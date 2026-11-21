@@ -1,0 +1,1401 @@
+{
+ "indexes": {
+  "FxMain/pgalmind.NDX": {
+   "sha1": "05e1784872033c1ec9f6b83c0c85c53bf5f2bd82",
+   "size": 1024
+  },
+  "FxMain/pgansym.NDX": {
+   "sha1": "cd96fc44c89319ae5c650da21c68ce545130a9d6",
+   "size": 1024
+  },
+  "FxMain/pgbutton.NDX": {
+   "sha1": "f8e0b1d56c34455c6d97d7fd85342aeeeb8fbee7",
+   "size": 3584
+  },
+  "FxMain/pgdynobj.NDX": {
+   "sha1": "4f66554e0ed57da55957d3871fb5419899b78801",
+   "size": 79360
+  },
+  "FxMain/pgkey.NDX": {
+   "sha1": "fd213d7b4c43a6b17c61385077250269327255f2",
+   "size": 6144
+  },
+  "FxMain/pgsym.NDX": {
+   "sha1": "568e303b26eb85abc222b658e3d108be317bd55e",
+   "size": 1024
+  },
+  "FxMain/pgtouch.NDX": {
+   "sha1": "3bf6723b0c03e9386060f197fd349177ead22ab2",
+   "size": 4608
+  }
+ },
+ "removed": [],
+ "tables": {
+  "FxMain/pgalmind.DBF": {
+   "added": [
+    {
+     "AN": "92",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank1",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "1",
+     "INCLUDE": "0",
+     "INSIDE": "0",
+     "PADDING": "3",
+     "PAGE": "FxParts",
+     "WIDTH": "2",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "PAGE",
+    "AN",
+    "EXPR",
+    "INCLUDE",
+    "INSIDE",
+    "WIDTH",
+    "PADDING",
+    "COLOUR",
+    "FLAG_ON",
+    "FLAG_LOC",
+    "EQHIER"
+   ]
+  },
+  "FxMain/pgansym.DBF": {
+   "added": [
+    {
+     "AN": "42",
+     "EXPR": "FX_MODE",
+     "MODE": "ANM_ARRAY",
+     "PAGE": "FxParts",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "PAGE",
+    "AN",
+    "EXPR",
+    "OFF_SYMBOL",
+    "SYMBOL_1",
+    "SYMBOL_2",
+    "SYMBOL_3",
+    "SYMBOL_4",
+    "SYMBOL_5",
+    "SYMBOL_6",
+    "SYMBOL_7",
+    "SYMBOL_8",
+    "MODE",
+    "COMMENT",
+    "VISIBLE"
+   ]
+  },
+  "FxMain/pgbutton.DBF": {
+   "added": [
+    {
+     "AN": "22",
+     "CMD": "FxGoto(\"FxShapes\", 1)",
+     "FONT": "ButtonFont",
+     "HEIGHT": "24",
+     "PAGE": "FxParts",
+     "TEXT": "Go",
+     "VIS_MODE": "XP_STYLE",
+     "WIDTH": "90",
+     "_flag": " "
+    },
+    {
+     "AN": "28",
+     "CMD": "FxListShow();",
+     "FONT": "ButtonFont",
+     "HEIGHT": "24",
+     "PAGE": "FxParts",
+     "TEXT": "Show",
+     "VIS_MODE": "XP_STYLE",
+     "WIDTH": "80",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "PAGE",
+    "AN",
+    "TEXT",
+    "FONT",
+    "WIDTH",
+    "HEIGHT",
+    "CMD",
+    "PRIV",
+    "MSG_LOG",
+    "DEVICE",
+    "UP_AN",
+    "DOWN_AN",
+    "LEFT_AN",
+    "RIGHT_AN",
+    "COMMENT",
+    "DOWN_CMD",
+    "REPEAT_CMD",
+    "DISMODE",
+    "DISABLED",
+    "GREY_STYLE",
+    "VIS_MODE",
+    "VISIBLE",
+    "AREA",
+    "RPT_RATE",
+    "MVX",
+    "MVXMINPT",
+    "MVXMAXPT",
+    "MVXMODE",
+    "MVY",
+    "MVYMINPT",
+    "MVYMAXPT",
+    "MVYMODE"
+   ]
+  },
+  "FxMain/pgdynobj.DBF": {
+   "added": [
+    {
+     "AN": "9",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "1",
+     "GROUP": "9",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "2",
+     "GROUP": "9",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "3",
+     "GROUP": "9",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "4",
+     "GROUP": "9",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "5",
+     "GROUP": "9",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "6",
+     "GROUP": "9",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "7",
+     "GROUP": "9",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "8",
+     "GROUP": "9",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "10",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "11",
+     "GROUP": "10",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "12",
+     "GROUP": "10",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "13",
+     "GROUP": "10",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "14",
+     "GROUP": "10",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "15",
+     "GROUP": "10",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "16",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "17",
+     "GROUP": "16",
+     "PAGE": "FxParts",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "18",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "19",
+     "GROUP": "18",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "20",
+     "GROUP": "18",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "21",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "23",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "24",
+     "GROUP": "23",
+     "PAGE": "FxParts",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "25",
+     "GROUP": "23",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "26",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "27",
+     "GROUP": "26",
+     "PAGE": "FxParts",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "29",
+     "GROUP": "26",
+     "MVY": "FxListPos()",
+     "MVYMAXPT": "90",
+     "MVYMINPT": "0",
+     "PAGE": "FxParts",
+     "SZY": "FxListSize()",
+     "SZYMAXPC": "100",
+     "SZYMINPC": "10",
+     "SZYORG": "-1",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "30",
+     "GROUP": "26",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "31",
+     "GROUP": "30",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "32",
+     "GROUP": "26",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "33",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "34",
+     "GROUP": "33",
+     "PAGE": "FxParts",
+     "TXTMODE": "0",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "35",
+     "GROUP": "33",
+     "PAGE": "FxParts",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_T201_LT",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "36",
+     "GROUP": "33",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "37",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "38",
+     "GROUP": "37",
+     "PAGE": "FxParts",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "39",
+     "GROUP": "37",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "40",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "43",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "44",
+     "GROUP": "43",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "45",
+     "GROUP": "44",
+     "PAGE": "FxParts",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "46",
+     "GROUP": "44",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "47",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "48",
+     "GROUP": "47",
+     "PAGE": "FxParts",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "49",
+     "GROUP": "47",
+     "PAGE": "FxParts",
+     "TYPE": "0xFFFF",
+     "_flag": " "
+    },
+    {
+     "AN": "50",
+     "GROUP": "47",
+     "PAGE": "FxParts",
+     "TYPE": "0xFFFF",
+     "_flag": " "
+    },
+    {
+     "AN": "51",
+     "GROUP": "47",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "52",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "53",
+     "GROUP": "52",
+     "PAGE": "FxParts",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "54",
+     "GROUP": "52",
+     "PAGE": "FxParts",
+     "TYPE": "0xFFFF",
+     "_flag": " "
+    },
+    {
+     "AN": "55",
+     "GROUP": "52",
+     "PAGE": "FxParts",
+     "TYPE": "0xFFFF",
+     "_flag": " "
+    },
+    {
+     "AN": "56",
+     "GROUP": "52",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "57",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "58",
+     "GROUP": "57",
+     "PAGE": "FxParts",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "59",
+     "GROUP": "57",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "60",
+     "GROUP": "57",
+     "PAGE": "FxParts",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "61",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "62",
+     "GROUP": "61",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "63",
+     "GROUP": "61",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "64",
+     "GROUP": "63",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "65",
+     "GROUP": "63",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "66",
+     "GROUP": "65",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "67",
+     "GROUP": "61",
+     "PAGE": "FxParts",
+     "TYPE": "0x000B",
+     "_flag": " "
+    },
+    {
+     "AN": "68",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "69",
+     "GROUP": "68",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "70",
+     "GROUP": "68",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "71",
+     "GROUP": "70",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "72",
+     "GROUP": "70",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "73",
+     "GROUP": "72",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "74",
+     "GROUP": "68",
+     "PAGE": "FxParts",
+     "TYPE": "0x000B",
+     "_flag": " "
+    },
+    {
+     "AN": "75",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "76",
+     "GROUP": "75",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "77",
+     "GROUP": "75",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "78",
+     "GROUP": "77",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "79",
+     "GROUP": "77",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "80",
+     "GROUP": "79",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "81",
+     "GROUP": "75",
+     "PAGE": "FxParts",
+     "TYPE": "0x000B",
+     "_flag": " "
+    },
+    {
+     "AN": "82",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "83",
+     "GROUP": "82",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "84",
+     "GROUP": "82",
+     "PAGE": "FxParts",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "85",
+     "GROUP": "82",
+     "PAGE": "FxParts",
+     "TYPE": "0x0001",
+     "_flag": " "
+    },
+    {
+     "AN": "86",
+     "GROUP": "82",
+     "PAGE": "FxParts",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "87",
+     "GROUP": "82",
+     "PAGE": "FxParts",
+     "TYPE": "0x0010",
+     "_flag": " "
+    },
+    {
+     "AN": "88",
+     "GROUP": "82",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "89",
+     "GROUP": "88",
+     "PAGE": "FxParts",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "90",
+     "GROUP": "88",
+     "PAGE": "FxParts",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "91",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "92",
+     "GROUP": "91",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "93",
+     "GROUP": "92",
+     "PAGE": "FxParts",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "94",
+     "GROUP": "92",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "95",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "96",
+     "GROUP": "95",
+     "PAGE": "FxParts",
+     "TYPE": "0x0009",
+     "_flag": " "
+    },
+    {
+     "AN": "97",
+     "GROUP": "95",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "98",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "99",
+     "COL_A": "FX_V1_ON",
+     "GROUP": "98",
+     "PAGE": "FxParts",
+     "TYPE": "0x0010",
+     "_flag": " "
+    },
+    {
+     "AN": "100",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "101",
+     "GROUP": "100",
+     "PAGE": "FxParts",
+     "TYPE": "0x000B",
+     "_flag": " "
+    },
+    {
+     "AN": "102",
+     "GROUP": "100",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "103",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "104",
+     "GROUP": "103",
+     "PAGE": "FxParts",
+     "TXTMODE": "0",
+     "TXT_A": "FX_PUMP1",
+     "TYPE": "0x000C",
+     "_flag": " "
+    },
+    {
+     "AN": "105",
+     "GROUP": "104",
+     "PAGE": "FxParts",
+     "TYPE": "0x0007",
+     "_flag": " "
+    },
+    {
+     "AN": "106",
+     "GROUP": "104",
+     "PAGE": "FxParts",
+     "TYPE": "0x0007",
+     "_flag": " "
+    },
+    {
+     "AN": "107",
+     "GROUP": "103",
+     "PAGE": "FxParts",
+     "SET_ARR": "FX_PUMP1_MODE",
+     "TXTMODE": "2",
+     "TYPE": "0x000C",
+     "_flag": " "
+    },
+    {
+     "AN": "108",
+     "GROUP": "107",
+     "PAGE": "FxParts",
+     "TYPE": "0x0007",
+     "_flag": " "
+    },
+    {
+     "AN": "109",
+     "GROUP": "107",
+     "PAGE": "FxParts",
+     "TYPE": "0x0007",
+     "_flag": " "
+    },
+    {
+     "AN": "110",
+     "GROUP": "107",
+     "PAGE": "FxParts",
+     "TYPE": "0x0007",
+     "_flag": " "
+    },
+    {
+     "AN": "111",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "112",
+     "GROUP": "111",
+     "PAGE": "FxParts",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "113",
+     "GROUP": "111",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "114",
+     "GROUP": "111",
+     "PAGE": "FxParts",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "115",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "116",
+     "GROUP": "115",
+     "PAGE": "FxParts",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "117",
+     "GROUP": "115",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "118",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "119",
+     "GROUP": "118",
+     "PAGE": "FxParts",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "120",
+     "GROUP": "118",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "121",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "122",
+     "GROUP": "121",
+     "PAGE": "FxParts",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "123",
+     "GROUP": "121",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "124",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "125",
+     "GROUP": "124",
+     "PAGE": "FxParts",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_T201_SP",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "126",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "127",
+     "GROUP": "126",
+     "PAGE": "FxParts",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "128",
+     "GROUP": "126",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "129",
+     "GROUP": "126",
+     "PAGE": "FxParts",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "130",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "131",
+     "GROUP": "130",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "132",
+     "GROUP": "131",
+     "PAGE": "FxParts",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "133",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "134",
+     "GROUP": "133",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "135",
+     "GROUP": "133",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "136",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "137",
+     "GROUP": "136",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "138",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "139",
+     "GROUP": "138",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "140",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "141",
+     "GROUP": "140",
+     "PAGE": "FxParts",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "142",
+     "GROUP": "140",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "143",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "144",
+     "GROUP": "143",
+     "PAGE": "FxParts",
+     "TYPE": "0x000F",
+     "VISIBLE": "1",
+     "_flag": " "
+    },
+    {
+     "AN": "145",
+     "GROUP": "143",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "146",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "147",
+     "GROUP": "146",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "148",
+     "GROUP": "147",
+     "PAGE": "FxParts",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "149",
+     "GROUP": "147",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "150",
+     "PAGE": "FxParts",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "151",
+     "GROUP": "150",
+     "PAGE": "FxParts",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "152",
+     "GROUP": "150",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "153",
+     "GROUP": "150",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "154",
+     "GROUP": "150",
+     "PAGE": "FxParts",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "155",
+     "GROUP": "150",
+     "PAGE": "FxParts",
+     "TYPE": "0x0011",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "PAGE",
+    "TYPE",
+    "AN",
+    "GROUP",
+    "SZX",
+    "SZXMINPC",
+    "SZXMAXPC",
+    "SZXORG",
+    "SZXMODE",
+    "SZY",
+    "SZYMINPC",
+    "SZYMAXPC",
+    "SZYORG",
+    "SZYMODE",
+    "ROT",
+    "ROTSL",
+    "ROTMINPC",
+    "ROTMAXPC",
+    "ROTXORG",
+    "ROTYORG",
+    "ROTMODE",
+    "ROTSLMODE",
+    "MVX",
+    "MVXSL",
+    "MVXMINPT",
+    "MVXMAXPT",
+    "MVXMODE",
+    "MVXSLMODE",
+    "MVY",
+    "MVYSL",
+    "MVYMINPT",
+    "MVYMAXPT",
+    "MVYMODE",
+    "MVYSLMODE",
+    "VISIBLE",
+    "VISMODE",
+    "COL_A",
+    "COL_B",
+    "COL_C",
+    "COL_D",
+    "COL_E",
+    "COL_ARR",
+    "COL_EXP",
+    "COLMODE",
+    "TXT_A",
+    "TXT_B",
+    "TXT_C",
+    "TXT_D",
+    "TXT_E",
+    "TXT_STR",
+    "SET_ARR",
+    "TXTMODE",
+    "FIL",
+    "FILMINPC",
+    "FILMAXPC",
+    "FILMODE",
+    "DISABLED",
+    "DISMODE",
+    "GREY_STYLE",
+    "DESC",
+    "COMMENT",
+    "AREA",
+    "PRIV",
+    "MSG_LOG",
+    "DEVICE"
+   ]
+  },
+  "FxMain/pgkey.DBF": {
+   "added": [
+    {
+     "AN": "24",
+     "CMD": "FxSet(FX_MODE, 10)",
+     "KEY_SEQ": "LBUTTON_DN",
+     "PAGE": "FxParts",
+     "_flag": " "
+    },
+    {
+     "AN": "24",
+     "CMD": "FxSet(FX_MODE, 11)",
+     "KEY_SEQ": "LBUTTON_UP",
+     "PAGE": "FxParts",
+     "_flag": " "
+    },
+    {
+     "AN": "24",
+     "CMD": "FxSet(FX_MODE, 12)",
+     "KEY_SEQ": "LBUTTON_DBL",
+     "PAGE": "FxParts",
+     "_flag": " "
+    },
+    {
+     "AN": "24",
+     "CMD": "FxSet(FX_MODE, 13)",
+     "KEY_SEQ": "LBUTTON_CMD_DN",
+     "PAGE": "FxParts",
+     "_flag": " "
+    },
+    {
+     "AN": "24",
+     "CMD": "FxSet(FX_MODE, 14)",
+     "KEY_SEQ": "LBUTTON_CMD_UP",
+     "PAGE": "FxParts",
+     "_flag": " "
+    },
+    {
+     "AN": "24",
+     "CMD": "FxSet(FX_MODE, 15)",
+     "KEY_SEQ": "RBUTTON_UP",
+     "PAGE": "FxParts",
+     "_flag": " "
+    },
+    {
+     "AN": "125",
+     "CMD": "FX_T201_SP = ArgValue1",
+     "KEY_SEQ": "ENTER",
+     "PAGE": "FxParts",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "PAGE",
+    "AN",
+    "KEY_SEQ",
+    "CMD",
+    "PRIV",
+    "MSG_LOG",
+    "DEVICE",
+    "UP_AN",
+    "DOWN_AN",
+    "LEFT_AN",
+    "RIGHT_AN",
+    "COMMENT",
+    "AREA"
+   ]
+  },
+  "FxMain/pgsym.DBF": {
+   "added": [
+    {
+     "AN": "41",
+     "PAGE": "FxParts",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "PAGE",
+    "AN",
+    "VAR_A",
+    "VAR_B",
+    "VAR_C",
+    "SYMB000",
+    "SYMB001",
+    "SYMB010",
+    "SYMB011",
+    "SYMB100",
+    "SYMB101",
+    "SYMB110",
+    "SYMB111",
+    "MODE",
+    "COMMENT",
+    "VISIBLE"
+   ]
+  },
+  "FxMain/pgtouch.DBF": {
+   "added": [
+    {
+     "ACTION": "KEY_LBUTTON",
+     "AN": "24",
+     "CMD": "FxSet(FX_MODE, 1)",
+     "DOWN_CMD": "FxSet(FX_MODE, 2)",
+     "PAGE": "FxParts",
+     "REPEAT_CMD": "FxSet(FX_MODE, 3)",
+     "RPT_RATE": "500",
+     "_flag": " "
+    },
+    {
+     "ACTION": "KEY_LBUTTON",
+     "AN": "58",
+     "CMD": "FxSet(FX_PUMP1, 4)",
+     "PAGE": "FxParts",
+     "RPT_RATE": "500",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "PAGE",
+    "AN",
+    "ACTION",
+    "RPT_RATE",
+    "CMD",
+    "DOWN_CMD",
+    "DBLCLK_CMD",
+    "REPEAT_CMD",
+    "MSG_LOG",
+    "MSG_LOGDN",
+    "MSG_LOGDBL",
+    "MSG_LOGRPT"
+   ]
+  }
+ }
+}

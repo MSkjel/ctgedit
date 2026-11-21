@@ -1,0 +1,71 @@
+{
+ "calls": [
+  {
+   "page": "FxOraclePlace",
+   "place": [
+    "FxLib",
+    "fxnest",
+    "n2",
+    "ctm",
+    200,
+    200,
+    [
+     [
+      "Name",
+      "P2"
+     ]
+    ]
+   ],
+   "stage": "placed",
+   "type": 0
+  },
+  {
+   "AN": 2,
+   "DrawText": [
+    "%Label% X",
+    10,
+    45
+   ],
+   "open": "n0",
+   "stage": "n0_gained"
+  },
+  {
+   "open + save": "n1",
+   "page type": 1,
+   "stage": "n1_saved/n1"
+  },
+  {
+   "open + save": "FxOraclePlace",
+   "stage": "same"
+  },
+  {
+   "fresh Graphics Builder": true,
+   "library": "as after n1_saved",
+   "page": "as placed"
+  },
+  {
+   "open + save": "FxOraclePlace",
+   "stage": "fresh"
+  },
+  {
+   "page": "FxOracleDraw",
+   "place": [
+    "FxLib",
+    "fxnest",
+    "n2",
+    "ctm",
+    200,
+    200,
+    [
+     [
+      "Name",
+      "P2"
+     ]
+    ]
+   ],
+   "stage": "fresh/placed",
+   "type": 0
+  }
+ ],
+ "page": "FxMain/FxOraclePlace"
+}

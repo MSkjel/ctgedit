@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<CompositeInstance TemplateId="9e4a6f5d-b071-4c8d-ae9f-a0b1c2d3e4f5" Digest="DMtPivoUAMCjvVk3MhrUAZEVIqA=">
+  <Parameters>
+    <Parameter Name="Equipment" Type="String" Value="FxPlant.Pump3" />
+    <Parameter Name="Size" Type="String" Value="Large" />
+  </Parameters>
+  <LibraryItemVersions>
+    <ItemVersion Project="FxLib" Library="fxgenie" Item="fx_value">
+      <Version>5dc5a41e-4285-8b4e-bf8e-a141a8d2721e</Version>
+    </ItemVersion>
+  </LibraryItemVersions>
+</CompositeInstance>

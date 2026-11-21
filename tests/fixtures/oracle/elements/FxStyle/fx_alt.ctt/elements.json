@@ -1,0 +1,22 @@
+{
+ "fresh_builder_before": [],
+ "missed": [],
+ "page_types": {
+  "arrows@-XGA": 3,
+  "blank@-XGA": 3,
+  "flash@-XGA": 3,
+  "marker@-XGA": 3,
+  "pagecontent@-XGA": 3,
+  "sets@-XGA": 3,
+  "stale@-XGA": 3
+ },
+ "saved": [
+  "pagecontent@-XGA",
+  "blank@-XGA",
+  "marker@-XGA",
+  "sets@-XGA",
+  "flash@-XGA",
+  "stale@-XGA",
+  "arrows@-XGA"
+ ]
+}

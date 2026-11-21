@@ -1,0 +1,39 @@
+[
+  {"id": "index", "title": "Welcome to ctgedit"},
+  {"id": "getting-started", "title": "Getting started", "children": [
+    {"id": "the-window", "title": "The editor window"},
+    {"id": "opening-and-saving", "title": "Opening, creating and saving pages"}
+  ]},
+  {"id": "page-properties", "title": "Page properties", "children": [
+    {"id": "templates", "title": "Page templates"},
+    {"id": "update-pages", "title": "Update Pages"}
+  ]},
+  {"id": "drawing", "title": "Drawing objects", "children": [
+    {"id": "selecting-and-arranging", "title": "Selecting, moving and arranging"},
+    {"id": "properties", "title": "Object properties and animation"},
+    {"id": "text-and-numbers", "title": "Text, numbers and fonts"},
+    {"id": "colours", "title": "Colours"},
+    {"id": "bitmaps", "title": "Pictures and bitmaps"},
+    {"id": "symbol-sets", "title": "Symbol sets"},
+    {"id": "special-objects", "title": "Trends, Cicode objects, web content and ActiveX"},
+    {"id": "underlay", "title": "The underlay: a page or picture to trace"}
+  ]},
+  {"id": "library-panel", "title": "Symbols and genies: the Library panel", "children": [
+    {"id": "genies", "title": "Genies"},
+    {"id": "composite-genies", "title": "Composite genies"},
+    {"id": "super-genies", "title": "Super genies"},
+    {"id": "library-elements", "title": "Editing symbols, genies and templates"}
+  ]},
+  {"id": "situational-awareness", "title": "Situational Awareness pages"},
+  {"id": "objects-panel", "title": "The Objects panel"},
+  {"id": "tags-panel", "title": "The Tags panel"},
+  {"id": "compile-and-run", "title": "Compile and run", "children": [
+    {"id": "graphics-builder", "title": "Working alongside the Graphics Builder and Studio"},
+    {"id": "simulate", "title": "Simulate a page"}
+  ]},
+  {"id": "settings", "title": "Settings"},
+  {"id": "keyboard-shortcuts", "title": "Keyboard shortcuts"},
+  {"id": "differences", "title": "Coming from the Graphics Builder"},
+  {"id": "troubleshooting", "title": "Troubleshooting"},
+  {"id": "glossary", "title": "Glossary"}
+]

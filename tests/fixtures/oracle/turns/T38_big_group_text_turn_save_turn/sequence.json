@@ -1,0 +1,18 @@
+{
+ "an": {
+  "selection": [
+   98,
+   108
+  ]
+ },
+ "names": [
+  "FxBigGroup",
+  "FxLoneText"
+ ],
+ "ops": [
+  "R",
+  "S",
+  "R"
+ ],
+ "page": "FxMain/FxArrange"
+}

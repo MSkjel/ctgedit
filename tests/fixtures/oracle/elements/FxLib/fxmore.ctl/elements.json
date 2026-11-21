@@ -1,0 +1,22 @@
+{
+ "fresh_builder_before": [],
+ "missed": [],
+ "page_types": {
+  "fx_bigsym": 0,
+  "fx_bitmap2": 0,
+  "fx_blå_sø": 0,
+  "fx_dspsym": 0,
+  "fx_flash2": 0,
+  "fx_grouped": 0,
+  "fx_symsym": 0
+ },
+ "saved": [
+  "fx_bitmap2",
+  "fx_flash2",
+  "fx_blå_sø",
+  "fx_symsym",
+  "fx_bigsym",
+  "fx_grouped",
+  "fx_dspsym"
+ ]
+}

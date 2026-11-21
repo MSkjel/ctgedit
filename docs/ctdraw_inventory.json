@@ -1,0 +1,962 @@
+{
+ "menus": {
+  "menus": [
+   {
+    "menu": "File",
+    "items": [
+     "New... (Ctrl+N)",
+     "Open... (Ctrl+O)",
+     "Close (Ctrl+F4)",
+     "Find...",
+     "---",
+     "Save (Ctrl+S)",
+     "Save As...",
+     "Save All",
+     "Import...",
+     "Import As Flashing...",
+     "---",
+     "Properties  [page properties]",
+     "Defaults  [page defaults]",
+     "---",
+     "Compile (Alt+F10)",
+     "Run (F5)",
+     "---",
+     "Print (Ctrl+P)",
+     "Print Setup...",
+     "---",
+     "Exit (Alt+F4)",
+     "--- (dynamic) MRU list of up to 4 recent pages as '&1 Project\\Page'"
+    ]
+   },
+   {
+    "menu": "Edit",
+    "items": [
+     "Undo (Ctrl+Z)",
+     "Redo (Ctrl+Y)",
+     "---",
+     "Cut (Ctrl+X)",
+     "Copy (Ctrl+C)",
+     "Paste (Ctrl+V)",
+     "Paste Special...",
+     "Insert ActiveX Control...",
+     "Insert Process Analyst",
+     "Insert Database Exchange",
+     "Delete (Del)",
+     "Duplicate (Ctrl+D)",
+     "Select All (Ctrl+A)",
+     "---",
+     "Find... (Ctrl+F)  [text in objects]",
+     "Replace... (Ctrl+H)",
+     "---",
+     "Cut Link  [break library link, cmd=AxeSelected]",
+     "Paste Symbol... (F6)",
+     "Paste Symbol As Flashing...",
+     "Paste Genie... (F11)  [cmd=PasteEitherGenie, also covers Super Genie Ctrl+F11]",
+     "Paste Composite Genie...",
+     "Copy to Library...",
+     "Attach Super Genies...",
+     "---",
+     "Lock object",
+     "Unlock Object",
+     "Break Lock Mode",
+     "---",
+     "Properties...  [object property sheet]",
+     "Genie Parameters...",
+     "Edit Composite Genie..."
+    ]
+   },
+   {
+    "menu": "View",
+    "items": [
+     "Refresh",
+     "---",
+     "Grid Setup...",
+     "Snap to Grid (F8)",
+     "Guidelines Setup...",
+     "Snap to Guidelines (F7)",
+     "---",
+     "Show Tool Bar",
+     "Show Tools (F3)  [drawing toolbox]",
+     "Show Zoom (F10)  [floating zoom window]",
+     "Show Status Bar",
+     "Show Scroll Bars",
+     "---",
+     "Cross Hair Cursor",
+     "Cursor Keys Slow Speed"
+    ]
+   },
+   {
+    "menu": "Objects",
+    "items": [
+     "Free Hand Line",
+     "Straight Line",
+     "Rectangle",
+     "Ellipse  [internal 'Circle']",
+     "Polygon  [internal 'Polyline']",
+     "Pipe",
+     "Text",
+     "Number  [text-as-number]",
+     "Button",
+     "Symbol Set",
+     "Trend",
+     "Cicode Object  [advanced animation]",
+     "Web Content",
+     "Pelco Camera Viewer",
+     "Scheduler"
+    ]
+   },
+   {
+    "menu": "Text",
+    "items": [
+     "Font...",
+     "---",
+     "Bold (Ctrl+B)",
+     "Italic (Ctrl+I)",
+     "Underline (Ctrl+U)",
+     "Strikeout",
+     "---",
+     "Left Justified",
+     "Centered",
+     "Right Justified",
+     "---",
+     "Normal",
+     "Shadowed",
+     "Raised",
+     "Lowered",
+     "Embossed"
+    ]
+   },
+   {
+    "menu": "Arrange",
+    "items": [
+     "Adjust Position and Size... (Ctrl+Shift+P)",
+     "---",
+     "Align... (Ctrl+Shift+A)",
+     "Rotate... (Ctrl+Shift+R)",
+     "Mirror... (Ctrl+Shift+M)",
+     "---",
+     "Group Objects (Ctrl+Shift+G)",
+     "Ungroup Objects (Ctrl+Shift+U)",
+     "---",
+     "Bring to Front",
+     "Send to Back",
+     "Bring Forwards",
+     "Send Backwards"
+    ]
+   },
+   {
+    "menu": "Tools",
+    "items": [
+     "Goto Object... (Ctrl+G)",
+     "---",
+     "Swap Colors...",
+     "Adjust Colors...",
+     "Edit Favorite Colors...",
+     "Convert to Bitmap",
+     "Bitmap Editor (F9)",
+     "---",
+     "Update Pages in Active and Included Projects",
+     "---",
+     "Pack Libraries in Active Project",
+     "Pack Libraries in Active and Included Projects",
+     "---",
+     "Plant SCADA Studio (F12)",
+     "Cicode Editor",
+     "Computer Setup Wizard",
+     "Computer Setup Editor",
+     "Runtime Manager",
+     "---",
+     "Options...  [Graphics Builder options dialog]"
+    ]
+   },
+   {
+    "menu": "Window",
+    "items": [
+     "Cascade",
+     "Tile Horizontally",
+     "Tile Vertically",
+     "Arrange Icons",
+     "--- (dynamic) list of open page windows ('SEPARATOR_OPENPAGES' + one 'OpenEx' item per open page)"
+    ]
+   },
+   {
+    "menu": "Help",
+    "items": [
+     "Help (F1)",
+     "Online Help",
+     "---",
+     "Graphics Builder Help",
+     "Cicode Functions",
+     "---",
+     "About"
+    ]
+   },
+   {
+    "menu": "Canvas context menu (right-click)",
+    "items": [
+     "Cut (Ctrl+X)",
+     "Copy (Ctrl+C)",
+     "Paste (Ctrl+V)",
+     "---",
+     "Group",
+     "Ungroup",
+     "---",
+     "Properties...",
+     "Genie Parameters...",
+     "Edit Composite Genie...",
+     "Page Properties..."
+    ]
+   },
+   {
+    "menu": "Bitmap Editor menus (embedded editor)",
+    "items": [
+     "Save",
+     "Zoom In (+)",
+     "Zoom Out (-)",
+     "Dimensions",
+     "Color Select (Shft+P)",
+     "Symbols",
+     "Zoom",
+     "Tools"
+    ]
+   },
+   {
+    "menu": "Zoom window (F10)",
+    "items": [
+     "Zoom In (Num+)",
+     "Zoom Out (Num-)"
+    ]
+   },
+   {
+    "menu": "Legacy V3/V4 'Objects' menu strings (shown only with 'Show version 3.xx/4.xx tools' option)",
+    "items": [
+     "Number",
+     "Digital Text",
+     "Symbol",
+     "Color Flood",
+     "Bar Graph",
+     "Trend",
+     "Button",
+     "String",
+     "Animated Symbol",
+     "Slider",
+     "Animation Keyboard",
+     "Pagewide Keyboard",
+     "Cicode Object",
+     "Variable Tags (Ctrl+T)"
+    ]
+   }
+  ],
+  "dialogs": [
+   {
+    "title": "Object Properties sheet: tab structure",
+    "controls": [
+     "Appearance: General | 3D Effects | Display Value (text/number) | Visibility | Linkage (symbol) | ActiveX Properties + Tag Association (ActiveX)",
+     "Movement: Horizontal | Vertical | Rotational",
+     "Scaling: Horizontal | Vertical",
+     "Fill: Color | Level",
+     "Input: Touch | Keyboard Commands",
+     "Slider: Horizontal | Vertical | Rotational",
+     "Access: General | Disable | Identification (ActiveX)",
+     "Metadata: General",
+     "Vertices (polyline only)",
+     "Alarm Indicator (equipment objects)",
+     "Sheet buttons: OK/Cancel/Apply/Help; every animation tab has a 'Clear Property' button and a 'Property disabled' overlay state"
+    ]
+   },
+   {
+    "title": "Appearance>General: Line",
+    "controls": [
+     "Group 'Line': Width (edit+updown), Style (combo: Solid/Dash/Dot/Dash Dot/Dash Dot Dot), Color (ColorSelector)",
+     "Group 'Sample' (live preview)"
+    ]
+   },
+   {
+    "title": "Appearance>General: Free Hand Line",
+    "controls": [
+     "Group 'Line': Width (edit+updown), Style (combo), Color",
+     "Group 'Fill': Filled (check), Color",
+     "Group 'Sample'"
+    ]
+   },
+   {
+    "title": "Appearance>General: Rectangle",
+    "controls": [
+     "Group 'Line': Width, Style, Color",
+     "Group 'Fill': Filled (check), Color",
+     "Group 'Gradient': Gradient Fill (check), Color, Direction (combo: Left to Right/Right to Left/Top to Bottom/Bottom to Top/Horizontal Gradient To Middle/From Middle/Vertical To Middle/From Middle)",
+     "Group 'Object type': Extra line (3-state check), Border (check), Corner Radius (edit+updown)"
+    ]
+   },
+   {
+    "title": "Appearance>General: Ellipse",
+    "controls": [
+     "Group 'Line': Width, Style, Color",
+     "Group 'Fill': Filled, Color",
+     "Group 'Gradient': Gradient Fill, Color, Direction",
+     "Group 'Object type': radio Ellipse/Pie-slice/Arc, Start angle (edit+updown, degrees), End angle (edit+updown, degrees)",
+     "Group 'Sample'"
+    ]
+   },
+   {
+    "title": "Appearance>General: Polygon",
+    "controls": [
+     "Group 'Line': Width, Style, Color",
+     "Group 'Fill': Filled, Color",
+     "Group 'Gradient': Gradient Fill, Color, Direction",
+     "Group 'Object type': radio Open/Closed",
+     "Group 'Sample'"
+    ]
+   },
+   {
+    "title": "Appearance>General: Pipe",
+    "controls": [
+     "Group 'Line': Width (edit+updown), Highlight color (ColorSelector), Lowlight color (ColorSelector)",
+     "Group 'Sample'"
+    ]
+   },
+   {
+    "title": "Appearance>General: Text",
+    "controls": [
+     "Font (combo), Style (combo), Size (combo)",
+     "Group 'Alignment': radio Left/Right/Centre",
+     "Group 'Effects': Strikeout (check), Underline (check)",
+     "Group 'Text': multiline edit",
+     "Foreground (ColorSelector), Background (ColorSelector)",
+     "Script (combo: Western/Symbol/Japanese/Hangul/Chinese GB2312/Big5/Johab/Hebrew/Arabic/Greek/Turkish/Vietnamese/Thai/Central European/Cyrillic/Baltic)"
+    ]
+   },
+   {
+    "title": "Appearance>Display Value: Text/Number",
+    "controls": [
+     "Group 'Type': radio On / off | Multi-state | Array | Numeric | String",
+     "On/off: 'ON text when' expression (edit + wizard button), OFF text (edit), ON text (edit)",
+     "Multi-state: Conditions (editable list + Add/Delete/Edit), State text (editable list)",
+     "Array: 'Array expression' (edit + wizard), Array text (editable list)",
+     "Numeric: 'Numeric expression' (edit + wizard), Specify range (check), Minimum/Maximum (edit+updown), Format (combo)",
+     "String: 'String expression' (edit + wizard)",
+     "Clear Property"
+    ]
+   },
+   {
+    "title": "Appearance>General: Button",
+    "controls": [
+     "Group 'Type': radio Text/Symbol/Target",
+     "XP Style (check), Custom Fill Color (check), Fill Color Up (ColorSelector), Fill Color Down (ColorSelector)",
+     "Symbol mode: symbol THUMB + 'Set...' + '<none>' label, Mode (combo)",
+     "Text mode: Font/Style/Size combos, Alignment radio Left/Right/Centre, Effects Strikeout/Underline, Text multiline edit, Foreground/Background ColorSelectors, Script combo"
+    ]
+   },
+   {
+    "title": "Appearance>General: Symbol Set",
+    "controls": [
+     "Group 'Type': radio On / off | Multi-state | Array | Animated",
+     "On/off: 'ON symbol when' expression (edit + wizard), OFF symbol THUMB + Set.../Clear, ON symbol THUMB + Set.../Clear",
+     "Multi-state: Conditions (list + Add/Delete/Edit), State symbols (MultiControlLB + Set.../Clear)",
+     "Array: 'Array expression' (edit + wizard), Array symbols (MultiControlLB + Set.../Clear)",
+     "Animated: 'Animate when' expression (edit + wizard), Animation frames (MultiControlLB + Set.../Clear)",
+     "Clear Property"
+    ]
+   },
+   {
+    "title": "Appearance>General: Trend",
+    "controls": [
+     "Cluster Name (combo)",
+     "Pens (TrendList) + Edit button",
+     "Group 'Samples': Number of samples (edit+updown), Pixels per sample (edit+updown)",
+     "Group 'Command': Command (edit)",
+     "Display All Trend Types As Periodic (check)"
+    ]
+   },
+   {
+    "title": "Appearance>General: Cicode Object",
+    "controls": [
+     "Group 'Command': expression (edit + wizard button)",
+     "Display as: THUMB + '<default>' + Set...",
+     "Clear Property"
+    ]
+   },
+   {
+    "title": "Appearance>General: Web Content",
+    "controls": [
+     "Group 'URL': edit",
+     "Group 'Options': Enable 'Print' in context menu (check)"
+    ]
+   },
+   {
+    "title": "Appearance>Linkage: pasted Symbol",
+    "controls": [
+     "linked symbol THUMB",
+     "'<none>' library.symbol label",
+     "Set... button"
+    ]
+   },
+   {
+    "title": "Appearance: ActiveX Properties",
+    "controls": [
+     "(empty host dialog: embeds the control's own property pages)"
+    ]
+   },
+   {
+    "title": "Appearance>Tag Association: ActiveX",
+    "controls": [
+     "Properties (CheckList of bindable control properties)",
+     "association expression (edit + wizard button)",
+     "'Bindable' check, 'Property status:' indicator",
+     "Group 'Update association on': Event (combo)",
+     "Property documentation (read-only edit)",
+     "Clear Property",
+     "List Property Type"
+    ]
+   },
+   {
+    "title": "Appearance>3D Effects",
+    "controls": [
+     "Group 'Effects': radio None/Shadowed/Raised/Lowered/Embossed",
+     "Depth (edit+updown), Auto depth (check)",
+     "Highlight color, Lowlight color, Shadow color (ColorSelectors)",
+     "Group 'Sample'"
+    ]
+   },
+   {
+    "title": "Appearance>Visibility",
+    "controls": [
+     "Group 'Hidden when': expression (edit + wizard button)",
+     "Clear Property"
+    ]
+   },
+   {
+    "title": "Movement>Horizontal / Vertical",
+    "controls": [
+     "Group 'Movement expression': edit + wizard",
+     "Specify range (check), Minimum/Maximum (edit+updown)",
+     "Group 'Offset': At minimum (edit+updown) pixels (left/up), At maximum (edit+updown) pixels (right/down)",
+     "Clear Property",
+     "note: mutually exclusive with the matching Slider property"
+    ]
+   },
+   {
+    "title": "Movement>Rotational",
+    "controls": [
+     "Group 'Angle expression': edit + wizard",
+     "Specify range, Minimum/Maximum",
+     "Group 'Angle': At minimum (edit+updown) degrees (anti-clockwise), At maximum (edit+updown) degrees (clockwise)",
+     "Group 'Centre axis offset': radio Express/Custom, QuickSet 9-point picker ('Middle, Centre'), X (edit+updown) pixels (right), Y (edit+updown) pixels (down)",
+     "Clear Property"
+    ]
+   },
+   {
+    "title": "Scaling>Horizontal / Vertical",
+    "controls": [
+     "Group 'Scaling expression': edit + wizard",
+     "Specify range, Minimum/Maximum",
+     "Group 'Scaling': At minimum (edit+updown) percent, At maximum (edit+updown) percent",
+     "Group 'Centre axis offset': radio Express/Custom, QuickSet picker, offset (edit+updown) pixels",
+     "Clear Property"
+    ]
+   },
+   {
+    "title": "Fill>Color",
+    "controls": [
+     "Group 'Type': radio On / off | Multi-state | Array | Threshold | Gradient",
+     "On/off: 'ON color when' expression (edit + wizard), OFF color / ON color (ColorSelectors)",
+     "Multi-state: Conditions (list + Add/Delete/Edit), State colors (MultiControlLB)",
+     "Array: 'Array expression' + Array colors (MultiControlLB)",
+     "Threshold: 'Color expression' (edit + wizard), Specify range + Min/Max, 'Thresholds (%)' (ThresholdList + Add/Delete/Edit)",
+     "Gradient: 'Color expression' (edit + wizard), Specify range + Min/Max, At minimum / At maximum colors",
+     "Clear Property"
+    ]
+   },
+   {
+    "title": "Fill>Level",
+    "controls": [
+     "Group 'Level expression': edit + wizard",
+     "Specify range, Minimum/Maximum",
+     "Group 'Level': At minimum percent, At maximum percent (edit+updown)",
+     "Fill direction: radio Up/Down/Left/Right",
+     "Background color (ColorSelector)",
+     "Clear Property"
+    ]
+   },
+   {
+    "title": "Input>Touch",
+    "controls": [
+     "Action (CheckList: Up/Down/Repeat/Double click)",
+     "Group 'Execute command': edit + wizard",
+     "Group 'Logging': Log message (edit), Repeat rate (edit+updown) milliseconds",
+     "Clear Property"
+    ]
+   },
+   {
+    "title": "Input>Keyboard Commands",
+    "controls": [
+     "Key sequence (ComboList + Add/Delete/Edit)",
+     "Group 'Execute command': edit + wizard",
+     "Group 'Security': Same area as object (check), Command area (combo), Same privilege as object (check), Privilege level (combo)",
+     "Group 'Logging': Log message (edit)",
+     "Clear Property"
+    ]
+   },
+   {
+    "title": "Slider>Horizontal / Vertical",
+    "controls": [
+     "Group 'Tag': tag (edit + wizard)",
+     "Continuous update of tag (check)",
+     "Group 'Offset': At minimum/maximum (edit+updown) pixels (left/right or up/down)",
+     "Clear Property"
+    ]
+   },
+   {
+    "title": "Slider>Rotational",
+    "controls": [
+     "Group 'Tag': tag (edit + wizard)",
+     "Continuous update of tag (check)",
+     "Group 'Angle': At minimum degrees (anti-clockwise), At maximum degrees (clockwise)",
+     "Group 'Centre axis offset': radio Express/Custom, QuickSet picker, X/Y offsets (edit+updown)",
+     "Clear Property"
+    ]
+   },
+   {
+    "title": "Access>General",
+    "controls": [
+     "Group 'Identification': Object AN (read-only edit), Name (edit), Description (edit), Tool tip (edit)",
+     "Group 'Security': Same area as page (check), Object area (combo), No privilege restrictions (check), Privilege level (combo)",
+     "Group 'Logging': Log device (combo)"
+    ]
+   },
+   {
+    "title": "Access>Disable",
+    "controls": [
+     "Group 'Disable when': expression (edit + wizard)",
+     "Disable on insufficient area or privilege (check)",
+     "Group 'Disable style': radio Embossed/Grayed/Hidden/Unchanged",
+     "Clear Property"
+    ]
+   },
+   {
+    "title": "Access>Identification: ActiveX",
+    "controls": [
+     "Group 'Identification': Object Name (edit), Event Class (edit)",
+     "Group 'Persistence': Persist ActiveX data between page transitions (check)",
+     "Clear Property"
+    ]
+   },
+   {
+    "title": "Metadata",
+    "controls": [
+     "EditableViewList of name/value pairs",
+     "Add / Delete / Edit buttons"
+    ]
+   },
+   {
+    "title": "Alarm Indicator",
+    "controls": [
+     "Has Alarm Indicator (check)",
+     "Group 'Highest priority alarm from': Equipment (edit + combo), Include equipment references in count (check)",
+     "Group 'Border Appearance': Is Inside (check), Width (edit+updown), Padding (edit+updown), Frame Color (ColorSelector)",
+     "Group 'Flag Appearance': Show Flag (check), Position radio Top/Middle/Bottom x Left/Centre/Right (8 positions)"
+    ]
+   },
+   {
+    "title": "Vertices: polyline animation",
+    "controls": [
+     "Group 'Vertices': EditableViewList",
+     "Group 'Expression for Vertex': edit + wizard",
+     "Specify Range (check), Minimum/Maximum (edit+updown)",
+     "Group 'From Offset': X/Y (edit+updown)",
+     "Group 'To Offset': X/Y (edit+updown)"
+    ]
+   },
+   {
+    "title": "Page Properties: General (PAGEPROP_GENERAL)",
+    "controls": [
+     "Window title (edit)",
+     "Description (edit)",
+     "Previous page (combo)",
+     "Next page (combo)",
+     "Group 'Security': All areas (check), Area (combo)",
+     "Group 'Logging': Log device (combo)",
+     "Group 'Page scan time': Default (check), milliseconds (edit+updown)",
+     "Group 'Cluster context': Inherit from caller (check), Cluster (combo)"
+    ]
+   },
+   {
+    "title": "Page Properties: Appearance (PAGEPROP_APPEARANCE)",
+    "controls": [
+     "Group 'Template': Style (combo), Resolution (combo), Name (combo), 'Designed for showing title bar' (check), template preview THUMB",
+     "Group 'View area': Width (edit+updown), Height (edit+updown)",
+     "Page color (ColorSelector)",
+     "Ignore Quality (combo)"
+    ]
+   },
+   {
+    "title": "Page Properties: Keyboard Commands (PAGEPROP_KEYBOARD)",
+    "controls": [
+     "Key sequence (ComboList + Add/Delete/Edit)",
+     "Group 'Execute command': edit + wizard",
+     "Group 'Security': Same area as page (check), Command area (combo), No privilege restrictions (check), Privilege level (combo)",
+     "Group 'Logging': Log message (edit)",
+     "Clear Property"
+    ]
+   },
+   {
+    "title": "Page Properties: Events (PAGEPROP_EVENT)",
+    "controls": [
+     "Event (CheckList: On page shown / While page open / On page closed)",
+     "Group 'Execute command': edit + wizard",
+     "Clear Property"
+    ]
+   },
+   {
+    "title": "Page Properties: Environment (PAGEPROP_ENVIRONMENT)",
+    "controls": [
+     "Group 'Variables': ListBox of property/value pairs",
+     "Add / Remove / Edit (opens 'Edit Property' dialog: Property/Value edits)"
+    ]
+   },
+   {
+    "title": "Page Properties: Associations (PAGEPROP_ASSOCIATIONS)",
+    "controls": [
+     "EditableViewList of super-genie associations (format '?<datatype> <name>?')",
+     "Add / Delete / Edit"
+    ]
+   },
+   {
+    "title": "Page (Genie) Properties: Options (PAGEPROP_GENIEOPTIONS)",
+    "controls": [
+     "'I want to use this Genie with the Cicode function DspSym' (check)"
+    ]
+   },
+   {
+    "title": "Align (ALIGN)",
+    "controls": [
+     "Group 'Vertical': radio Top/Centre/Bottom/Even/None",
+     "Group 'Horizontal': radio Left/Centre/Right/Even/None",
+     "OK / Cancel / Help"
+    ]
+   },
+   {
+    "title": "Rotate (ROTATE)",
+    "controls": [
+     "Group 'Rotate': radio Clockwise/Anticlockwise/None",
+     "OK / Cancel / Help"
+    ]
+   },
+   {
+    "title": "Mirror (MIRROR)",
+    "controls": [
+     "Group 'Mirror': radio Vertical/Horizontal/None",
+     "OK / Cancel / Help"
+    ]
+   },
+   {
+    "title": "Adjust Position and Size (ADJPOSANDSIZE)",
+    "controls": [
+     "Group 'Position': X (edit+updown), Y (edit+updown)",
+     "Group 'Size': radio 'By percentage' / 'By absolute size', percentage (edit+updown), Width (edit+updown), Height (edit+updown)",
+     "OK / Cancel / Apply / Help"
+    ]
+   },
+   {
+    "title": "Grid Setup (GRID)",
+    "controls": [
+     "Group 'Pitch': Horizontal (x), Vertical (y) edits",
+     "Group 'Origin': Horizontal (x), Vertical (y) edits",
+     "Display Grid (check)",
+     "Snap to Grid (check)",
+     "OK / Cancel / Help"
+    ]
+   },
+   {
+    "title": "Guidelines Setup (GUIDELINES)",
+    "controls": [
+     "Group 'Direction': radio Horizontal/Vertical",
+     "guideline position list + position edit",
+     "Set / Clear / Clear All buttons",
+     "Display Guidelines (check)",
+     "Snap to Guidelines (check)",
+     "OK / Cancel / Help"
+    ]
+   },
+   {
+    "title": "Swap Color (SWAPCOL)",
+    "controls": [
+     "Group 'From': ColorSelector",
+     "Group 'To': ColorSelector",
+     "From any color (check)",
+     "Swap range (check)",
+     "OK / Cancel / Help"
+    ]
+   },
+   {
+    "title": "Adjust Colors (ADJUSTCOLORS)",
+    "controls": [
+     "Group 'Hue (degrees)': From Hue Range trackbar+edit 'to' trackbar+edit, To Hue Range trackbar+edit 'to' edit",
+     "Group 'Lightness (%)': trackbar+edit, Selected Hues Only (check)",
+     "Group 'Saturation (%)': trackbar+edit, Selected Hues Only (check)",
+     "OK / Cancel / Help"
+    ]
+   },
+   {
+    "title": "Edit Favorite Colors (COLORPICKER)",
+    "controls": [
+     "ColorFavorites grid",
+     "Name (edit)",
+     "Add / Replace / Clear buttons",
+     "Flashing (check) with radio On State/Off State",
+     "Transparent (check)",
+     "Hue/Lum/Sat (edits+updown)",
+     "Red/Green/Blue (edits+updown)",
+     "Color sample, Color wheel, Brightness bar",
+     "Edit ... button",
+     "OK / Cancel / Help"
+    ]
+   },
+   {
+    "title": "Goto Object (GOTOAN)",
+    "controls": [
+     "object tree (SysTreeView32 of ANs/names)",
+     "Object Name or AN (edit)",
+     "Up / Down buttons",
+     "OK / Cancel / Help"
+    ]
+   },
+   {
+    "title": "Find: object text (FIND)",
+    "controls": [
+     "Find what (edit)",
+     "Group 'Search in': radio 'Current view' / 'All views'",
+     "Group 'Direction': radio Back/Forward",
+     "Match whole field only (check)",
+     "Find Next / Close"
+    ]
+   },
+   {
+    "title": "Replace: object text (REPLACE)",
+    "controls": [
+     "Find what (edit)",
+     "Replace with (edit)",
+     "Group 'Search in': Current view / All views",
+     "Group 'Direction': Back/Forward",
+     "Match whole field only (check)",
+     "Find Next / Replace / Replace All / Close"
+    ]
+   },
+   {
+    "title": "Find page (File>Find, PAGEFIND)",
+    "controls": [
+     "Pages (edit + listbox)",
+     "Project Name (listbox)",
+     "OK / Cancel / Help"
+    ]
+   },
+   {
+    "title": "New (File>New, NEWPAGE)",
+    "controls": [
+     "5 big bitmap buttons: Page / Template / Symbol / Genie / Super Genie (each with description text)",
+     "Cancel / Help"
+    ]
+   },
+   {
+    "title": "Page Defaults (PAGEDEFDLG / 26007)",
+    "controls": [
+     "Group 'Template': Style (combo), Resolution (combo), 'Designed for showing title bar' (check), Preview THUMB",
+     "Background color (ColorSelector)",
+     "OK / Cancel / Help"
+    ]
+   },
+   {
+    "title": "Open/Save As (OPENSAVEASDLG)",
+    "controls": [
+     "TabBox with tabs Page / Template / Symbol / Genie / Super Genie / Library",
+     "File (edit), Dir (listbox), Drive (combo), file ListBox",
+     "Preview THUMB + Enable (check)",
+     "Resolution (combo)",
+     "Designed for showing title bar (check)",
+     "OK / Cancel / New / Delete / Help"
+    ]
+   },
+   {
+    "title": "Select Library Item (SELECTLIBOBJ: Paste Symbol / Paste Genie browser)",
+    "controls": [
+     "Library (listbox)",
+     "Selection / Super Genie label",
+     "12 thumbnail THUMBs + scrollbar (paged grid)",
+     "Resolution (combo)",
+     "Linked (check)",
+     "Designed for showing title bar (check)",
+     "OK / Cancel / Edit / New / Help"
+    ]
+   },
+   {
+    "title": "New Library (NEWLIBRARY)",
+    "controls": [
+     "Name (edit)",
+     "OK / Cancel / Help"
+    ]
+   },
+   {
+    "title": "Attach Super Genies (EDITBINDINGSLIST)",
+    "controls": [
+     "'Attached Super Genies' listbox",
+     "Add / Remove",
+     "OK / Cancel / Help"
+    ]
+   },
+   {
+    "title": "Page Environment list (EDITPROPERTYLIST) + Edit Property (EDITPROPERTY)",
+    "controls": [
+     "Properties listbox + Add/Remove/Edit",
+     "Edit Property: Property (edit), Value (edit), OK/Cancel"
+    ]
+   },
+   {
+    "title": "Options: Tools>Options (OPTIONSDLG)",
+    "controls": [
+     "Display properties on new (check)",
+     "Display properties on copy (check)",
+     "Save template warning (check)",
+     "Modify Object AN field (check)",
+     "Disable genie forms (check)",
+     "Display group button (check)",
+     "Compile enquiry message (check)",
+     "Fast runtime display (check)",
+     "List system pages (check)",
+     "Show version 3.xx/4.xx tools (check)",
+     "XP Style Buttons by default (check)",
+     "Transparent paste (ColorSelector)",
+     "ActiveX Automatic Page Saving (combo)",
+     "OK / Cancel / Help"
+    ]
+   },
+   {
+    "title": "Print",
+    "controls": [
+     "Group 'Print selection': CheckList of pages, Select All / Deselect All",
+     "Group 'Options': 'Graphics pages included in print selection' (combo), 'Group printouts by graphics page' (check)",
+     "OK / Cancel / Help"
+    ]
+   },
+   {
+    "title": "Font (FONTDLGEX)",
+    "controls": [
+     "Font (combo), Style (combo), Size (combo)",
+     "Group 'Effects': Strikeout (check), Underline (check)",
+     "Script (combo)",
+     "OK / Cancel / Help"
+    ]
+   },
+   {
+    "title": "Insert ActiveX Control",
+    "controls": [
+     "ActiveX Controls (listbox)",
+     "Location (edit)",
+     "Insert / Cancel"
+    ]
+   },
+   {
+    "title": "Insert Function (PASTEFUNCBOX) / Insert Tag (PASTETAGBOX) / Insert Trend (PASTETRENDBOX)",
+    "controls": [
+     "selection listbox",
+     "Insert arguments (check, function only)",
+     "OK / Cancel / Help"
+    ]
+   },
+   {
+    "title": "Hot Spot Location (HOTSPOTDLG)",
+    "controls": [
+     "X Position (edit)",
+     "Y Position (edit)",
+     "OK / Cancel / Help"
+    ]
+   },
+   {
+    "title": "Animation Point (ANDLG: legacy)",
+    "controls": [
+     "X Coordinate (edit)",
+     "Y Coordinate (edit)",
+     "Animation Number (edit)",
+     "OK / Cancel"
+    ]
+   },
+   {
+    "title": "Bar Graph Attributes (BARDLG: legacy)",
+    "controls": [
+     "Group 'Direction': radio Up/Right",
+     "Group 'Limits': One (scrollbar+value), Two (scrollbar+value)",
+     "Group 'Colors': Limit Two / Limit One / Bar (3 ColorSelectors)",
+     "OK / Cancel"
+    ]
+   },
+   {
+    "title": "Bitmap size (EDITDLG: bitmap editor)",
+    "controls": [
+     "Group 'Mode': radio Grow/Shrink",
+     "Left/Right/Top/Bottom (edits)",
+     "Group 'Dimensions': Width/Height (edits)",
+     "OK / Cancel"
+    ]
+   },
+   {
+    "title": "File Error / broken link (BROKENLNK)",
+    "controls": [
+     "message + icon",
+     "Yes / Yes to All / No / No to All / Cancel"
+    ]
+   },
+   {
+    "title": "Save page prompt before ActiveX insert (ACTIVEXSAVEDLG)",
+    "controls": [
+     "Yes / Yes to All / No / No to All"
+    ]
+   },
+   {
+    "title": "Update Pages progress (UPDATEPAGESDLG) / Status (CACHEINFO/STATUSDLG)",
+    "controls": [
+     "progress gauge (GASGAUGE)",
+     "Cancel"
+    ]
+   },
+   {
+    "title": "About (INTRODLG)",
+    "controls": [
+     "CTDRAW bitmap",
+     "OK"
+    ]
+   },
+   {
+    "title": "Debug Info (OBJECTDBG: hidden object-record inspector)",
+    "controls": [
+     "record listbox",
+     "Close / Parent... / Base... / First... / Next... / Dump"
+    ]
+   }
+  ],
+  "features": [
+   "Menu architecture: menu bar order is File, Edit, View, Objects, Text, Arrange, Tools, Window, Help. User-defined menu items can be added from the project configuration (to a named top menu, which can also be renamed or replaced).",
+   "Main toolbar: New, Open, Save | Run (Citect) | Plant SCADA Studio, Cicode Editor, Setup Wizard | Cut, Copy, Paste, Undo | Send to Front, Send to Back, Bring Forwards, Send Backwards | Group, Ungroup | Help Topics.",
+   "Drawing toolbox ('Show Tools' F3, floating): tool per Objects-menu entry (Free Hand Line, Straight Line, Rectangle, Ellipse, Polygon, Pipe, Text, Number, Button, Symbol Set, Trend, Cicode Object, ...) with status-bar descriptions; legacy V3/V4 tools (Animation Point, Color Flood, Bar Graph, String, Animated Symbol, Slider, Keyboard, Size/Move, Variable Tags, even a 'Sparkle' easter-egg tool) appear when Options>'Show version 3.xx/4.xx tools' is enabled.",
+   "Floating Zoom window (View>Show Zoom, F10) with Zoom In (Num+) / Zoom Out (Num-); embedded Bitmap Editor (Tools>Bitmap Editor, F9) with its own Save/Zoom In(+)/Zoom Out(-)/Dimensions/Color Select(Shft+P) commands and 'Bitmap size' grow/shrink dialog.",
+   "Expression 'wizard' button on every expression/tag field opens a popup menu: Insert Tag..., Insert Function..., Insert Trend Tag..., Build Expression... backed by the Insert Tag/Insert Function/Insert Trend dialogs.",
+   "Grid: Grid Setup (pitch x/y, origin x/y, display, snap) + Snap to Grid (F8); Guidelines: per-direction guideline list with Set/Clear/Clear All + Snap to Guidelines (F7); Cross Hair Cursor toggle; Cursor Keys Slow Speed (slow nudge) toggle; Show Tool Bar / Tools / Zoom / Status Bar / Scroll Bars view toggles; Refresh (redraw).",
+   "Goto Object (Ctrl+G): tree-based AN/object browser with Up/Down navigation: jumps selection to any animation number.",
+   "Object text Find/Replace across 'Current view' or 'All views' with direction and whole-field match; separate File>Find page browser by page name across projects.",
+   "Clipboard: Cut/Copy/Paste/Duplicate/Select All plus Paste Special with formats: AVEVA Plant SCADA Graphics Object(s), Device Independent Bitmap, Bitmap, Unformatted Text, Picture (Metafile), Picture (Enhanced Metafile); transparent-paste key color configurable in Options.",
+   "Library workflow: Paste Symbol (F6) / Paste Symbol As Flashing / Paste Genie (F11, genie or super genie) / Paste Composite Genie; Copy to Library; Cut Link (break library link = 'AxeSelected'); 'Linked' checkbox on the library browser controls linked vs embedded paste; New Library creation; library item Edit/New from the browser; Pack Libraries (active project / + included projects); Update Pages in Active and Included Projects (re-syncs pages with changed library objects; warns if library-object tracking info missing).",
+   "Genies: Genie Parameters... (substitution editing), Edit Composite Genie..., Paste Composite Genie, Attach Super Genies (bindings list), super-genie association syntax '?<datatype> <name>?', genie save validation (no ActiveX in DspSym genies), 'Cannot reparent Composite Genie instance at AN %d', composite-genie cache initialisation ('Initializing composite genie cache').",
+   "Object locking: Lock object / Unlock Object / Break Lock Mode (locked objects not selectable until unlocked).",
+   "Arrange: Align (V: top/centre/bottom/even, H: left/centre/right/even), Rotate (90-degree CW/ACW), Mirror (V/H), Group/Ungroup, 4-way z-order (Front/Back/Forwards/Backwards), Adjust Position and Size (numeric X/Y + size by % or absolute W/H, with Apply).",
+   "Color tooling: 16-color favorites palette with named colors, flashing colors (separate ON/OFF state colors), transparent sentinel color, HLS + RGB editing, color wheel; Swap Color (exact or any/range); Adjust Colors (hue-range remap + lightness/saturation, 'Selected Hues Only'); Convert to Bitmap.",
+   "Object identity: every object has an AN (animation number); Access>General exposes AN/Name/Description/Tooltip; object names validated ('Name needs to begin with a letter...', uniqueness 'Object Type %s (AN %d) already uses name %s'); reserved ANs warning ('Do NOT remove reserved animation points!').",
+   "Per-object animation model exposed via property-sheet tabs (Appearance/Movement/Scaling/Fill/Input/Slider/Access/Metadata) with per-tab 'Clear Property' and mutual-exclusion rules (Movement vs Slider per axis, Rotational Slider vs H/V Slider); options 'Display properties on new/copy' auto-open the sheet after create/copy.",
+   "Symbol Set states: Off Symbol + Symbol 1..8; line styles enumeration Solid/Dash/Dot/Dash Dot/Dash Dot Dot (733-737); gradient directions incl. to/from-middle variants (1668-1675); touch actions Up/Down/Repeat/Double click; 9-point 'Express' center-axis QuickSet picker (Top/Middle/Bottom x Left/Centre/Right).",
+   "Page-level: Page Properties (General/Appearance/Keyboard Commands/Events/Environment/Associations), Page Defaults (default template style/resolution/title bar/background), page Events (On page shown etc.), page scan time, cluster context inheritance, 'Ignore Quality' setting, view area W/H, page color.",
+   "File-level: New offers Page/Template/Symbol/Genie/Super Genie object classes; Open/SaveAs browses by class tab with thumbnail preview and per-class resolution/title-bar filter; Import (image) and Import As Flashing (primary+flash image pair); Save All; Compile (Alt+F10) and Run (F5) from the editor; Print with page-selection list; MRU of 4 pages persisted as [ctedit] page0..page3 INI keys; warning prompts when pages were changed externally (Studio): 'External Change Detected'.",
+   "ActiveX/extensibility: Insert ActiveX Control (registry-enumerated, license-checked, interface-validated IOleObject/IViewObject2/IPersistStorage), Tag Association of bindable control properties to tags with update-on-event, type-compatibility warnings, persist-data-between-pages option, automatic page-saving policy option; Insert Process Analyst; Insert Database Exchange control; Web Content object with URL diagnostics; Pelco Camera Viewer; Scheduler control.",
+   "Editor options (Tools>Options): properties on new/copy, save template warning, Modify Object AN field, disable genie forms, display group button, compile enquiry message, fast runtime display (writes .ctF fast-display files), list system pages, show 3.xx/4.xx tools, XP-style buttons default, transparent paste color, ActiveX page-save policy.",
+   "Misc behaviors: MDI child windows per page with Window-menu open-page list; status bar; double-click opens object properties; right-click context menu (Cut/Copy/Paste/Group/Ungroup/Properties/Genie Parameters/Edit Composite Genie/Page Properties); broken library link dialog with Yes/No to All; hidden Debug Info 'Hot Spot' tool for symbol hotspot X/Y; multi-language font Script selection with runtime-substitution warning; super-genie generated page edit warning and static (library) page edit redirection.",
+   "Keyboard shortcuts (from the menu captions): Ctrl+N/O/S/P, Ctrl+F4, Alt+F10, F5, Alt+F4, Ctrl+Z/Y/X/C/V/D/A/F/H/G, Del, F6 (paste symbol), F11 (paste genie), Ctrl+F11 (paste super genie, legacy string), F7/F8 (snap toggles), F3 (tools), F10 (zoom), F9 (bitmap editor), F12 (Studio), F1 (help), Ctrl+B/I/U (text styles), Ctrl+Shift+A/R/M/G/U/P/K (arrange), Ctrl+E (compile errors, legacy), Num+/Num- (zoom)."
+  ],
+  "summary": "CtDraw v8.50 (AVEVA Plant SCADA 2023 Graphics Builder): its menus, dialogs and editor behaviours, as the running Graphics Builder shows them."
+ }
+}

@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TemplateMetadata TemplateId="7c2e4d3b-9e5f-4a6b-8c7d-8e9f0a1b2c3d" Digest="bfsA9pxYnACnrXZSf/Y0yAKGBU4=">
+  <LibraryItemVersions>
+    <ItemVersion Project="FxLib" Library="fxgenie" Item="fx_plain">
+      <Version>391178e4-f2f2-044a-86c7-d14f669335ae</Version>
+    </ItemVersion>
+    <ItemVersion Project="FxLib" Library="fxparts" Item="fx_valve_left">
+      <Version>192f3fa2-57ba-a741-a9ab-2d45de4ef305</Version>
+    </ItemVersion>
+  </LibraryItemVersions>
+</TemplateMetadata>

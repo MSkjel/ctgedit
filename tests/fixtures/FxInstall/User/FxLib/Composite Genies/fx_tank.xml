@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<VisualTemplate Guid="{6B1F3C2A-8D4E-4F5A-9B6C-7D8E9F0A1B2C}" Name="FxTank" Thumbnail="fx_tank">
+  <Parameters>
+    <Parameter Name="Equipment" Label="Equipment" Type="String" NamingRules="Equipment"
+        MinLength="1" MaxLength="160" Description="The equipment the tank shows."/>
+    <Parameter Name="Label" Label="Label" Type="String" DefaultValue="Tank"/>
+    <Parameter Name="ShowValue" Label="Show value" Type="Bool" DefaultValue="true"/>
+    <Parameter Name="Orientation" Label="Orientation" Type="String" DefaultValue="Left">
+      <Values><Value Id="0" Label="Left"/><Value Id="1" Label="Right"/></Values>
+    </Parameter>
+  </Parameters>
+  <ContentItems>
+    <Content Id="1" Type="Genie" Project="FxLib" Library="fxgenie" Item="fx_plain"/>
+    <Content Id="2" Type="Genie" Project="FxLib" Library="fxgenie" Item="fx_value"/>
+  </ContentItems>
+  <Compositions>
+    <Composition Id="{6B1F3C2A-8D4E-4F5A-9B6C-7D8E9F0A1B2D}">
+      <Layout>
+        <Content ItemId="1" ZIndex="1"/>
+        <Content ItemId="2" ZIndex="2" VisibleWhen="ShowIt">
+          <Parameters><Parameter Name="Description" TemplateParameter="Label"/></Parameters>
+        </Content>
+      </Layout>
+    </Composition>
+  </Compositions>
+  <GlobalConditions>
+    <GlobalCondition Id="ShowIt">
+      <ParameterCondition Name="ShowValue" Value="true"/></GlobalCondition>
+  </GlobalConditions>
+</VisualTemplate>

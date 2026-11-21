@@ -1,0 +1,5 @@
+// FxLib's Cicode: a function of an included project (expression completion); it calls no
+// built-in function, so an engine without a function list compiles it
+FUNCTION FxLibShow(STRING sName, INT nMode)
+    fx_lib_local = nMode;
+END

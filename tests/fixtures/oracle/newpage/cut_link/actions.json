@@ -1,0 +1,19 @@
+{
+ "break_lock_posted": true,
+ "links_lost": [],
+ "menu_command": 138,
+ "page": "FxTplLinked",
+ "selected": "PageSelectObject(11)",
+ "template": {
+  "an": 11,
+  "handle": 10,
+  "index": 0,
+  "keep": [
+   "fxgenie.fx_pump.<ctm"
+  ],
+  "reference": "fx_style.normal@XGA.<ctt",
+  "sha1": "5baeb33f09514bf93a9898062438e4a9aee0ca58"
+ },
+ "template_reference_left": false,
+ "unchanged": false
+}

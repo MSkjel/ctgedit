@@ -1,0 +1,23 @@
+// FxSim: the Cicode the simulator runs (our own)
+INT FUNCTION FxSimStart()
+    FX_SIM_RUN = 1;
+    RETURN 1;
+END
+
+INT FUNCTION FxSimStop()
+    FX_SIM_RUN = 0;
+    RETURN 0;
+END
+
+REAL FUNCTION FxSimScaled(REAL value)
+    RETURN value * 2.0;
+END
+
+FUNCTION FxSimTick()
+    WHILE TRUE DO
+        IF FX_SIM_RUN THEN
+            FX_SIM_COUNT = FX_SIM_COUNT + 1;
+        END
+        Sleep(1);
+    END
+END

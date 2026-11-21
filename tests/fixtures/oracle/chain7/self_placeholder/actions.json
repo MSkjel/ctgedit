@@ -1,0 +1,37 @@
+{
+ "calls": [
+  {
+   "PageName after the open": "error: (-2147352567, 'Exception occurred.', (0, None, None, None, 0, -2147024890), None)",
+   "PageOpenEx": [
+    "FxLib",
+    "fxnest",
+    "n1",
+    1
+   ],
+   "copied from": "chain5/element_placeholder/element_missing/library.ctm fx_row",
+   "element": "n1",
+   "library changed": false,
+   "open": "error: (-2147417851, 'The server threw an exception.', None, None)",
+   "open seconds": 0.3,
+   "open: builder ended": false,
+   "stage": "n1_holds"
+  },
+  {
+   "PageName after the open": "error: (-2147352567, 'Exception occurred.', (0, None, None, None, 0, -2147024890), None)",
+   "PageOpenEx": [
+    "FxLib",
+    "fxnest",
+    "n0",
+    1
+   ],
+   "copied from": "chain5/element_placeholder/element_missing/library.ctm fx_row",
+   "element": "n0",
+   "library changed": false,
+   "open": "error: (-2147417851, 'The server threw an exception.', None, None)",
+   "open seconds": 0.2,
+   "open: builder ended": false,
+   "stage": "n0_holds"
+  }
+ ],
+ "library": "FxLib/fxnest.ctm"
+}

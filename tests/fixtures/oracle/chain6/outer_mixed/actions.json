@@ -1,0 +1,142 @@
+{
+ "calls": [
+  {
+   "PageName": "template.Untitled1@XGA",
+   "PageNewTemplate": [
+    "FxStyle",
+    "fx_style",
+    "normal",
+    3,
+    true,
+    true
+   ]
+  },
+  {
+   "PageSaveAsEx": [
+    "FxStyle",
+    "fx_style",
+    "fxouter"
+   ],
+   "new elements": [
+    "fxouter@XGA"
+   ]
+  },
+  {
+   "ANs": [
+    12,
+    13
+   ],
+   "DrawText": [
+    [
+     "%P%",
+     500,
+     500
+    ],
+    [
+     "%Q=5%",
+     500,
+     540
+    ]
+   ],
+   "open": "fxouter@XGA",
+   "stage": "params_added"
+  },
+  {
+   "New Page": [
+    {
+     "PageNew": [
+      "FxMain",
+      "fx_style",
+      "fxouter",
+      3,
+      true,
+      true
+     ],
+     "PageSaveAs": [
+      "FxMain",
+      "FxOracleMixedNew1"
+     ],
+     "result": "saved"
+    }
+   ],
+   "stage": "first/new_page"
+  },
+  {
+   "open + save": "fxouter@XGA",
+   "page type": 3,
+   "stage": "resaved/fxouter@XGA"
+  },
+  {
+   "New Page": [
+    {
+     "PageNew": [
+      "FxMain",
+      "fx_style",
+      "fxouter",
+      3,
+      true,
+      true
+     ],
+     "PageSaveAs": [
+      "FxMain",
+      "FxOracleMixedNew2"
+     ],
+     "result": "saved"
+    }
+   ],
+   "stage": "resaved/new_page"
+  },
+  {
+   "fresh Graphics Builder": true,
+   "library": "as after params_added"
+  },
+  {
+   "New Page": [
+    {
+     "PageNew": [
+      "FxMain",
+      "fx_style",
+      "fxouter",
+      3,
+      true,
+      true
+     ],
+     "PageSaveAs": [
+      "FxMain",
+      "FxOracleMixedNew3"
+     ],
+     "result": "saved"
+    }
+   ],
+   "stage": "fresh/new_page"
+  },
+  {
+   "open + save": "fxouter@XGA",
+   "page type": 3,
+   "stage": "fresh/fxouter@XGA"
+  },
+  {
+   "New Page": [
+    {
+     "PageNew": [
+      "FxMain",
+      "fx_style",
+      "fxouter",
+      3,
+      true,
+      true
+     ],
+     "PageSaveAs": [
+      "FxMain",
+      "FxOracleMixedNew4"
+     ],
+     "result": "saved"
+    }
+   ],
+   "stage": "fresh_resaved/new_page"
+  }
+ ],
+ "inner": "normal@XGA",
+ "library": "FxStyle/fx_style.ctt",
+ "made": "fxouter@XGA"
+}

@@ -1,0 +1,523 @@
+{
+ "calls": [
+  {
+   "DrawRectangle": [
+    100,
+    140,
+    200,
+    180
+   ],
+   "DrawText": [
+    "Mirror grp",
+    100,
+    100
+   ],
+   "group": "Mirror grp",
+   "mirrored": true,
+   "rectangle AN": 2,
+   "selected after PageGroupSelectedObjects": {
+    "AN": 3,
+    "class": "Group"
+   },
+   "stage": "grouped",
+   "text AN": 1
+  },
+  {
+   "DrawRectangle": [
+    400,
+    140,
+    500,
+    180
+   ],
+   "DrawText": [
+    "Plain grp",
+    400,
+    100
+   ],
+   "group": "Plain grp",
+   "mirrored": false,
+   "rectangle AN": 5,
+   "selected after PageGroupSelectedObjects": {
+    "AN": 6,
+    "class": "Group"
+   },
+   "stage": "grouped",
+   "text AN": 4
+  },
+  {
+   "AN": 7,
+   "DrawText": [
+    "Font plain",
+    100,
+    400
+   ],
+   "mirrored": false,
+   "stage": "grouped"
+  },
+  {
+   "AN": 8,
+   "DrawText": [
+    "Font mirror",
+    400,
+    400
+   ],
+   "mirrored": true,
+   "stage": "grouped"
+  },
+  {
+   "AN": 3,
+   "AttributeTransformationMatrixPut": [
+    2.0,
+    0.0,
+    0.0,
+    2.0,
+    -100.0,
+    -100.0
+   ],
+   "composed onto": [
+    1.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0
+   ],
+   "getters after": {
+    "AttributeBaseCoordinates": [
+     100,
+     87,
+     200,
+     180
+    ],
+    "AttributeExtentX": 301,
+    "AttributeExtentY": 261,
+    "AttributeTransformationMatrixGet": [
+     2.0,
+     0.0,
+     0.0,
+     2.0,
+     -100.0,
+     -100.0
+    ],
+    "AttributeX": 100,
+    "AttributeXEx": 100,
+    "AttributeY": 100,
+    "AttributeYEx": 100
+   },
+   "getters before": {
+    "AttributeBaseCoordinates": [
+     100,
+     87,
+     200,
+     180
+    ],
+    "AttributeExtentX": 201,
+    "AttributeExtentY": 181,
+    "AttributeTransformationMatrixGet": [
+     1.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    "AttributeX": 100,
+    "AttributeXEx": 100,
+    "AttributeY": 100,
+    "AttributeYEx": 100
+   },
+   "record before": {
+    "an": 3,
+    "anchor": [
+     100,
+     179
+    ],
+    "rect1": [
+     100,
+     100,
+     200,
+     180
+    ],
+    "rect2": [
+     100,
+     100,
+     201,
+     181
+    ],
+    "slots": [
+     [
+      0,
+      [
+       1.0,
+       0.0,
+       0.0,
+       1.0,
+       0.0,
+       0.0
+      ]
+     ],
+     [
+      0,
+      [
+       1.0,
+       0.0,
+       0.0,
+       1.0,
+       0.0,
+       0.0
+      ]
+     ],
+     [
+      0,
+      [
+       1.0,
+       0.0,
+       0.0,
+       1.0,
+       0.0,
+       0.0
+      ]
+     ]
+    ],
+    "type_code": 8
+   },
+   "scaled": "Mirror grp",
+   "stage": "scaled"
+  },
+  {
+   "AN": 6,
+   "AttributeTransformationMatrixPut": [
+    2.0,
+    0.0,
+    0.0,
+    2.0,
+    -400.0,
+    -100.0
+   ],
+   "composed onto": [
+    1.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0
+   ],
+   "getters after": {
+    "AttributeBaseCoordinates": [
+     400,
+     100,
+     500,
+     180
+    ],
+    "AttributeExtentX": 601,
+    "AttributeExtentY": 261,
+    "AttributeTransformationMatrixGet": [
+     2.0,
+     0.0,
+     0.0,
+     2.0,
+     -400.0,
+     -100.0
+    ],
+    "AttributeX": 400,
+    "AttributeXEx": 400,
+    "AttributeY": 100,
+    "AttributeYEx": 100
+   },
+   "getters before": {
+    "AttributeBaseCoordinates": [
+     400,
+     100,
+     500,
+     180
+    ],
+    "AttributeExtentX": 501,
+    "AttributeExtentY": 181,
+    "AttributeTransformationMatrixGet": [
+     1.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    "AttributeX": 400,
+    "AttributeXEx": 400,
+    "AttributeY": 100,
+    "AttributeYEx": 100
+   },
+   "record before": {
+    "an": 6,
+    "anchor": [
+     400,
+     179
+    ],
+    "rect1": [
+     400,
+     100,
+     500,
+     180
+    ],
+    "rect2": [
+     400,
+     100,
+     501,
+     181
+    ],
+    "slots": [
+     [
+      0,
+      [
+       1.0,
+       0.0,
+       0.0,
+       1.0,
+       0.0,
+       0.0
+      ]
+     ],
+     [
+      0,
+      [
+       1.0,
+       0.0,
+       0.0,
+       1.0,
+       0.0,
+       0.0
+      ]
+     ],
+     [
+      0,
+      [
+       1.0,
+       0.0,
+       0.0,
+       1.0,
+       0.0,
+       0.0
+      ]
+     ]
+    ],
+    "type_code": 8
+   },
+   "scaled": "Plain grp",
+   "stage": "scaled"
+  },
+  {
+   "AN": 7,
+   "AttributeTextFontSize put": 22,
+   "getters after": {
+    "AttributeBaseCoordinates": [
+     100,
+     386,
+     228,
+     419
+    ],
+    "AttributeExtentX": 228,
+    "AttributeExtentY": 419,
+    "AttributeTransformationMatrixGet": [
+     1.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    "AttributeX": 100,
+    "AttributeXEx": 100,
+    "AttributeY": 386,
+    "AttributeYEx": 386
+   },
+   "getters before": {
+    "AttributeBaseCoordinates": [
+     100,
+     400,
+     163,
+     416
+    ],
+    "AttributeExtentX": 163,
+    "AttributeExtentY": 416,
+    "AttributeTransformationMatrixGet": [
+     1.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    "AttributeX": 100,
+    "AttributeXEx": 100,
+    "AttributeY": 400,
+    "AttributeYEx": 400
+   },
+   "record before": {
+    "an": 7,
+    "anchor": [
+     100,
+     413
+    ],
+    "rect1": [
+     100,
+     400,
+     163,
+     416
+    ],
+    "rect2": [
+     100,
+     400,
+     163,
+     416
+    ],
+    "slots": [
+     [
+      0,
+      [
+       1.0,
+       0.0,
+       0.0,
+       1.0,
+       0.0,
+       0.0
+      ]
+     ],
+     [
+      0,
+      [
+       1.0,
+       0.0,
+       0.0,
+       1.0,
+       0.0,
+       0.0
+      ]
+     ],
+     [
+      0,
+      [
+       1.0,
+       0.0,
+       0.0,
+       1.0,
+       0.0,
+       0.0
+      ]
+     ]
+    ],
+    "type_code": 5
+   },
+   "stage": "scaled",
+   "text": "Font plain"
+  },
+  {
+   "AN": 8,
+   "AttributeTextFontSize put": 22,
+   "getters after": {
+    "AttributeBaseCoordinates": [
+     400,
+     373,
+     544,
+     406
+    ],
+    "AttributeExtentX": 470,
+    "AttributeExtentY": 419,
+    "AttributeTransformationMatrixGet": [
+     -1.0,
+     0.0,
+     -0.0,
+     1.0,
+     870.0,
+     13.0
+    ],
+    "AttributeX": 326,
+    "AttributeXEx": 326,
+    "AttributeY": 386,
+    "AttributeYEx": 386
+   },
+   "getters before": {
+    "AttributeBaseCoordinates": [
+     400,
+     387,
+     470,
+     403
+    ],
+    "AttributeExtentX": 470,
+    "AttributeExtentY": 416,
+    "AttributeTransformationMatrixGet": [
+     -1.0,
+     0.0,
+     -0.0,
+     1.0,
+     870.0,
+     13.0
+    ],
+    "AttributeX": 400,
+    "AttributeXEx": 400,
+    "AttributeY": 400,
+    "AttributeYEx": 400
+   },
+   "record before": {
+    "an": 8,
+    "anchor": [
+     470,
+     413
+    ],
+    "rect1": [
+     400,
+     400,
+     470,
+     416
+    ],
+    "rect2": [
+     400,
+     400,
+     470,
+     416
+    ],
+    "slots": [
+     [
+      3,
+      [
+       -1.0,
+       0.0,
+       0.0,
+       1.0,
+       870.0,
+       13.0
+      ]
+     ],
+     [
+      3,
+      [
+       -1.0,
+       0.0,
+       0.0,
+       1.0,
+       870.0,
+       13.0
+      ]
+     ],
+     [
+      3,
+      [
+       -1.0,
+       0.0,
+       0.0,
+       1.0,
+       870.0,
+       13.0
+      ]
+     ]
+    ],
+    "type_code": 5
+   },
+   "stage": "scaled",
+   "text": "Font mirror"
+  },
+  {
+   "open + save": "FxOracleDraw",
+   "stage": "reopened"
+  }
+ ],
+ "page": "FxMain/FxOracleDraw"
+}

@@ -1,0 +1,76 @@
+# Messages that break the message rules of tools/check_ui_text.py, accepted until their
+# package fixes them: remove a line when you fix its message (path | rule | the text).
+ctgedit/ui/dialog/quick_open.py | message without a final '.' | %s is in the Tags panel and on the clipboard
+ctgedit/ui/dialog/quick_open.py | message without a final '.' | The Cicode file was not found
+ctgedit/ui/window/canvas_edits.py | '(s)' in a message | Copied %d object(s)
+ctgedit/ui/window/canvas_edits.py | '(s)' in a message | Delete %d object(s)?
+ctgedit/ui/window/canvas_edits.py | '(s)' in a message | Deleted %d node(s)
+ctgedit/ui/window/canvas_edits.py | message without a final '.' | Composite genie updated with the newest template
+ctgedit/ui/window/canvas_edits.py | message without a final '.' | Copied %d object(s)
+ctgedit/ui/window/canvas_edits.py | message without a final '.' | Deleted %d node(s)
+ctgedit/ui/window/canvas_edits.py | message without a final '.' | Number not placed: no expression was entered
+ctgedit/ui/window/canvas_edits.py | message without a final '.' | Open a document first
+ctgedit/ui/window/canvas_edits.py | message without a final '.' | Opened the properties of the first %d of the %d objects copied
+ctgedit/ui/window/canvas_edits.py | message without a final '.' | The composite genie is up to date
+ctgedit/ui/window/canvas_edits.py | message without a final '.' | Updated genie parameters
+ctgedit/ui/window/canvas_edits.py | message without a final '.' | Updated object properties
+ctgedit/ui/window/canvas_edits.py | message without a final '.' | Updated the symbol set
+ctgedit/ui/window/canvas_edits.py | message without a final '.' | Updated the template's inputs
+ctgedit/ui/window/commands.py | '(s)' in a message | %d object(s) locked (Edit > Break Lock Mode to select them)
+ctgedit/ui/window/commands.py | '(s)' in a message | %d object(s) unlocked
+ctgedit/ui/window/commands.py | '(s)' in a message | Imported %d picture(s)
+ctgedit/ui/window/commands.py | message without a final '.' | %d object(s) locked (Edit > Break Lock Mode to select them)
+ctgedit/ui/window/commands.py | message without a final '.' | %d object(s) unlocked
+ctgedit/ui/window/commands.py | message without a final '.' | %s is no longer there
+ctgedit/ui/window/commands.py | message without a final '.' | %s not found in the Plant SCADA install
+ctgedit/ui/window/commands.py | message without a final '.' | Aligned %d objects
+ctgedit/ui/window/commands.py | message without a final '.' | Arranged %d objects in a grid
+ctgedit/ui/window/commands.py | message without a final '.' | Break Lock Mode off: locked objects cannot be edited
+ctgedit/ui/window/commands.py | message without a final '.' | Break Lock Mode on: locked objects can be edited
+ctgedit/ui/window/commands.py | message without a final '.' | Imported %d picture(s)
+ctgedit/ui/window/commands.py | message without a final '.' | Imported a flashing bitmap (the page shows its primary picture)
+ctgedit/ui/window/commands.py | message without a final '.' | Open a page first, then drop pictures on it
+ctgedit/ui/window/commands.py | message without a final '.' | Page sent to printer
+ctgedit/ui/window/commands.py | message without a final '.' | Select two or more objects to align (locked objects and the objects of
+ctgedit/ui/window/commands.py | message without a final '.' | Select two or more objects to arrange (locked objects and the objects 
+ctgedit/ui/window/commands.py | message without a final '.' | Select two or more objects to space (locked objects and the objects of
+ctgedit/ui/window/commands.py | message without a final '.' | Spaced %d objects equally
+ctgedit/ui/window/commands.py | message without a final '.' | The clipboard picture could not be read
+ctgedit/ui/window/commands.py | message without a final '.' | The selection changed: check the values and apply again
+ctgedit/ui/window/library.py | '(s)' in a message | %d composite genie instance(s) in the composition caches are not used 
+ctgedit/ui/window/library.py | '(s)' in a message | Adjusted the colours of %d object(s).
+ctgedit/ui/window/library.py | '(s)' in a message | Rewrite the symbol/genie/template libraries in %d project folder(s) co
+ctgedit/ui/window/library.py | '(s)' in a message | Swapped the colours of %d object(s).
+ctgedit/ui/window/library.py | '(s)' in a message | The page is no longer linked to %s: %d template object(s) are now page
+ctgedit/ui/window/library.py | message without a final '.' | %s.%s is not on this project's include path
+ctgedit/ui/window/library.py | message without a final '.' | A drawing (metafile) is always drawn at its size
+ctgedit/ui/window/library.py | message without a final '.' | A genie form belongs to a genie
+ctgedit/ui/window/library.py | message without a final '.' | A template or super genie has no hot spot to move: its reference point
+ctgedit/ui/window/library.py | message without a final '.' | Attached super genies of %s saved (%d)
+ctgedit/ui/window/library.py | message without a final '.' | Bitmap changed (%d x %d%s)
+ctgedit/ui/window/library.py | message without a final '.' | Click on the page to place the composite genie %s (Esc cancels)
+ctgedit/ui/window/library.py | message without a final '.' | Composite genie placed (composed into the project's composition cache)
+ctgedit/ui/window/library.py | message without a final '.' | Cut Link works on a placed library symbol (or, with nothing selected, 
+ctgedit/ui/window/library.py | message without a final '.' | Drag the box of the %s on the page (a click places it at its default s
+ctgedit/ui/window/library.py | message without a final '.' | New pages of %s now start from the %s style (%s)
+ctgedit/ui/window/library.py | message without a final '.' | Open a page of the project first
+ctgedit/ui/window/library.py | message without a final '.' | Save the page into its project first
+ctgedit/ui/window/library.py | message without a final '.' | Select one placed genie first
+ctgedit/ui/window/library.py | message without a final '.' | Select one placed genie first
+ctgedit/ui/window/library.py | message without a final '.' | Select the objects to copy first
+ctgedit/ui/window/library.py | message without a final '.' | Super genies can only be attached to a genie
+ctgedit/ui/window/library.py | message without a final '.' | The bitmap is already stored at its size on the page (%d x %d)
+ctgedit/ui/window/library.py | message without a final '.' | The bitmap is too large on the page to store at that size
+ctgedit/ui/window/library.py | message without a final '.' | The bitmap's picture could not be read
+ctgedit/ui/window/library.py | message without a final '.' | The bitmap's picture could not be read
+ctgedit/ui/window/library.py | message without a final '.' | The bitmap's picture could not be read (its stored data is damaged); i
+ctgedit/ui/window/library.py | message without a final '.' | The genie's library was not found
+ctgedit/ui/window/library.py | message without a final '.' | The hot spot belongs to a symbol or genie: open one for editing first
+ctgedit/ui/window/library.py | message without a final '.' | The page is no longer linked to %s: %d template object(s) are now page
+ctgedit/ui/window/library.py | message without a final '.' | The symbol is now a group of its own objects: it no longer follows its
+ctgedit/ui/window/shell.py | message without a final '.' | Click on the page to place the %s %s.%s%s (Esc cancels)
+ctgedit/ui/window/shell.py | message without a final '.' | Created the super genie page%s %s in project %s (compile to use %s)
+ctgedit/ui/window/shell.py | message without a final '.' | Open a page first
+ctgedit/ui/window/shell.py | message without a final '.' | Open a page first
+ctgedit/ui/window/view.py | message without a final '.' | Drop a tag on a genie to bind it
+ctgedit/ui/window/view.py | message without a final '.' | UI layout reset

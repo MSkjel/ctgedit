@@ -1,0 +1,158 @@
+{
+ "indexes": {
+  "FxMain/pgansym.NDX": {
+   "sha1": "eed1cb56899383c77b322eb930e9efb134660d06",
+   "size": 1024
+  },
+  "FxMain/pgkey.NDX": {
+   "sha1": "ce797f21328aac6b3107b655e2fc8553f389f7f9",
+   "size": 4096
+  },
+  "FxMain/pgnum.NDX": {
+   "sha1": "1efb9f74c6113315a73366bcefc7e9cf3913a1b0",
+   "size": 1024
+  },
+  "FxMain/pgstr.NDX": {
+   "sha1": "eed1cb56899383c77b322eb930e9efb134660d06",
+   "size": 1024
+  },
+  "FxMain/pgsym.NDX": {
+   "sha1": "1efb9f74c6113315a73366bcefc7e9cf3913a1b0",
+   "size": 1024
+  }
+ },
+ "removed": [],
+ "tables": {
+  "FxMain/pgansym.DBF": {
+   "added": [
+    {
+     "AN": "2",
+     "EXPR": "FX_MODE",
+     "MODE": "ANM_ARRAY",
+     "PAGE": "FxLegacy2",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "PAGE",
+    "AN",
+    "EXPR",
+    "OFF_SYMBOL",
+    "SYMBOL_1",
+    "SYMBOL_2",
+    "SYMBOL_3",
+    "SYMBOL_4",
+    "SYMBOL_5",
+    "SYMBOL_6",
+    "SYMBOL_7",
+    "SYMBOL_8",
+    "MODE",
+    "COMMENT",
+    "VISIBLE"
+   ]
+  },
+  "FxMain/pgkey.DBF": {
+   "added": [
+    {
+     "AN": "3",
+     "CMD": "FxToggle(FX_PUMP1)",
+     "KEY_SEQ": "ENTER",
+     "PAGE": "FxLegacy2",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "PAGE",
+    "AN",
+    "KEY_SEQ",
+    "CMD",
+    "PRIV",
+    "MSG_LOG",
+    "DEVICE",
+    "UP_AN",
+    "DOWN_AN",
+    "LEFT_AN",
+    "RIGHT_AN",
+    "COMMENT",
+    "AREA"
+   ]
+  },
+  "FxMain/pgnum.DBF": {
+   "added": [
+    {
+     "AN": "5",
+     "EXPR": "FX_LEVEL1",
+     "FONT": "FxSP",
+     "PAGE": "FxLegacy2",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "PAGE",
+    "AN",
+    "EXPR",
+    "FONT",
+    "COMMENT",
+    "VISIBLE"
+   ]
+  },
+  "FxMain/pgstr.DBF": {
+   "added": [
+    {
+     "AN": "3",
+     "EXPR": "FX_PUMP1",
+     "OFF_FONT": "DefaultFont",
+     "OFF_TEXT": "\"@(Fx OK)\"",
+     "ON_FONT": "DefaultFont",
+     "ON_TEXT": "\"@(Fx Run)\"",
+     "PAGE": "FxLegacy2",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "PAGE",
+    "AN",
+    "EXPR",
+    "OFF_TEXT",
+    "OFF_FONT",
+    "ON_TEXT",
+    "ON_FONT",
+    "COMMENT",
+    "VISIBLE"
+   ]
+  },
+  "FxMain/pgsym.DBF": {
+   "added": [
+    {
+     "AN": "1",
+     "PAGE": "FxLegacy2",
+     "VAR_A": "FX_PUMP1",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "PAGE",
+    "AN",
+    "VAR_A",
+    "VAR_B",
+    "VAR_C",
+    "SYMB000",
+    "SYMB001",
+    "SYMB010",
+    "SYMB011",
+    "SYMB100",
+    "SYMB101",
+    "SYMB110",
+    "SYMB111",
+    "MODE",
+    "COMMENT",
+    "VISIBLE"
+   ]
+  }
+ }
+}

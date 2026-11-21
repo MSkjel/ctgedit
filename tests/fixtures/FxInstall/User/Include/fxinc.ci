@@ -1,0 +1,8 @@
+// Stand-ins for functions every project can call (our own, no Plant SCADA code)
+INT FUNCTION FxIncPing()
+    RETURN 1;
+END
+
+STRING FUNCTION FxIncName(INT n)
+    RETURN "Fx" + IntToStr(n);
+END

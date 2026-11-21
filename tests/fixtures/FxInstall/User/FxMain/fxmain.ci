@@ -1,0 +1,12 @@
+// FxMain's own Cicode (stand-ins the pages call)
+INT FUNCTION FxToggle(INT tag)
+    RETURN NOT tag;
+END
+
+FUNCTION FxSet(INT tag, INT value)
+    tag = value;
+END
+
+INT FUNCTION FxExpanded()
+    RETURN 0;
+END

@@ -1,0 +1,212 @@
+{
+ "calls": [
+  {
+   "page": "FxOraclePlace",
+   "place": [
+    "FxLib",
+    "fxnest",
+    "n0",
+    "ctm",
+    100,
+    100,
+    []
+   ],
+   "stage": "placed",
+   "type": 0
+  },
+  {
+   "ClipboardCopy": 2,
+   "record": {
+    "an": 2,
+    "anchor": [
+     100,
+     115
+    ],
+    "rect1": [
+     100,
+     100,
+     104,
+     116
+    ],
+    "rect2": [
+     100,
+     100,
+     104,
+     116
+    ],
+    "slots": [
+     [
+      1,
+      [
+       1.0,
+       0.0,
+       0.0,
+       1.0,
+       129.0,
+       108.0
+      ]
+     ],
+     [
+      1,
+      [
+       1.0,
+       0.0,
+       0.0,
+       1.0,
+       90.0,
+       90.0
+      ]
+     ],
+     [
+      1,
+      [
+       1.0,
+       0.0,
+       0.0,
+       1.0,
+       90.0,
+       90.0
+      ]
+     ]
+    ],
+    "type_code": 8
+   },
+   "stage": "placed"
+  },
+  {
+   "ClipboardPaste": true,
+   "objects after": [
+    [
+     1,
+     "SquareV3"
+    ],
+    [
+     2,
+     "CircleV2"
+    ],
+    [
+     3,
+     "Genie"
+    ]
+   ],
+   "objects before": [
+    [
+     1,
+     "SquareV3"
+    ],
+    [
+     2,
+     "CircleV2"
+    ]
+   ],
+   "open": "fx_plain",
+   "shown before the save": {
+    "other": {
+     "1": [
+      1,
+      "SquareV3"
+     ],
+     "2": [
+      2,
+      "CircleV2"
+     ],
+     "3": [
+      3,
+      "Genie"
+     ]
+    },
+    "texts": {
+     "4": ""
+    }
+   },
+   "stage": "pasted"
+  },
+  {
+   "LibraryObjectPlaceEx": [
+    "FxLib",
+    "fxgenie",
+    "fx_plain",
+    0,
+    false,
+    40,
+    0
+   ],
+   "open": "fx_none",
+   "stage": "host_made"
+  },
+  {
+   "AN": 5,
+   "DrawText": [
+    "%P%",
+    0,
+    25
+   ],
+   "open": "fx_plain",
+   "stage": "gained"
+  },
+  {
+   "open + save": "fx_none",
+   "page type": 1,
+   "stage": "same/fx_none"
+  },
+  {
+   "page": "FxOracleDraw",
+   "place": [
+    "FxLib",
+    "fxparts",
+    "fx_none",
+    "ctm",
+    200,
+    200,
+    [
+     [
+      "P",
+      "PV"
+     ],
+     [
+      "Label",
+      "LV"
+     ]
+    ]
+   ],
+   "property puts refused": [],
+   "stage": "same/page",
+   "type": 0
+  },
+  {
+   "fresh Graphics Builder": true,
+   "libraries": "fxparts.ctm as after host_made, fxgenie.ctm as after gained"
+  },
+  {
+   "open + save": "fx_none",
+   "page type": 1,
+   "stage": "fresh/fx_none"
+  },
+  {
+   "page": "FxOracleDraw",
+   "place": [
+    "FxLib",
+    "fxparts",
+    "fx_none",
+    "ctm",
+    200,
+    200,
+    [
+     [
+      "P",
+      "PV"
+     ],
+     [
+      "Label",
+      "LV"
+     ]
+    ]
+   ],
+   "property puts refused": [],
+   "stage": "fresh/page",
+   "type": 0
+  }
+ ],
+ "host": "FxLib/fxparts.ctm/fx_none",
+ "pasted into": "FxLib/fxgenie.ctm/fx_plain"
+}

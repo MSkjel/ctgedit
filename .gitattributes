@@ -1,0 +1,4 @@
+# Text files are LF in the repository and in every checkout, whatever core.autocrlf says.
+# The fixtures (tests/fixtures) are byte-exact files: their own .gitattributes keeps them so.
+* text=auto eol=lf
+*.png binary

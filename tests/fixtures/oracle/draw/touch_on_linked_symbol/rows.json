@@ -1,0 +1,82 @@
+{
+ "indexes": {
+  "FxMain/pgtouch.NDX": {
+   "sha1": "6ad11a1f13a47bd63aa9a5c094710b37ce7d5661",
+   "size": 4096
+  }
+ },
+ "removed": [],
+ "tables": {
+  "FxMain/changes.DBF": {
+   "added": [
+    {
+     "KEY": "FxSymbols",
+     "NAME": "pages",
+     "RECORD_NO": "4",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "NAME",
+    "KEY",
+    "RECORD_NO"
+   ]
+  },
+  "FxMain/pages.DBF": {
+   "added": [],
+   "changed": [],
+   "fields": [
+    "NAME",
+    "ALIAS",
+    "TITLE",
+    "AREA",
+    "BGND_FILE",
+    "SYMB_FILE",
+    "NEXT_PAGE",
+    "PREV_PAGE",
+    "PAGE_INCL",
+    "ENTRY_FUNC",
+    "BGND_FUNC",
+    "EXIT_FUNC",
+    "COMMENT",
+    "SCANTIME",
+    "LOGDEVICE",
+    "READY_FUNC",
+    "CLUSTER",
+    "CINHERIT",
+    "IGNOREVQ",
+    "CON_TYPE",
+    "ACT_FUNC",
+    "DEACT_FUNC",
+    "PARENT"
+   ]
+  },
+  "FxMain/pgtouch.DBF": {
+   "added": [
+    {
+     "ACTION": "KEY_LBUTTON",
+     "AN": "2",
+     "DOWN_CMD": "Beep()",
+     "PAGE": "FxSymbols",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "PAGE",
+    "AN",
+    "ACTION",
+    "RPT_RATE",
+    "CMD",
+    "DOWN_CMD",
+    "DBLCLK_CMD",
+    "REPEAT_CMD",
+    "MSG_LOG",
+    "MSG_LOGDN",
+    "MSG_LOGDBL",
+    "MSG_LOGRPT"
+   ]
+  }
+ }
+}

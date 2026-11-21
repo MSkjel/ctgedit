@@ -1,0 +1,14 @@
+{
+ "fresh_builder_before": [],
+ "missed": [],
+ "page_types": {
+  "pointer2_e_grey": 0,
+  "pointer2_e_r": 0,
+  "pointer_s_red": 0
+ },
+ "saved": [
+  "pointer2_e_r",
+  "pointer2_e_grey",
+  "pointer_s_red"
+ ]
+}

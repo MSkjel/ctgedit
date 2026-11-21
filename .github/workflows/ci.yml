@@ -1,0 +1,133 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - name: Install ruff
+        run: python -m pip install ruff==0.17.6
+
+      - name: Check formatting
+        run: ruff format --check .
+
+      - name: Lint
+        run: ruff check .
+
+  # the suite in four parts at once (tools/run_tests.py --shard): a part fails alone
+  test:
+    name: test (${{ matrix.shard }}/4)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONUTF8: "1"
+      # the tests that need an AVEVA install or a long corpus run skip
+      CTG_SKIP_HEAVY: "1"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Build the simulator engine
+        run: dotnet build external/cicode-sim/engine/src/ctsim/ctsim.csproj -c Release -f net48
+
+      - name: UI text check
+        if: matrix.shard == 1
+        run: python tools/check_ui_text.py
+
+      # one worker (a Qt process) per core of the runner
+      - name: Tests (the hermetic suite)
+        run: >-
+          python tools/run_tests.py test-log.txt --workers $env:NUMBER_OF_PROCESSORS
+          --shard ${{ matrix.shard }}/4
+
+      - name: Upload the test log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-log-${{ matrix.shard }}
+          path: test-log.txt
+          if-no-files-found: ignore
+
+      # the README's pictures, from the fake install's FxDemo project
+      - name: Screenshots
+        if: matrix.shard == 1
+        run: python tools/screenshots.py --out screens
+
+      - if: matrix.shard == 1
+        uses: actions/upload-artifact@v7
+        with:
+          name: screens
+          path: screens
+          if-no-files-found: error
+
+  # pushes the screenshots as the only commit on the screens branch, where the README gets them
+  screens:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    concurrency:
+      group: screens
+      cancel-in-progress: true
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: screens
+          path: screens
+
+      - name: Push the screens branch
+        working-directory: screens
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          git init -q -b screens
+          git add -A
+          git -c user.name="github-actions[bot]" \
+            -c user.email="41898299+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "Screens from ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" screens
+
+  installer:
+    needs: test
+    uses: ./.github/workflows/installer.yml

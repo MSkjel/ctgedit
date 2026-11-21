@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<CompositeInstance TemplateId="6b1f3c2a-8d4e-4f5a-9b6c-7d8e9f0a1b2c" Digest="QLdA92nnWHOTmNu1ByCGtlOeZuE=">
+  <Parameters>
+    <Parameter Name="Equipment" Type="String" Value="FxPlant.Tank1" />
+    <Parameter Name="Label" Type="String" Value="Tank one" />
+    <Parameter Name="ShowValue" Type="Bool" Value="True" />
+    <Parameter Name="Orientation" Type="String" Value="Left" />
+  </Parameters>
+  <LibraryItemVersions>
+    <ItemVersion Project="FxLib" Library="fxgenie" Item="fx_plain">
+      <Version>391178e4-f2f2-044a-86c7-d14f669335ae</Version>
+    </ItemVersion>
+    <ItemVersion Project="FxLib" Library="fxgenie" Item="fx_value">
+      <Version>5dc5a41e-4285-8b4e-bf8e-a141a8d2721e</Version>
+    </ItemVersion>
+  </LibraryItemVersions>
+</CompositeInstance>

@@ -1,0 +1,160 @@
+{
+ "calls": [
+  {
+   "made": [
+    {
+     "anchor": [
+      700,
+      118
+     ],
+     "class part": [
+      700,
+      100,
+      803,
+      119,
+      700,
+      118
+     ],
+     "element": "fx_marker",
+     "head of": "fx_box",
+     "rect": [
+      700,
+      100,
+      803,
+      119
+     ],
+     "slots": [
+      [
+       0,
+       [
+        1.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ]
+      ],
+      [
+       0,
+       [
+        1.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ]
+      ],
+      [
+       0,
+       [
+        1.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ]
+      ]
+     ]
+    },
+    {
+     "anchor": [
+      631,
+      361
+     ],
+     "class part": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     "element": "fx_marker_scaled",
+     "head of": "fx_box",
+     "rect": [
+      631,
+      361,
+      631,
+      361
+     ],
+     "slots": [
+      [
+       3,
+       [
+        1.2,
+        0.0,
+        0.0,
+        1.2,
+        631.25,
+        361.0
+       ]
+      ],
+      [
+       3,
+       [
+        1.2,
+        0.0,
+        0.0,
+        1.2,
+        -4.75,
+        -31.0
+       ]
+      ],
+      [
+       3,
+       [
+        1.2,
+        0.0,
+        0.0,
+        1.2,
+        631.25,
+        361.0
+       ]
+      ]
+     ]
+    }
+   ],
+   "stage": "input"
+  },
+  {
+   "objects": [
+    [
+     1,
+     "DummyMarker"
+    ]
+   ],
+   "open + save": "fx_marker",
+   "page type": 0,
+   "stage": "saved/fx_marker"
+  },
+  {
+   "objects": [
+    [
+     1,
+     "DummyMarker"
+    ]
+   ],
+   "open + save": "fx_marker_scaled",
+   "page type": 0,
+   "stage": "saved/fx_marker_scaled"
+  },
+  {
+   "fresh Graphics Builder": true,
+   "library": "as after the saves"
+  },
+  {
+   "open + save": "fx_marker",
+   "page type": 0,
+   "stage": "fresh/fx_marker"
+  },
+  {
+   "open + save": "fx_marker_scaled",
+   "page type": 0,
+   "stage": "fresh/fx_marker_scaled"
+  }
+ ],
+ "library": "FxLib/fxsym.ctl"
+}

@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A schema of our own for composite genie templates (the fixtures' subset) -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified">
+  <xs:simpleType name="Guid">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="\{[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}\}"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="ComparisonOperator">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="IsEqualTo"/>
+      <xs:enumeration value="IsNotEqualTo"/>
+      <xs:enumeration value="IsGreaterThan"/>
+      <xs:enumeration value="IsGreaterThanOrEqualTo"/>
+      <xs:enumeration value="IsLessThan"/>
+      <xs:enumeration value="IsLessThanOrEqualTo"/>
+      <xs:enumeration value="StartsWith"/>
+      <xs:enumeration value="EndsWith"/>
+      <xs:enumeration value="Contains"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="LogicalOperator">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="And"/>
+      <xs:enumeration value="Or"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="ParameterType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="String"/>
+      <xs:enumeration value="Int"/>
+      <xs:enumeration value="Bool"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:complexType name="ParameterCondition">
+    <xs:attribute name="Name" type="xs:string" use="required"/>
+    <xs:attribute name="Value" type="xs:string" use="required"/>
+    <xs:attribute name="Comparison" type="ComparisonOperator"/>
+    <xs:attribute name="Negation" type="xs:boolean"/>
+  </xs:complexType>
+  <xs:complexType name="GlobalConditionRef">
+    <xs:attribute name="Id" type="xs:string" use="required"/>
+    <xs:attribute name="Negation" type="xs:boolean"/>
+  </xs:complexType>
+  <xs:complexType name="Condition">
+    <xs:choice>
+      <xs:element name="ParameterCondition" type="ParameterCondition"/>
+      <xs:element name="GlobalConditionRef" type="GlobalConditionRef"/>
+      <xs:element name="CompositeCondition" type="CompositeCondition"/>
+    </xs:choice>
+  </xs:complexType>
+  <xs:complexType name="CompositeCondition">
+    <xs:choice minOccurs="1" maxOccurs="unbounded">
+      <xs:element name="ParameterCondition" type="ParameterCondition"/>
+      <xs:element name="GlobalConditionRef" type="GlobalConditionRef"/>
+      <xs:element name="CompositeCondition" type="CompositeCondition"/>
+    </xs:choice>
+    <xs:attribute name="Operator" type="LogicalOperator" use="required"/>
+    <xs:attribute name="Negation" type="xs:boolean"/>
+  </xs:complexType>
+  <xs:complexType name="GlobalCondition">
+    <xs:complexContent>
+      <xs:extension base="Condition">
+        <xs:attribute name="Id" type="xs:string" use="required"/>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+  <xs:complexType name="Value">
+    <xs:attribute name="Id" type="xs:integer" use="required"/>
+    <xs:attribute name="Label" type="xs:string" use="required"/>
+  </xs:complexType>
+  <xs:complexType name="Values">
+    <xs:sequence>
+      <xs:element name="Value" type="Value" minOccurs="1" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="Parameter">
+    <xs:all>
+      <xs:element name="Dependency" type="Condition" minOccurs="0"/>
+      <xs:element name="Values" type="Values" minOccurs="0"/>
+    </xs:all>
+    <xs:attribute name="Name" type="xs:string" use="required"/>
+    <xs:attribute name="Label" type="xs:string" use="required"/>
+    <xs:attribute name="Type" type="ParameterType" use="required"/>
+    <xs:attribute name="DefaultValue" type="xs:string"/>
+    <xs:attribute name="Description" type="xs:string"/>
+    <xs:attribute name="NamingRules" type="xs:string"/>
+    <xs:attribute name="MinLength" type="xs:integer"/>
+    <xs:attribute name="MaxLength" type="xs:integer"/>
+    <xs:attribute name="MinValue" type="xs:integer"/>
+    <xs:attribute name="MaxValue" type="xs:integer"/>
+  </xs:complexType>
+  <xs:complexType name="Parameters">
+    <xs:sequence>
+      <xs:element name="Parameter" type="Parameter" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="ContentItem">
+    <xs:attribute name="Id" type="xs:integer" use="required"/>
+    <xs:attribute name="Type" type="xs:string" use="required"/>
+    <xs:attribute name="Project" type="xs:string"/>
+    <xs:attribute name="Library" type="xs:string" use="required"/>
+    <xs:attribute name="Item" type="xs:string" use="required"/>
+    <xs:attribute name="Anchor" type="xs:string"/>
+  </xs:complexType>
+  <xs:complexType name="ContentItems">
+    <xs:sequence>
+      <xs:element name="Content" type="ContentItem" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="BoundParameter">
+    <xs:attribute name="Name" type="xs:string" use="required"/>
+    <xs:attribute name="TemplateParameter" type="xs:string"/>
+    <xs:attribute name="Value" type="xs:string"/>
+  </xs:complexType>
+  <xs:complexType name="BoundParameters">
+    <xs:sequence>
+      <xs:element name="Parameter" type="BoundParameter" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="LayoutContent">
+    <xs:all>
+      <xs:element name="Parameters" type="BoundParameters" minOccurs="0"/>
+      <xs:element name="VisibleWhen" type="Condition" minOccurs="0"/>
+    </xs:all>
+    <xs:attribute name="ItemId" type="xs:integer" use="required"/>
+    <xs:attribute name="ZIndex" type="xs:integer"/>
+    <xs:attribute name="VisibleWhen" type="xs:string"/>
+    <xs:attribute name="AnimationName" type="xs:string"/>
+    <xs:attribute name="HorizontalAlignment" type="xs:string"/>
+    <xs:attribute name="VerticalAlignment" type="xs:string"/>
+  </xs:complexType>
+  <xs:complexType name="Layout">
+    <xs:sequence>
+      <xs:element name="Content" type="LayoutContent" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="Hotspot" type="xs:string"/>
+  </xs:complexType>
+  <xs:complexType name="Composition">
+    <xs:sequence>
+      <xs:element name="Prerequisite" type="Condition" minOccurs="0"/>
+      <xs:element name="Layout" type="Layout">
+        <xs:unique name="UniqueAnimationName">
+          <xs:selector xpath=".//Content"/>
+          <xs:field xpath="@AnimationName"/>
+        </xs:unique>
+      </xs:element>
+    </xs:sequence>
+    <xs:attribute name="Id" type="Guid" use="required"/>
+  </xs:complexType>
+  <xs:complexType name="Compositions">
+    <xs:sequence>
+      <xs:element name="Composition" type="Composition" minOccurs="1" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="GlobalConditions">
+    <xs:sequence>
+      <xs:element name="GlobalCondition" type="GlobalCondition" minOccurs="0"
+                  maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:element name="VisualTemplate">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="Parameters" type="Parameters" minOccurs="0"/>
+        <xs:element name="ContentItems" type="ContentItems"/>
+        <xs:element name="Compositions" type="Compositions"/>
+        <xs:element name="GlobalConditions" type="GlobalConditions" minOccurs="0"/>
+      </xs:all>
+      <xs:attribute name="Guid" type="Guid" use="required"/>
+      <xs:attribute name="Name" type="xs:string" use="required"/>
+      <xs:attribute name="Thumbnail" type="xs:string"/>
+      <xs:attribute name="Description" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

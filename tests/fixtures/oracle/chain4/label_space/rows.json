@@ -1,0 +1,90 @@
+{
+ "indexes": {
+  "FxMain/pgdynobj.NDX": {
+   "sha1": "da92e0bd922c22624c7bcc651f0772c8ec8f7ff2",
+   "size": 54272
+  }
+ },
+ "removed": [],
+ "tables": {
+  "FxMain/pgdynobj.DBF": {
+   "added": [
+    {
+     "AN": "1",
+     "GROUP": "2",
+     "PAGE": "FxOraclePlace",
+     "TYPE": "0x0005",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "PAGE",
+    "TYPE",
+    "AN",
+    "GROUP",
+    "SZX",
+    "SZXMINPC",
+    "SZXMAXPC",
+    "SZXORG",
+    "SZXMODE",
+    "SZY",
+    "SZYMINPC",
+    "SZYMAXPC",
+    "SZYORG",
+    "SZYMODE",
+    "ROT",
+    "ROTSL",
+    "ROTMINPC",
+    "ROTMAXPC",
+    "ROTXORG",
+    "ROTYORG",
+    "ROTMODE",
+    "ROTSLMODE",
+    "MVX",
+    "MVXSL",
+    "MVXMINPT",
+    "MVXMAXPT",
+    "MVXMODE",
+    "MVXSLMODE",
+    "MVY",
+    "MVYSL",
+    "MVYMINPT",
+    "MVYMAXPT",
+    "MVYMODE",
+    "MVYSLMODE",
+    "VISIBLE",
+    "VISMODE",
+    "COL_A",
+    "COL_B",
+    "COL_C",
+    "COL_D",
+    "COL_E",
+    "COL_ARR",
+    "COL_EXP",
+    "COLMODE",
+    "TXT_A",
+    "TXT_B",
+    "TXT_C",
+    "TXT_D",
+    "TXT_E",
+    "TXT_STR",
+    "SET_ARR",
+    "TXTMODE",
+    "FIL",
+    "FILMINPC",
+    "FILMAXPC",
+    "FILMODE",
+    "DISABLED",
+    "DISMODE",
+    "GREY_STYLE",
+    "DESC",
+    "COMMENT",
+    "AREA",
+    "PRIV",
+    "MSG_LOG",
+    "DEVICE"
+   ]
+  }
+ }
+}

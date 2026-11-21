@@ -1,0 +1,42 @@
+{
+ "calls": [
+  {
+   "page": "FxOraclePlace",
+   "place": [
+    "FxLib",
+    "fxgenie",
+    "fx_value",
+    "ctm",
+    100,
+    100,
+    [
+     [
+      "Description",
+      "Fx Start"
+     ]
+    ]
+   ],
+   "stage": "placed",
+   "type": 0
+  },
+  {
+   "AN": 1,
+   "AttributeText put": "@(%Description% EDITED)",
+   "open": "fx_value",
+   "stage": "genie_edited"
+  },
+  {
+   "open + save": "FxOraclePlace",
+   "stage": "same"
+  },
+  {
+   "fresh Graphics Builder": true,
+   "page": "as placed"
+  },
+  {
+   "open + save": "FxOraclePlace",
+   "stage": "fresh"
+  }
+ ],
+ "page": "FxMain/FxOraclePlace"
+}

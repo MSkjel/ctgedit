@@ -1,0 +1,120 @@
+{
+ "calls": [
+  {
+   "PageName": "template.Untitled1@XGA",
+   "PageName after": "fx_style.normal@XGA",
+   "PageNewTemplate": [
+    "FxStyle",
+    "fx_style",
+    "normal",
+    3,
+    true,
+    true
+   ],
+   "library changed": false,
+   "message boxes": [
+    "Attempt to save page with a link to itself.  Press OK to abort [OK]",
+    "Attempt to save page with a link to itself.  Press OK to abort [OK]"
+   ],
+   "new": "returned None",
+   "new seconds": 0.0,
+   "new: builder ended": false,
+   "stage": "self",
+   "tries": [
+    {
+     "PageSaveAsEx": [
+      "FxStyle",
+      "fx_style",
+      "normal"
+     ],
+     "library changed": false,
+     "save": "error: (-2147352567, 'Exception occurred.', (0, None, None, None, 0, -2147467259), None)",
+     "save seconds": 0.7,
+     "save: builder ended": false
+    },
+    {
+     "PageSaveAsEx": [
+      "FxStyle",
+      "fx_style",
+      "normal@XGA"
+     ],
+     "library changed": false,
+     "save": "error: (-2147352567, 'Exception occurred.', (0, None, None, None, 0, -2147467259), None)",
+     "save seconds": 1.0,
+     "save: builder ended": false
+    }
+   ]
+  },
+  {
+   "fresh Graphics Builder": true,
+   "library": "as it was"
+  },
+  {
+   "PageName": "template.Untitled1@XGA",
+   "PageNewTemplate": [
+    "FxStyle",
+    "fx_style",
+    "normal",
+    3,
+    true,
+    true
+   ]
+  },
+  {
+   "PageSaveAsEx": [
+    "FxStyle",
+    "fx_style",
+    "fxouter"
+   ],
+   "new elements": [
+    "fxouter@XGA"
+   ]
+  },
+  {
+   "PageName": "template.Untitled2@XGA",
+   "PageName after": "fx_style.normal@XGA",
+   "PageNewTemplate": [
+    "FxStyle",
+    "fx_style",
+    "fxouter",
+    3,
+    true,
+    true
+   ],
+   "library changed": false,
+   "message boxes": [
+    "Attempt to save page with a link to itself.  Press OK to abort [OK]",
+    "Attempt to save page with a link to itself.  Press OK to abort [OK]"
+   ],
+   "new": "returned None",
+   "new seconds": 0.0,
+   "new: builder ended": false,
+   "stage": "outer_self",
+   "tries": [
+    {
+     "PageSaveAsEx": [
+      "FxStyle",
+      "fx_style",
+      "normal"
+     ],
+     "library changed": false,
+     "save": "error: (-2147352567, 'Exception occurred.', (0, None, None, None, 0, -2147467259), None)",
+     "save seconds": 0.9,
+     "save: builder ended": false
+    },
+    {
+     "PageSaveAsEx": [
+      "FxStyle",
+      "fx_style",
+      "normal@XGA"
+     ],
+     "library changed": false,
+     "save": "error: (-2147352567, 'Exception occurred.', (0, None, None, None, 0, -2147467259), None)",
+     "save seconds": 1.0,
+     "save: builder ended": false
+    }
+   ]
+  }
+ ],
+ "library": "FxStyle/fx_style.ctt"
+}

@@ -1,0 +1,16 @@
+{
+ "actions": [
+  [
+   "place",
+   "FxLib",
+   "fxmany",
+   "fx_last_big",
+   "ctl",
+   200,
+   200,
+   [],
+   "type 0"
+  ]
+ ],
+ "page": "FxOraclePlace"
+}

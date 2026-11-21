@@ -1,0 +1,16 @@
+{
+ "an": {
+  "selection": [
+   15,
+   11
+  ]
+ },
+ "names": [
+  "FxSymRotate",
+  "FxNeedle1"
+ ],
+ "ops": [
+  "R"
+ ],
+ "page": "FxMain/FxMotion"
+}

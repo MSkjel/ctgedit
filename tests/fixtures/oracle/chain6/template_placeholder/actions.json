@@ -1,0 +1,72 @@
+{
+ "calls": [
+  {
+   "removed": "FxLib/fxgenie.ctm"
+  },
+  {
+   "fresh Graphics Builder": false,
+   "library": "missing",
+   "open + save": "normal@XGA",
+   "placeholder": false,
+   "stage": "template_missing"
+  },
+  {
+   "fresh Graphics Builder": true,
+   "library": "missing",
+   "open + save": "normal@XGA",
+   "placeholder": true,
+   "stage": "template_missing_fresh"
+  },
+  {
+   "put back": "FxLib/fxgenie.ctm"
+  },
+  {
+   "fresh Graphics Builder": true,
+   "library": "back"
+  },
+  {
+   "open + save": "FxTplLinked",
+   "stage": "page_back"
+  },
+  {
+   "New Page": [
+    {
+     "PageNew": [
+      "FxMain",
+      "fx_style",
+      "normal",
+      3,
+      true,
+      true
+     ],
+     "PageSaveAs": [
+      "FxMain",
+      "FxOracleHolderNew"
+     ],
+     "result": "saved"
+    }
+   ],
+   "stage": "new_page"
+  },
+  {
+   "open + save": "normal@XGA",
+   "page type": 3,
+   "stage": "template_back/normal@XGA"
+  },
+  {
+   "open + save": "FxTplLinked",
+   "stage": "page_after"
+  },
+  {
+   "fresh Graphics Builder": true,
+   "library": "as after template_back",
+   "page": "as it was"
+  },
+  {
+   "open + save": "FxTplLinked",
+   "stage": "page_after_fresh"
+  }
+ ],
+ "page": "FxMain/FxTplLinked",
+ "template": "FxStyle/fx_style.ctt/normal@XGA"
+}

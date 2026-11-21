@@ -1,0 +1,158 @@
+{
+ "indexes": {
+  "FxMain/pgdynobj.NDX": {
+   "sha1": "5a30b8b3ae88b0219d485347b76791e4c94375e0",
+   "size": 54272
+  },
+  "FxMain/pglang.NDX": {
+   "sha1": "0e6258c40e4dd620ba40a69e6806da81eeac8b3c",
+   "size": 3072
+  }
+ },
+ "removed": [],
+ "tables": {
+  "FxMain/pgdynobj.DBF": {
+   "added": [
+    {
+     "AN": "3",
+     "GROUP": "6",
+     "PAGE": "FxOraclePlace",
+     "TXTMODE": "1",
+     "TXT_A": "FX_A",
+     "TXT_B": "FX_B",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "4",
+     "GROUP": "6",
+     "PAGE": "FxOraclePlace",
+     "TXTMODE": "2",
+     "TXT_A": "FX_IDX",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "5",
+     "GROUP": "6",
+     "PAGE": "FxOraclePlace",
+     "TXT_A": "FX_BIT",
+     "TYPE": "0x0005",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "PAGE",
+    "TYPE",
+    "AN",
+    "GROUP",
+    "SZX",
+    "SZXMINPC",
+    "SZXMAXPC",
+    "SZXORG",
+    "SZXMODE",
+    "SZY",
+    "SZYMINPC",
+    "SZYMAXPC",
+    "SZYORG",
+    "SZYMODE",
+    "ROT",
+    "ROTSL",
+    "ROTMINPC",
+    "ROTMAXPC",
+    "ROTXORG",
+    "ROTYORG",
+    "ROTMODE",
+    "ROTSLMODE",
+    "MVX",
+    "MVXSL",
+    "MVXMINPT",
+    "MVXMAXPT",
+    "MVXMODE",
+    "MVXSLMODE",
+    "MVY",
+    "MVYSL",
+    "MVYMINPT",
+    "MVYMAXPT",
+    "MVYMODE",
+    "MVYSLMODE",
+    "VISIBLE",
+    "VISMODE",
+    "COL_A",
+    "COL_B",
+    "COL_C",
+    "COL_D",
+    "COL_E",
+    "COL_ARR",
+    "COL_EXP",
+    "COLMODE",
+    "TXT_A",
+    "TXT_B",
+    "TXT_C",
+    "TXT_D",
+    "TXT_E",
+    "TXT_STR",
+    "SET_ARR",
+    "TXTMODE",
+    "FIL",
+    "FILMINPC",
+    "FILMAXPC",
+    "FILMODE",
+    "DISABLED",
+    "DISMODE",
+    "GREY_STYLE",
+    "DESC",
+    "COMMENT",
+    "AREA",
+    "PRIV",
+    "MSG_LOG",
+    "DEVICE"
+   ]
+  },
+  "FxMain/pglang.DBF": {
+   "added": [
+    {
+     "NATIVE": "Running",
+     "_flag": " "
+    },
+    {
+     "NATIVE": "Stopped",
+     "_flag": " "
+    },
+    {
+     "NATIVE": "Fault",
+     "_flag": " "
+    },
+    {
+     "NATIVE": "Manual",
+     "_flag": " "
+    },
+    {
+     "NATIVE": "Auto",
+     "_flag": " "
+    },
+    {
+     "NATIVE": "Hand",
+     "_flag": " "
+    },
+    {
+     "NATIVE": "Off Mode",
+     "_flag": " "
+    },
+    {
+     "NATIVE": "Fx On",
+     "_flag": " "
+    },
+    {
+     "NATIVE": "Fx Off",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "NATIVE"
+   ]
+  }
+ }
+}

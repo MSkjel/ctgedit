@@ -1,0 +1,16 @@
+version: 2
+updates:
+  # a pull request that moves the engine pin to ctsim's latest main; CI tests the pair
+  - package-ecosystem: gitsubmodule
+    directory: /
+    schedule:
+      interval: daily
+    commit-message:
+      prefix: engine
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci

@@ -1,0 +1,9 @@
+{
+ "name": "ctgedit",
+ "title": "ctgedit",
+ "description": "S opens the command palette at the pointer, A is the Symbol tool.",
+ "keys": {
+  "tool.symbol": ["A"],
+  "act_palette_here": ["Shift+S", "S"]
+ }
+}

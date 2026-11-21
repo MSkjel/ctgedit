@@ -1,0 +1,82 @@
+{
+ "calls": [
+  {
+   "removed": "FxLib/fxnest.ctm"
+  },
+  {
+   "library": "missing",
+   "open + save": "fx_row",
+   "placeholder": true,
+   "stage": "element_missing"
+  },
+  {
+   "page": "FxOraclePlace",
+   "place": [
+    "FxLib",
+    "fxparts",
+    "fx_row",
+    "ctm",
+    100,
+    100,
+    [
+     [
+      "RowNum",
+      "7"
+     ]
+    ]
+   ],
+   "stage": "page_placed",
+   "type": 0
+  },
+  {
+   "open + save": "FxOraclePlace",
+   "stage": "page_missing"
+  },
+  {
+   "put back": "FxLib/fxnest.ctm"
+  },
+  {
+   "open + save": "FxOraclePlace",
+   "stage": "page_back"
+  },
+  {
+   "page": "FxOracleDraw",
+   "place": [
+    "FxLib",
+    "fxparts",
+    "fx_row",
+    "ctm",
+    100,
+    100,
+    [
+     [
+      "RowNum",
+      "7"
+     ]
+    ]
+   ],
+   "stage": "page_placed_back",
+   "type": 0
+  },
+  {
+   "library": "fxparts.ctm as after element_missing"
+  },
+  {
+   "open + save": "fx_row",
+   "page type": 1,
+   "stage": "element_back/fx_row"
+  },
+  {
+   "dropped": [
+    "fxnest.n1.<ctm"
+   ],
+   "library": "fxparts.ctm as nobare_input"
+  },
+  {
+   "open + save": "fx_row",
+   "page type": 1,
+   "stage": "element_nobare/fx_row"
+  }
+ ],
+ "page": "FxMain/FxOraclePlace"
+}

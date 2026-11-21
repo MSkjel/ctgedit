@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<VisualTemplate Guid="{AF5B7A6E-C182-4D9E-BFA0-B1C2D3E4F5A6}" Name="FxMeterC" Thumbnail="fx_meter">
+  <Parameters>
+    <Parameter Name="Equipment" Label="Equipment" Type="String" NamingRules="Equipment"/>
+    <Parameter Name="DisplayOutput" Label="Display output" Type="Bool" DefaultValue="false"/>
+    <Parameter Name="DisplayReadback" Label="Display readback" Type="Bool" DefaultValue="false">
+      <Dependency><ParameterCondition Name="DisplayOutput" Value="true"/></Dependency>
+    </Parameter>
+    <Parameter Name="DisplayTrend" Label="Display trend" Type="Bool" DefaultValue="false"/>
+    <Parameter Name="TrendType" Label="Trend type" Type="String" DefaultValue="Line">
+      <Dependency><GlobalConditionRef Id="HasTrend"/></Dependency>
+      <Values><Value Id="0" Label="Line"/><Value Id="1" Label="Bar"/></Values>
+    </Parameter>
+    <Parameter Name="Span" Label="Span" Type="Int" DefaultValue="60" MinValue="1" MaxValue="3600">
+      <Dependency><GlobalConditionRef Id="HasTrend"/></Dependency>
+    </Parameter>
+    <Parameter Name="DisplaySecond" Label="Display a second meter" Type="Bool" DefaultValue="false"/>
+    <Parameter Name="Equipment2" Label="Second equipment" Type="String" NamingRules="Equipment">
+      <Dependency><GlobalConditionRef Id="TwoMeters"/></Dependency>
+    </Parameter>
+    <Parameter Name="ReferenceEquipment" Label="Reference" Type="String" NamingRules="Equipment">
+      <Dependency><ParameterCondition Name="DisplayOutput" Value="true"/></Dependency>
+    </Parameter>
+  </Parameters>
+  <ContentItems>
+    <Content Id="1" Type="Genie" Project="FxLib" Library="fxgenie" Item="fx_value"/>
+    <Content Id="2" Type="Genie" Project="FxLib" Library="fxgenie" Item="fx_plain"/>
+  </ContentItems>
+  <Compositions>
+    <Composition Id="{AF5B7A6E-C182-4D9E-BFA0-B1C2D3E4F5A7}">
+      <Layout>
+        <Content ItemId="1" ZIndex="1"><Parameters>
+          <Parameter Name="Description" TemplateParameter="Equipment"/></Parameters></Content>
+        <Content ItemId="2" ZIndex="2" VisibleWhen="HasTrend"/>
+      </Layout>
+    </Composition>
+  </Compositions>
+  <GlobalConditions>
+    <GlobalCondition Id="HasTrend">
+      <ParameterCondition Name="DisplayTrend" Value="true"/></GlobalCondition>
+    <GlobalCondition Id="TwoMeters">
+      <ParameterCondition Name="DisplaySecond" Value="true"/></GlobalCondition>
+  </GlobalConditions>
+</VisualTemplate>

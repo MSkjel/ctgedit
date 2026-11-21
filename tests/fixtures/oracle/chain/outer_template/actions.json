@@ -1,0 +1,112 @@
+{
+ "calls": [
+  {
+   "PageName": "template.Untitled1@XGA",
+   "PageNewTemplate": [
+    "FxStyle",
+    "fx_style",
+    "normal",
+    3,
+    true,
+    true
+   ]
+  },
+  {
+   "PageSaveAsEx": [
+    "FxStyle",
+    "fx_style",
+    "fxouter"
+   ],
+   "new elements": [
+    "fxouter@XGA"
+   ]
+  },
+  {
+   "open + save": "fxouter@XGA",
+   "page type": 3,
+   "stage": "plain/fxouter@XGA"
+  },
+  {
+   "DrawRectangle": [
+    300,
+    300,
+    400,
+    360
+   ],
+   "open": "normal@XGA",
+   "stage": "inner_changed"
+  },
+  {
+   "open + save": "fxouter@XGA",
+   "page type": 3,
+   "stage": "same/fxouter@XGA"
+  },
+  {
+   "New Page": [
+    {
+     "PageNew": [
+      "FxMain",
+      "fx_style",
+      "fxouter",
+      3,
+      true,
+      true
+     ],
+     "PageSaveAs": [
+      "FxMain",
+      "FxOracleOuterNew"
+     ],
+     "result": "PageNew: (-2147352567, 'Exception occurred.', (0, None, None, None, 0, -2147467259), None)"
+    },
+    {
+     "PageNew": [
+      "FxStyle",
+      "fx_style",
+      "fxouter",
+      3,
+      true,
+      true
+     ],
+     "PageSaveAs": [
+      "FxMain",
+      "FxOracleOuterNew"
+     ],
+     "result": "saved"
+    }
+   ],
+   "stage": "same/new_page"
+  },
+  {
+   "fresh Graphics Builder": true,
+   "library": "as after inner_changed"
+  },
+  {
+   "New Page": [
+    {
+     "PageNew": [
+      "FxMain",
+      "fx_style",
+      "fxouter",
+      3,
+      true,
+      true
+     ],
+     "PageSaveAs": [
+      "FxMain",
+      "FxOracleOuterNew2"
+     ],
+     "result": "saved"
+    }
+   ],
+   "stage": "fresh/new_page"
+  },
+  {
+   "open + save": "fxouter@XGA",
+   "page type": 3,
+   "stage": "fresh/fxouter@XGA"
+  }
+ ],
+ "inner": "normal@XGA",
+ "library": "FxStyle/fx_style.ctt",
+ "made": "fxouter@XGA"
+}

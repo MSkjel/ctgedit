@@ -1,0 +1,130 @@
+{
+ "calls": [
+  {
+   "PageName": "template.Untitled1@XGA",
+   "PageNewTemplate": [
+    "FxStyle",
+    "fx_style",
+    "normal",
+    3,
+    true,
+    true
+   ]
+  },
+  {
+   "PageSaveAsEx": [
+    "FxStyle",
+    "fx_style",
+    "fxouter"
+   ],
+   "new elements": [
+    "fxouter@XGA"
+   ]
+  },
+  {
+   "New Page": [
+    {
+     "PageNew": [
+      "FxMain",
+      "fx_style",
+      "fxouter",
+      3,
+      true,
+      true
+     ],
+     "PageSaveAs": [
+      "FxMain",
+      "FxOracleOuterLinked"
+     ],
+     "result": "saved"
+    }
+   ],
+   "stage": "page_made"
+  },
+  {
+   "DrawRectangle": [
+    300,
+    300,
+    400,
+    360
+   ],
+   "PageName after": "fx_style.normal@XGA",
+   "after": {
+    "inner saved": true,
+    "outer saved": false,
+    "pages changed": {
+     "FxOracleOuterLinked": false,
+     "FxTplLinked": false
+    }
+   },
+   "menu": 105,
+   "open": "normal@XGA",
+   "stage": "menu_save",
+   "waited": {
+    "dialogs": [
+     {
+      "first seen": 0.5,
+      "last seen": 0.5,
+      "texts": [
+       "OK",
+       "Please use Update Pages under Tools menu\nTo resave any page(s) associated with this template."
+      ],
+      "title": "Warning"
+     }
+    ],
+    "seconds": 3.5
+   },
+   "watch": {
+    "message boxes": [
+     "Please use Update Pages under Tools menu\nTo resave any page(s) associated with this template. [OK]"
+    ]
+   }
+  },
+  {
+   "ProjectUpdatePages": [
+    true
+   ],
+   "after": {
+    "inner saved": true,
+    "outer saved": true,
+    "pages changed": {
+     "FxOracleOuterLinked": true,
+     "FxTplLinked": true
+    }
+   },
+   "project": "FxMain",
+   "result": "returned None",
+   "seconds": 3.3,
+   "stage": "update_pages",
+   "waited": {
+    "dialogs": [],
+    "seconds": 2.0
+   },
+   "watch": {}
+  }
+ ],
+ "files changed": [
+  "FxMain/FxMissing.ctF",
+  "FxMain/FxMissing.ctg",
+  "FxMain/FxOracleOuterLinked.ctF",
+  "FxMain/FxOracleOuterLinked.ctg",
+  "FxMain/FxPlaceholder.ctF",
+  "FxMain/FxPlaceholder.ctg",
+  "FxMain/FxTplLast.ctF",
+  "FxMain/FxTplLast.ctg",
+  "FxMain/FxTplLinked.ctF",
+  "FxMain/FxTplLinked.ctg",
+  "FxMain/FxTplStale.ctF",
+  "FxMain/FxTplStale.ctg",
+  "FxMain/changes.DBF",
+  "FxMain/pages.DBF",
+  "FxMain/pgdynobj.DBF",
+  "FxMain/pgdynobj.NDX",
+  "FxMain/pglang.NDX",
+  "FxStyle/citect.pal",
+  "FxStyle/fx_style.ctt"
+ ],
+ "library": "FxStyle/fx_style.ctt",
+ "made": "fxouter@XGA",
+ "page": "FxMain/FxOracleOuterLinked"
+}

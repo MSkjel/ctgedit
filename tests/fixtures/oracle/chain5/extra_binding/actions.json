@@ -1,0 +1,64 @@
+{
+ "calls": [
+  {
+   "PageName": "template.Untitled1@XGA",
+   "PageNewTemplate": [
+    "FxStyle",
+    "fx_style",
+    "normal",
+    3,
+    true,
+    true
+   ]
+  },
+  {
+   "PageSaveAsEx": [
+    "FxStyle",
+    "fx_style",
+    "fxouter"
+   ],
+   "new elements": [
+    "fxouter@XGA"
+   ]
+  },
+  {
+   "PropertiesInputTouchPut": [
+    1,
+    "Beep()",
+    "",
+    0
+   ],
+   "break_lock_posted": true,
+   "member AN": 6,
+   "open": "fxouter@XGA",
+   "selected": "PageSelectObject(6)",
+   "stage": "bound"
+  },
+  {
+   "DrawRectangle": [
+    300,
+    300,
+    400,
+    360
+   ],
+   "open": "normal@XGA",
+   "stage": "inner_changed"
+  },
+  {
+   "open + save": "fxouter@XGA",
+   "page type": 3,
+   "stage": "same/fxouter@XGA"
+  },
+  {
+   "fresh Graphics Builder": true,
+   "library": "as after inner_changed"
+  },
+  {
+   "open + save": "fxouter@XGA",
+   "page type": 3,
+   "stage": "fresh/fxouter@XGA"
+  }
+ ],
+ "library": "FxStyle/fx_style.ctt",
+ "made": "fxouter@XGA"
+}

@@ -1,0 +1,40 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<VisualTemplate Guid="{9E4A6F5D-B071-4C8D-AE9F-A0B1C2D3E4F5}" Name="FxSwitchC" Thumbnail="fx_switch">
+  <Parameters>
+    <Parameter Name="Equipment" Label="Equipment" Type="String" NamingRules="Equipment" />
+    <Parameter Name="Size" Label="Size" Type="String" DefaultValue="Small">
+      <Values>
+        <Value Id="0" Label="Small" />
+        <Value Id="1" Label="Large" />
+      </Values>
+    </Parameter>
+  </Parameters>
+  <ContentItems>
+    <Content Id="1" Type="Genie" Project="FxLib" Library="fxgenie" Item="fx_plain" />
+    <Content Id="2" Type="Genie" Project="FxLib" Library="fxgenie" Item="fx_value" />
+  </ContentItems>
+  <Compositions>
+    <Composition Id="{9E4A6F5D-B071-4C8D-AE9F-A0B1C2D3E4F6}">
+      <Prerequisite>
+        <ParameterCondition Name="Size" Value="Large" />
+      </Prerequisite>
+      <Layout>
+        <Content ItemId="2" ZIndex="1">
+          <Parameters>
+            <Parameter Name="Description" TemplateParameter="Equipment" />
+          </Parameters>
+        </Content>
+      </Layout>
+    </Composition>
+    <Composition Id="{9E4A6F5D-B071-4C8D-AE9F-A0B1C2D3E4F7}">
+      <Layout>
+        <Content ItemId="1" ZIndex="1" VisibleWhen="IsSmall" />
+      </Layout>
+    </Composition>
+  </Compositions>
+  <GlobalConditions>
+    <GlobalCondition Id="IsSmall">
+      <ParameterCondition Name="Size" Value="Small" Comparison="IsEqualTo" />
+    </GlobalCondition>
+  </GlobalConditions>
+</VisualTemplate>

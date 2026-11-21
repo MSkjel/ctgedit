@@ -1,0 +1,241 @@
+{
+ "indexes": {
+  "FxMain/pgdynobj.NDX": {
+   "sha1": "c33d233f745ecae4c7e44dc45fc5c5eff78e6f56",
+   "size": 58880
+  }
+ },
+ "removed": [],
+ "tables": {
+  "FxMain/pgdynobj.DBF": {
+   "added": [
+    {
+     "AN": "3",
+     "GROUP": "7",
+     "PAGE": "FxUnderlay",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "5",
+     "GROUP": "7",
+     "PAGE": "FxUnderlay",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "8",
+     "PAGE": "FxUnderlay",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "9",
+     "PAGE": "FxUnderlay",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "10",
+     "PAGE": "FxUnderlay",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "11",
+     "PAGE": "FxUnderlay",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "12",
+     "PAGE": "FxUnderlay",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "13",
+     "PAGE": "FxUnderlay",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "14",
+     "PAGE": "FxUnderlay",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "15",
+     "PAGE": "FxUnderlay",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "16",
+     "PAGE": "FxUnderlay",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "17",
+     "PAGE": "FxUnderlay",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "18",
+     "PAGE": "FxUnderlay",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "19",
+     "PAGE": "FxUnderlay",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "20",
+     "PAGE": "FxUnderlay",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "21",
+     "PAGE": "FxUnderlay",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "22",
+     "PAGE": "FxUnderlay",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "23",
+     "PAGE": "FxUnderlay",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "24",
+     "PAGE": "FxUnderlay",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "25",
+     "PAGE": "FxUnderlay",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "26",
+     "PAGE": "FxUnderlay",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "27",
+     "PAGE": "FxUnderlay",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "28",
+     "PAGE": "FxUnderlay",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "29",
+     "PAGE": "FxUnderlay",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "30",
+     "PAGE": "FxUnderlay",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "31",
+     "PAGE": "FxUnderlay",
+     "TYPE": "0x0011",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "PAGE",
+    "TYPE",
+    "AN",
+    "GROUP",
+    "SZX",
+    "SZXMINPC",
+    "SZXMAXPC",
+    "SZXORG",
+    "SZXMODE",
+    "SZY",
+    "SZYMINPC",
+    "SZYMAXPC",
+    "SZYORG",
+    "SZYMODE",
+    "ROT",
+    "ROTSL",
+    "ROTMINPC",
+    "ROTMAXPC",
+    "ROTXORG",
+    "ROTYORG",
+    "ROTMODE",
+    "ROTSLMODE",
+    "MVX",
+    "MVXSL",
+    "MVXMINPT",
+    "MVXMAXPT",
+    "MVXMODE",
+    "MVXSLMODE",
+    "MVY",
+    "MVYSL",
+    "MVYMINPT",
+    "MVYMAXPT",
+    "MVYMODE",
+    "MVYSLMODE",
+    "VISIBLE",
+    "VISMODE",
+    "COL_A",
+    "COL_B",
+    "COL_C",
+    "COL_D",
+    "COL_E",
+    "COL_ARR",
+    "COL_EXP",
+    "COLMODE",
+    "TXT_A",
+    "TXT_B",
+    "TXT_C",
+    "TXT_D",
+    "TXT_E",
+    "TXT_STR",
+    "SET_ARR",
+    "TXTMODE",
+    "FIL",
+    "FILMINPC",
+    "FILMAXPC",
+    "FILMODE",
+    "DISABLED",
+    "DISMODE",
+    "GREY_STYLE",
+    "DESC",
+    "COMMENT",
+    "AREA",
+    "PRIV",
+    "MSG_LOG",
+    "DEVICE"
+   ]
+  }
+ }
+}

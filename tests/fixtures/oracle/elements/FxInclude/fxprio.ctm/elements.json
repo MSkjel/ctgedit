@@ -1,0 +1,16 @@
+{
+ "fresh_builder_before": [
+  "fx_p1"
+ ],
+ "missed": [],
+ "page_types": {
+  "fx_p1": 0,
+  "fx_p2": 0,
+  "fx_p3": 0
+ },
+ "saved": [
+  "fx_p1",
+  "fx_p2",
+  "fx_p3"
+ ]
+}

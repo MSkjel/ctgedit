@@ -1,0 +1,36 @@
+{
+ "calls": [
+  {
+   "PositionMirrorHorizontal": true,
+   "open": "n0",
+   "selected text AN": 1,
+   "stage": "n0_mirrored"
+  },
+  {
+   "open + save": "n1",
+   "page type": 1,
+   "stage": "after_mirror/n1"
+  },
+  {
+   "PositionMirrorHorizontal": true,
+   "open": "n0",
+   "selected text AN": 1,
+   "stage": "n0_back"
+  },
+  {
+   "open + save": "n1",
+   "page type": 1,
+   "stage": "after_back/n1"
+  },
+  {
+   "fresh Graphics Builder": true,
+   "library": "as after n0_back"
+  },
+  {
+   "open + save": "n1",
+   "page type": 1,
+   "stage": "after_back_fresh/n1"
+  }
+ ],
+ "library": "FxLib/fxnest.ctm"
+}

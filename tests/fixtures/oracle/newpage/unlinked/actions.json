@@ -1,0 +1,14 @@
+{
+ "PageNew": [
+  "FxMain",
+  "fx_style",
+  "normal",
+  3,
+  true,
+  false
+ ],
+ "PageSaveAs": [
+  "FxMain",
+  "FxOracleNewUnlinked"
+ ]
+}

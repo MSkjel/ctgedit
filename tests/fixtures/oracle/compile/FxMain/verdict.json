@@ -1,0 +1,9 @@
+{
+ "errs_rewritten": false,
+ "exit_code": 4294967293,
+ "messages": [],
+ "note": "the compiler wrote neither Logs\\errs nor compilersummary.xml",
+ "outcome": "completed",
+ "project": "FxMain",
+ "seconds": 0.5
+}

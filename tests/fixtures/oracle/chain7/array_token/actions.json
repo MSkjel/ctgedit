@@ -1,0 +1,73 @@
+{
+ "calls": [
+  {
+   "AN": 3,
+   "DrawText": [
+    "%Array0%",
+    0,
+    100
+   ],
+   "PropertiesDisplayValuePut": [
+    2,
+    "FX_IDX",
+    "",
+    "",
+    "",
+    ""
+   ],
+   "PropertiesDisplayValueTextPut": [
+    "%Array0%",
+    "%Array1%",
+    "%Array2%"
+   ],
+   "getters": {
+    "PropertiesDisplayValueGet": [
+     2,
+     "FX_IDX",
+     "",
+     "",
+     "",
+     ""
+    ]
+   },
+   "open": "fx_plain",
+   "stage": "genie"
+  },
+  {
+   "fresh Graphics Builder": true,
+   "library": "as after genie"
+  },
+  {
+   "page": "FxOraclePlace",
+   "place": [
+    "FxLib",
+    "fxgenie",
+    "fx_plain",
+    "ctm",
+    100,
+    100,
+    [
+     [
+      "Array1",
+      "A1"
+     ]
+    ]
+   ],
+   "stage": "placed",
+   "type": 0
+  },
+  {
+   "open + save": "FxOraclePlace",
+   "stage": "reopened"
+  },
+  {
+   "fresh Graphics Builder": true,
+   "page": "as placed"
+  },
+  {
+   "open + save": "FxOraclePlace",
+   "stage": "fresh"
+  }
+ ],
+ "library": "FxLib/fxgenie.ctm"
+}

@@ -1,0 +1,19 @@
+{
+ "an": {
+  "selection": [
+   104,
+   108
+  ]
+ },
+ "names": [
+  "FxPointGenie",
+  "FxLoneText"
+ ],
+ "ops": [
+  "R",
+  "R",
+  "R",
+  "R"
+ ],
+ "page": "FxMain/FxArrange"
+}

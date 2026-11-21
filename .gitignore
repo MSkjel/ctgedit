@@ -1,0 +1,36 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+build/
+dist/
+*.egg-info/
+*.whl
+
+# Regenerable analysis outputs
+tools/*_out.json
+tools/corpus_*.txt
+
+# Editor/OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Scratch output and local one-off scripts
+tools/_*/
+tools/_*.py
+*.err
+out/
+tools/_factory_thumb.bin
+backups_test_tags/
+
+# The corpus roles and pins (they name local projects): local only
+tests_corpus/local.json
+tests_corpus/corpus_pins.json
+
+# Local only: data recorded from AVEVA's example projects (their content: never committed)
+tests_corpus/data/sim/

@@ -1,0 +1,100 @@
+{
+ "indexes": {},
+ "removed": [],
+ "tables": {
+  "FxMain/activex.DBF": {
+   "added": [],
+   "changed": [
+    {
+     "fields": {
+      "OBJ_NAME": [
+       "FxGaugeA",
+       ""
+      ]
+     },
+     "flag": [
+      " ",
+      " "
+     ],
+     "index": 0
+    },
+    {
+     "fields": {
+      "OBJ_NAME": [
+       "FxGaugeB",
+       ""
+      ]
+     },
+     "flag": [
+      " ",
+      " "
+     ],
+     "index": 1
+    }
+   ],
+   "fields": [
+    "PAGE",
+    "AN",
+    "OBJ_NAME",
+    "OBJ_GUID"
+   ]
+  },
+  "FxMain/changes.DBF": {
+   "added": [
+    {
+     "KEY": "FxLegacy",
+     "NAME": "pages",
+     "RECORD_NO": "2",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxLegacy",
+     "NAME": "activex",
+     "RECORD_NO": "1",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxLegacy",
+     "NAME": "activex",
+     "RECORD_NO": "2",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "NAME",
+    "KEY",
+    "RECORD_NO"
+   ]
+  },
+  "FxMain/pages.DBF": {
+   "added": [],
+   "changed": [],
+   "fields": [
+    "NAME",
+    "ALIAS",
+    "TITLE",
+    "AREA",
+    "BGND_FILE",
+    "SYMB_FILE",
+    "NEXT_PAGE",
+    "PREV_PAGE",
+    "PAGE_INCL",
+    "ENTRY_FUNC",
+    "BGND_FUNC",
+    "EXIT_FUNC",
+    "COMMENT",
+    "SCANTIME",
+    "LOGDEVICE",
+    "READY_FUNC",
+    "CLUSTER",
+    "CINHERIT",
+    "IGNOREVQ",
+    "CON_TYPE",
+    "ACT_FUNC",
+    "DEACT_FUNC",
+    "PARENT"
+   ]
+  }
+ }
+}

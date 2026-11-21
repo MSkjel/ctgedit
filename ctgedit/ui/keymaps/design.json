@@ -1,0 +1,14 @@
+{
+ "name": "design",
+ "title": "Design tools",
+ "extends": "ctgedit",
+ "description": "Ctrl+G groups, Ctrl+Shift+G ungroups, Ctrl+Alt+G goes to an object, Shift + arrow keys move one large step.",
+ "keys": {
+  "act_group": ["Ctrl+G"],
+  "act_ungroup": ["Ctrl+Shift+G", "Ctrl+Shift+U"],
+  "act_goto": ["Ctrl+Alt+G"]
+ },
+ "settings": {
+  "opt/shift_arrow": "nudge10"
+ }
+}

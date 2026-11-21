@@ -1,0 +1,20 @@
+{
+ "an": {
+  "selection": [
+   3
+  ]
+ },
+ "names": [
+  "FxPair"
+ ],
+ "ops": [
+  "R",
+  [
+   "at",
+   100,
+   100
+  ],
+  "H"
+ ],
+ "page": "FxMain/FxMembers"
+}

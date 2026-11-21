@@ -1,0 +1,14 @@
+{
+ "fresh_builder_before": [],
+ "missed": [],
+ "page_types": {
+  "blank@SVGA": 3,
+  "normal@-XGA": 3,
+  "normal@XGA": 3
+ },
+ "saved": [
+  "normal@XGA",
+  "normal@-XGA",
+  "blank@SVGA"
+ ]
+}

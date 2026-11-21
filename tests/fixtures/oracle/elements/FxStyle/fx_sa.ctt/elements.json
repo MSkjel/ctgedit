@@ -1,0 +1,16 @@
+{
+ "fresh_builder_before": [],
+ "missed": [],
+ "page_types": {
+  "blank@-HD1080": 3,
+  "normal@-HD1080": 3,
+  "normal@-UHD4K": 3,
+  "pagecontent@-HD1080": 3
+ },
+ "saved": [
+  "normal@-HD1080",
+  "blank@-HD1080",
+  "pagecontent@-HD1080",
+  "normal@-UHD4K"
+ ]
+}

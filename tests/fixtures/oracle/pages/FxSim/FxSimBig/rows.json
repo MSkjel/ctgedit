@@ -1,0 +1,1583 @@
+{
+ "indexes": {
+  "FxSim/pgdynobj.NDX": {
+   "sha1": "a1c88e4b419a0e7db7c875c0d530686ec4f99b40",
+   "size": 41984
+  },
+  "FxSim/pglang.NDX": {
+   "sha1": "e6d24db24271a8955c54c018682441f61c22bbe4",
+   "size": 1024
+  }
+ },
+ "removed": [],
+ "tables": {
+  "FxSim/pgdynobj.DBF": {
+   "added": [
+    {
+     "AN": "1",
+     "COL_A": "FX_SIM_D01",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "2",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_SIM_R01",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "3",
+     "FIL": "FX_SIM_R01",
+     "FILMAXPC": "100",
+     "FILMINPC": "0",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "4",
+     "COL_A": "FX_SIM_D02",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "5",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_SIM_R02",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "6",
+     "FIL": "FX_SIM_R02",
+     "FILMAXPC": "100",
+     "FILMINPC": "0",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "7",
+     "COL_A": "FX_SIM_D03",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "8",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_SIM_R03",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "9",
+     "FIL": "FX_SIM_R03",
+     "FILMAXPC": "100",
+     "FILMINPC": "0",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "10",
+     "COL_A": "FX_SIM_D04",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "11",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_SIM_R04",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "12",
+     "FIL": "FX_SIM_R04",
+     "FILMAXPC": "100",
+     "FILMINPC": "0",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "13",
+     "COL_A": "FX_SIM_D05",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "14",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_SIM_R05",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "15",
+     "FIL": "FX_SIM_R05",
+     "FILMAXPC": "100",
+     "FILMINPC": "0",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "16",
+     "COL_A": "FX_SIM_D06",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "17",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_SIM_R06",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "18",
+     "FIL": "FX_SIM_R06",
+     "FILMAXPC": "100",
+     "FILMINPC": "0",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "19",
+     "COL_A": "FX_SIM_D07",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "20",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_SIM_R07",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "21",
+     "FIL": "FX_SIM_R07",
+     "FILMAXPC": "100",
+     "FILMINPC": "0",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "22",
+     "COL_A": "FX_SIM_D08",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "23",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_SIM_R08",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "24",
+     "FIL": "FX_SIM_R08",
+     "FILMAXPC": "100",
+     "FILMINPC": "0",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "25",
+     "COL_A": "FX_SIM_D09",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "26",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_SIM_R09",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "27",
+     "FIL": "FX_SIM_R09",
+     "FILMAXPC": "100",
+     "FILMINPC": "0",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "28",
+     "COL_A": "FX_SIM_D10",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "29",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_SIM_R10",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "30",
+     "FIL": "FX_SIM_R10",
+     "FILMAXPC": "100",
+     "FILMINPC": "0",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "31",
+     "COL_A": "FX_SIM_D11",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "32",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_SIM_R11",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "33",
+     "FIL": "FX_SIM_R11",
+     "FILMAXPC": "100",
+     "FILMINPC": "0",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "34",
+     "COL_A": "FX_SIM_D12",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "35",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_SIM_R12",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "36",
+     "FIL": "FX_SIM_R12",
+     "FILMAXPC": "100",
+     "FILMINPC": "0",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "37",
+     "COL_A": "FX_SIM_D13",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "38",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_SIM_R13",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "39",
+     "FIL": "FX_SIM_R13",
+     "FILMAXPC": "100",
+     "FILMINPC": "0",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "40",
+     "COL_A": "FX_SIM_D14",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "41",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_SIM_R14",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "42",
+     "FIL": "FX_SIM_R14",
+     "FILMAXPC": "100",
+     "FILMINPC": "0",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "43",
+     "COL_A": "FX_SIM_D15",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "44",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_SIM_R15",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "45",
+     "FIL": "FX_SIM_R15",
+     "FILMAXPC": "100",
+     "FILMINPC": "0",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "46",
+     "COL_A": "FX_SIM_D16",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "47",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_SIM_R16",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "48",
+     "FIL": "FX_SIM_R16",
+     "FILMAXPC": "100",
+     "FILMINPC": "0",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "49",
+     "COL_A": "FX_SIM_D17",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "50",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_SIM_R17",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "51",
+     "FIL": "FX_SIM_R17",
+     "FILMAXPC": "100",
+     "FILMINPC": "0",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "52",
+     "COL_A": "FX_SIM_D18",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "53",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_SIM_R18",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "54",
+     "FIL": "FX_SIM_R18",
+     "FILMAXPC": "100",
+     "FILMINPC": "0",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "55",
+     "COL_A": "FX_SIM_D19",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "56",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_SIM_R19",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "57",
+     "FIL": "FX_SIM_R19",
+     "FILMAXPC": "100",
+     "FILMINPC": "0",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "58",
+     "COL_A": "FX_SIM_D20",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "59",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_SIM_R20",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "60",
+     "FIL": "FX_SIM_R20",
+     "FILMAXPC": "100",
+     "FILMINPC": "0",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "61",
+     "COL_A": "FX_SIM_D21",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "62",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_SIM_R21",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "63",
+     "FIL": "FX_SIM_R21",
+     "FILMAXPC": "100",
+     "FILMINPC": "0",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "64",
+     "COL_A": "FX_SIM_D22",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "65",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_SIM_R22",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "66",
+     "FIL": "FX_SIM_R22",
+     "FILMAXPC": "100",
+     "FILMINPC": "0",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "67",
+     "COL_A": "FX_SIM_D23",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "68",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_SIM_R23",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "69",
+     "FIL": "FX_SIM_R23",
+     "FILMAXPC": "100",
+     "FILMINPC": "0",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "70",
+     "COL_A": "FX_SIM_D24",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "71",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_SIM_R24",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "72",
+     "FIL": "FX_SIM_R24",
+     "FILMAXPC": "100",
+     "FILMINPC": "0",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "73",
+     "COL_A": "FX_SIM_D25",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "74",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_SIM_R25",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "75",
+     "FIL": "FX_SIM_R25",
+     "FILMAXPC": "100",
+     "FILMINPC": "0",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "76",
+     "COL_A": "FX_SIM_D26",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "77",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_SIM_R26",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "78",
+     "FIL": "FX_SIM_R26",
+     "FILMAXPC": "100",
+     "FILMINPC": "0",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "79",
+     "COL_A": "FX_SIM_D27",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "80",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_SIM_R27",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "81",
+     "FIL": "FX_SIM_R27",
+     "FILMAXPC": "100",
+     "FILMINPC": "0",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "82",
+     "COL_A": "FX_SIM_D28",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "83",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_SIM_R28",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "84",
+     "FIL": "FX_SIM_R28",
+     "FILMAXPC": "100",
+     "FILMINPC": "0",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "85",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "0",
+     "TXT_A": "FX_SIM_D01",
+     "TYPE": "0x000C",
+     "_flag": " "
+    },
+    {
+     "AN": "86",
+     "GROUP": "85",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "87",
+     "GROUP": "86",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "88",
+     "GROUP": "85",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "89",
+     "GROUP": "88",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "90",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "0",
+     "TXT_A": "FX_SIM_D02",
+     "TYPE": "0x000C",
+     "_flag": " "
+    },
+    {
+     "AN": "91",
+     "GROUP": "90",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "92",
+     "GROUP": "91",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "93",
+     "GROUP": "90",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "94",
+     "GROUP": "93",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "95",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "0",
+     "TXT_A": "FX_SIM_D03",
+     "TYPE": "0x000C",
+     "_flag": " "
+    },
+    {
+     "AN": "96",
+     "GROUP": "95",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "97",
+     "GROUP": "96",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "98",
+     "GROUP": "95",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "99",
+     "GROUP": "98",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "100",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "0",
+     "TXT_A": "FX_SIM_D04",
+     "TYPE": "0x000C",
+     "_flag": " "
+    },
+    {
+     "AN": "101",
+     "GROUP": "100",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "102",
+     "GROUP": "101",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "103",
+     "GROUP": "100",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "104",
+     "GROUP": "103",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "105",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "0",
+     "TXT_A": "FX_SIM_D05",
+     "TYPE": "0x000C",
+     "_flag": " "
+    },
+    {
+     "AN": "106",
+     "GROUP": "105",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "107",
+     "GROUP": "106",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "108",
+     "GROUP": "105",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "109",
+     "GROUP": "108",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "110",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "0",
+     "TXT_A": "FX_SIM_D06",
+     "TYPE": "0x000C",
+     "_flag": " "
+    },
+    {
+     "AN": "111",
+     "GROUP": "110",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "112",
+     "GROUP": "111",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "113",
+     "GROUP": "110",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "114",
+     "GROUP": "113",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "115",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "0",
+     "TXT_A": "FX_SIM_D07",
+     "TYPE": "0x000C",
+     "_flag": " "
+    },
+    {
+     "AN": "116",
+     "GROUP": "115",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "117",
+     "GROUP": "116",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "118",
+     "GROUP": "115",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "119",
+     "GROUP": "118",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "120",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "0",
+     "TXT_A": "FX_SIM_D08",
+     "TYPE": "0x000C",
+     "_flag": " "
+    },
+    {
+     "AN": "121",
+     "GROUP": "120",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "122",
+     "GROUP": "121",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "123",
+     "GROUP": "120",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "124",
+     "GROUP": "123",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "125",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "0",
+     "TXT_A": "FX_SIM_D09",
+     "TYPE": "0x000C",
+     "_flag": " "
+    },
+    {
+     "AN": "126",
+     "GROUP": "125",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "127",
+     "GROUP": "126",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "128",
+     "GROUP": "125",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "129",
+     "GROUP": "128",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "130",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "0",
+     "TXT_A": "FX_SIM_D10",
+     "TYPE": "0x000C",
+     "_flag": " "
+    },
+    {
+     "AN": "131",
+     "GROUP": "130",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "132",
+     "GROUP": "131",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "133",
+     "GROUP": "130",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "134",
+     "GROUP": "133",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "135",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "0",
+     "TXT_A": "FX_SIM_D11",
+     "TYPE": "0x000C",
+     "_flag": " "
+    },
+    {
+     "AN": "136",
+     "GROUP": "135",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "137",
+     "GROUP": "136",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "138",
+     "GROUP": "135",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "139",
+     "GROUP": "138",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "140",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "0",
+     "TXT_A": "FX_SIM_D12",
+     "TYPE": "0x000C",
+     "_flag": " "
+    },
+    {
+     "AN": "141",
+     "GROUP": "140",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "142",
+     "GROUP": "141",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "143",
+     "GROUP": "140",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "144",
+     "GROUP": "143",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "145",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "0",
+     "TXT_A": "FX_SIM_D13",
+     "TYPE": "0x000C",
+     "_flag": " "
+    },
+    {
+     "AN": "146",
+     "GROUP": "145",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "147",
+     "GROUP": "146",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "148",
+     "GROUP": "145",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "149",
+     "GROUP": "148",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "150",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "0",
+     "TXT_A": "FX_SIM_D14",
+     "TYPE": "0x000C",
+     "_flag": " "
+    },
+    {
+     "AN": "151",
+     "GROUP": "150",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "152",
+     "GROUP": "151",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "153",
+     "GROUP": "150",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "154",
+     "GROUP": "153",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "155",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "0",
+     "TXT_A": "FX_SIM_D15",
+     "TYPE": "0x000C",
+     "_flag": " "
+    },
+    {
+     "AN": "156",
+     "GROUP": "155",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "157",
+     "GROUP": "156",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "158",
+     "GROUP": "155",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "159",
+     "GROUP": "158",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "160",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "0",
+     "TXT_A": "FX_SIM_D16",
+     "TYPE": "0x000C",
+     "_flag": " "
+    },
+    {
+     "AN": "161",
+     "GROUP": "160",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "162",
+     "GROUP": "161",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "163",
+     "GROUP": "160",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "164",
+     "GROUP": "163",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "165",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "0",
+     "TXT_A": "FX_SIM_D17",
+     "TYPE": "0x000C",
+     "_flag": " "
+    },
+    {
+     "AN": "166",
+     "GROUP": "165",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "167",
+     "GROUP": "166",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "168",
+     "GROUP": "165",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "169",
+     "GROUP": "168",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "170",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "0",
+     "TXT_A": "FX_SIM_D18",
+     "TYPE": "0x000C",
+     "_flag": " "
+    },
+    {
+     "AN": "171",
+     "GROUP": "170",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "172",
+     "GROUP": "171",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "173",
+     "GROUP": "170",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "174",
+     "GROUP": "173",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "175",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "0",
+     "TXT_A": "FX_SIM_D19",
+     "TYPE": "0x000C",
+     "_flag": " "
+    },
+    {
+     "AN": "176",
+     "GROUP": "175",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "177",
+     "GROUP": "176",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "178",
+     "GROUP": "175",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "179",
+     "GROUP": "178",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "180",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "0",
+     "TXT_A": "FX_SIM_D20",
+     "TYPE": "0x000C",
+     "_flag": " "
+    },
+    {
+     "AN": "181",
+     "GROUP": "180",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "182",
+     "GROUP": "181",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "183",
+     "GROUP": "180",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "184",
+     "GROUP": "183",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "187",
+     "DISABLED": "FX_SIM_D11",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "185",
+     "GROUP": "187",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "186",
+     "GROUP": "187",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "190",
+     "DISABLED": "FX_SIM_D12",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "188",
+     "GROUP": "190",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "189",
+     "GROUP": "190",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "193",
+     "DISABLED": "FX_SIM_D13",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "191",
+     "GROUP": "193",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "192",
+     "GROUP": "193",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "196",
+     "DISABLED": "FX_SIM_D14",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "194",
+     "GROUP": "196",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "195",
+     "GROUP": "196",
+     "PAGE": "FxSimBig",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "197",
+     "PAGE": "FxSimBig",
+     "TXTMODE": "4",
+     "TXT_STR": "\"@(Fx Start)\"",
+     "TYPE": "0x0005",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "PAGE",
+    "TYPE",
+    "AN",
+    "GROUP",
+    "SZX",
+    "SZXMINPC",
+    "SZXMAXPC",
+    "SZXORG",
+    "SZXMODE",
+    "SZY",
+    "SZYMINPC",
+    "SZYMAXPC",
+    "SZYORG",
+    "SZYMODE",
+    "ROT",
+    "ROTSL",
+    "ROTMINPC",
+    "ROTMAXPC",
+    "ROTXORG",
+    "ROTYORG",
+    "ROTMODE",
+    "ROTSLMODE",
+    "MVX",
+    "MVXSL",
+    "MVXMINPT",
+    "MVXMAXPT",
+    "MVXMODE",
+    "MVXSLMODE",
+    "MVY",
+    "MVYSL",
+    "MVYMINPT",
+    "MVYMAXPT",
+    "MVYMODE",
+    "MVYSLMODE",
+    "VISIBLE",
+    "VISMODE",
+    "COL_A",
+    "COL_B",
+    "COL_C",
+    "COL_D",
+    "COL_E",
+    "COL_ARR",
+    "COL_EXP",
+    "COLMODE",
+    "TXT_A",
+    "TXT_B",
+    "TXT_C",
+    "TXT_D",
+    "TXT_E",
+    "TXT_STR",
+    "SET_ARR",
+    "TXTMODE",
+    "FIL",
+    "FILMINPC",
+    "FILMAXPC",
+    "FILMODE",
+    "DISABLED",
+    "DISMODE",
+    "GREY_STYLE",
+    "DESC",
+    "COMMENT",
+    "AREA",
+    "PRIV",
+    "MSG_LOG",
+    "DEVICE"
+   ]
+  },
+  "FxSim/pglang.DBF": {
+   "added": [
+    {
+     "NATIVE": "Fx Start",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "NATIVE"
+   ]
+  }
+ }
+}

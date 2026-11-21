@@ -1,0 +1,191 @@
+{
+ "calls": [
+  {
+   "page": "FxOraclePlace",
+   "place": [
+    "FxLib",
+    "fxnest",
+    "n2",
+    "ctm",
+    100,
+    100,
+    [
+     [
+      "Name",
+      "P"
+     ]
+    ]
+   ],
+   "stage": "placed",
+   "type": 0
+  },
+  {
+   "ClipboardCopy": 6,
+   "record": {
+    "an": 6,
+    "anchor": [
+     100,
+     175
+    ],
+    "rect1": [
+     100,
+     100,
+     129,
+     176
+    ],
+    "rect2": [
+     100,
+     100,
+     129,
+     176
+    ],
+    "slots": [
+     [
+      1,
+      [
+       1.0,
+       0.0,
+       0.0,
+       1.0,
+       140.0,
+       138.0
+      ]
+     ],
+     [
+      1,
+      [
+       1.0,
+       0.0,
+       0.0,
+       1.0,
+       90.0,
+       90.0
+      ]
+     ],
+     [
+      1,
+      [
+       1.0,
+       0.0,
+       0.0,
+       1.0,
+       90.0,
+       90.0
+      ]
+     ]
+    ],
+    "type_code": 8
+   },
+   "stage": "placed"
+  },
+  {
+   "ClipboardPaste": true,
+   "objects after": [
+    [
+     1,
+     "Text"
+    ],
+    [
+     6,
+     "Genie"
+    ],
+    [
+     8,
+     "Genie"
+    ]
+   ],
+   "objects before": [
+    [
+     1,
+     "Text"
+    ],
+    [
+     6,
+     "Genie"
+    ]
+   ],
+   "open": "n3",
+   "shown before the save": {
+    "other": {
+     "10": [
+      10,
+      "Genie"
+     ],
+     "12": [
+      12,
+      "Genie"
+     ],
+     "2": [
+      2,
+      "Genie"
+     ],
+     "4": [
+      4,
+      "Genie"
+     ],
+     "6": [
+      6,
+      "Genie"
+     ],
+     "8": [
+      8,
+      "Genie"
+     ]
+    },
+    "texts": {
+     "1": "%Extra%",
+     "11": "P",
+     "13": "P L1",
+     "3": "%Name% 3 L1",
+     "5": "%Name% 3",
+     "7": "N2",
+     "9": "N2"
+    }
+   },
+   "stage": "pasted"
+  },
+  {
+   "fresh Graphics Builder": true,
+   "open + save": "n3",
+   "shown": {
+    "other": {
+     "10": [
+      10,
+      "Genie"
+     ],
+     "12": [
+      12,
+      "Genie"
+     ],
+     "2": [
+      2,
+      "Genie"
+     ],
+     "4": [
+      4,
+      "Genie"
+     ],
+     "6": [
+      6,
+      "Genie"
+     ],
+     "8": [
+      8,
+      "Genie"
+     ]
+    },
+    "texts": {
+     "1": "%Extra%",
+     "11": "P",
+     "13": "P L1",
+     "3": "%Name% 3 L1",
+     "5": "%Name% 3",
+     "7": "N2",
+     "9": "N2"
+    }
+   },
+   "stage": "reopened/n3"
+  }
+ ],
+ "library": "FxLib/fxnest.ctm"
+}

@@ -1,0 +1,130 @@
+{
+ "calls": [
+  {
+   "PageName": "template.Untitled1@XGA",
+   "PageNewTemplate": [
+    "FxStyle",
+    "fx_style",
+    "normal",
+    3,
+    true,
+    true
+   ]
+  },
+  {
+   "PageSaveAsEx": [
+    "FxStyle",
+    "fx_style",
+    "fxouter"
+   ],
+   "new elements": [
+    "fxouter@XGA"
+   ]
+  },
+  {
+   "AN": 12,
+   "DrawText": [
+    "%P%",
+    500,
+    500
+   ],
+   "open": "fxouter@XGA",
+   "stage": "param_added"
+  },
+  {
+   "New Page": [
+    {
+     "PageNew": [
+      "FxMain",
+      "fx_style",
+      "fxouter",
+      3,
+      true,
+      true
+     ],
+     "PageSaveAs": [
+      "FxMain",
+      "FxOracleParamPage"
+     ],
+     "result": "saved"
+    }
+   ],
+   "stage": "page_made"
+  },
+  {
+   "DrawRectangle": [
+    300,
+    300,
+    400,
+    360
+   ],
+   "open": "normal@XGA",
+   "stage": "inner_changed"
+  },
+  {
+   "open + save": "FxOracleParamPage",
+   "stage": "same"
+  },
+  {
+   "fresh Graphics Builder": true,
+   "library": "as after inner_changed",
+   "page": "as made"
+  },
+  {
+   "open + save": "FxOracleParamPage",
+   "stage": "fresh"
+  },
+  {
+   "open + save": "fxouter@XGA",
+   "page type": 3,
+   "stage": "fresh/outer/fxouter@XGA"
+  },
+  {
+   "open + save": "FxOracleParamPage",
+   "stage": "fresh/after_outer"
+  },
+  {
+   "fresh Graphics Builder": true,
+   "library": "as after inner_changed",
+   "page": "as made"
+  },
+  {
+   "ProjectUpdatePages": [
+    true
+   ],
+   "project": "FxMain",
+   "result": "returned None",
+   "seconds": 4.2,
+   "stage": "update_pages",
+   "waited": {
+    "dialogs": [],
+    "seconds": 2.0
+   },
+   "watch": {}
+  }
+ ],
+ "files changed": [
+  "FxMain/FxMissing.ctF",
+  "FxMain/FxMissing.ctg",
+  "FxMain/FxOracleParamPage.ctF",
+  "FxMain/FxOracleParamPage.ctg",
+  "FxMain/FxPlaceholder.ctF",
+  "FxMain/FxPlaceholder.ctg",
+  "FxMain/FxTplLast.ctF",
+  "FxMain/FxTplLast.ctg",
+  "FxMain/FxTplLinked.ctF",
+  "FxMain/FxTplLinked.ctg",
+  "FxMain/FxTplStale.ctF",
+  "FxMain/FxTplStale.ctg",
+  "FxMain/changes.DBF",
+  "FxMain/pages.DBF",
+  "FxMain/pgdynobj.DBF",
+  "FxMain/pgdynobj.NDX",
+  "FxMain/pglang.NDX",
+  "FxStyle/citect.pal",
+  "FxStyle/fx_style.ctt"
+ ],
+ "library": "FxStyle/fx_style.ctt",
+ "made": "fxouter@XGA",
+ "page": "FxMain/FxOracleParamPage"
+}

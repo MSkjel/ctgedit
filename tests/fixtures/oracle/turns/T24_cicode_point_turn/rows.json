@@ -1,0 +1,68 @@
+{
+ "indexes": {
+  "FxMain/pgadv.NDX": {
+   "sha1": "a65948a69fe46248d7039f6f7851f69418e4e050",
+   "size": 2048
+  }
+ },
+ "removed": [],
+ "tables": {
+  "FxMain/pgadv.DBF": {
+   "added": [
+    {
+     "AN": "1",
+     "CMD": "FxToggle(FX_PUMP1)",
+     "PAGE": "FxCicode",
+     "_flag": " "
+    },
+    {
+     "AN": "2",
+     "CMD": "FxSet(FX_MODE, 1)",
+     "PAGE": "FxCicode",
+     "_flag": " "
+    },
+    {
+     "AN": "3",
+     "CMD": "PageDisplay(\"FxShapes\")",
+     "PAGE": "FxCicode",
+     "SYMBOL": "fxicons16.page",
+     "_flag": " "
+    },
+    {
+     "AN": "4",
+     "CMD": "FxSet(FX_MODE, 2)",
+     "PAGE": "FxCicode",
+     "SYMBOL": "fxprio.fx_p1",
+     "_flag": " "
+    },
+    {
+     "AN": "5",
+     "PAGE": "FxCicode",
+     "_flag": " "
+    },
+    {
+     "AN": "6",
+     "CMD": "FxSet(FX_MODE, 3)",
+     "PAGE": "FxCicode",
+     "SYMBOL": "<default>",
+     "_flag": " "
+    },
+    {
+     "AN": "7",
+     "CMD": "FxSet(FX_MODE, 4)",
+     "PAGE": "FxCicode",
+     "SYMBOL": "<deAlarm>",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "PAGE",
+    "AN",
+    "CMD",
+    "COMMENT",
+    "SYMBOL"
+   ]
+  }
+ }
+}

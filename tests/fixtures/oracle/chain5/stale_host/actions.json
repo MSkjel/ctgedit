@@ -1,0 +1,49 @@
+{
+ "calls": [
+  {
+   "AN": 2,
+   "DrawText": [
+    "%Label% X",
+    10,
+    45
+   ],
+   "open": "n0",
+   "stage": "n0_gained"
+  },
+  {
+   "open + save": "n2",
+   "page type": 1,
+   "stage": "same/stale/n2"
+  },
+  {
+   "open + save": "n1",
+   "page type": 1,
+   "stage": "same/after/n1"
+  },
+  {
+   "open + save": "n2",
+   "page type": 1,
+   "stage": "same/after/n2"
+  },
+  {
+   "fresh Graphics Builder": true,
+   "library": "as after n0_gained"
+  },
+  {
+   "open + save": "n2",
+   "page type": 1,
+   "stage": "fresh/stale/n2"
+  },
+  {
+   "open + save": "n1",
+   "page type": 1,
+   "stage": "fresh/after/n1"
+  },
+  {
+   "open + save": "n2",
+   "page type": 1,
+   "stage": "fresh/after/n2"
+  }
+ ],
+ "library": "FxLib/fxnest.ctm"
+}

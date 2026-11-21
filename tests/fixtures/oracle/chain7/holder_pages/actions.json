@@ -1,0 +1,81 @@
+{
+ "calls": [
+  {
+   "library": "FxStyle/fx_style.ctt as chain6/template_placeholder/template_missing_fresh/library.ctt",
+   "sha1": "f3ec066470ffa6152c7ee96839463d552b375f83",
+   "why": "the template holding the placeholder"
+  },
+  {
+   "New Page": [
+    {
+     "PageNew": [
+      "FxMain",
+      "fx_style",
+      "normal",
+      3,
+      true,
+      true
+     ],
+     "PageSaveAs": [
+      "FxMain",
+      "FxOracleHolderLinked"
+     ],
+     "result": "saved"
+    }
+   ],
+   "stage": "linked"
+  },
+  {
+   "fresh Graphics Builder": true
+  },
+  {
+   "New Page (unlinked)": [
+    {
+     "PageNew": [
+      "FxMain",
+      "fx_style",
+      "normal",
+      3,
+      true,
+      false
+     ],
+     "PageSaveAs": [
+      "FxMain",
+      "FxOracleHolderUnlinked"
+     ],
+     "result": "saved"
+    }
+   ],
+   "stage": "unlinked"
+  },
+  {
+   "fresh Graphics Builder": true
+  },
+  {
+   "AN": 11,
+   "Cut Link": "FxTplLinked",
+   "break_lock_posted": true,
+   "selected": "PageSelectObject(11)",
+   "stage": "cut_fixture",
+   "template": "fx_style.normal@XGA.<ctt",
+   "template_reference_left": false,
+   "unchanged": false
+  },
+  {
+   "fresh Graphics Builder": true,
+   "page": "FxOracleHolderLinked as made"
+  },
+  {
+   "AN": 8,
+   "Cut Link": "FxOracleHolderLinked",
+   "break_lock_posted": true,
+   "selected": "PageSelectObject(8)",
+   "stage": "cut_linked",
+   "template": "fx_style.normal@XGA.<ctt",
+   "template_reference_left": false,
+   "unchanged": false
+  }
+ ],
+ "input": "chain6/template_placeholder/template_missing_fresh/library.ctt",
+ "template": "FxStyle/fx_style.ctt/normal@XGA"
+}

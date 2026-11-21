@@ -1,0 +1,51 @@
+{
+ "indexes": {},
+ "removed": [],
+ "tables": {
+  "FxSim/changes.DBF": {
+   "added": [
+    {
+     "KEY": "!fx_popup",
+     "NAME": "pages",
+     "RECORD_NO": "8",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "NAME",
+    "KEY",
+    "RECORD_NO"
+   ]
+  },
+  "FxSim/pages.DBF": {
+   "added": [],
+   "changed": [],
+   "fields": [
+    "NAME",
+    "ALIAS",
+    "TITLE",
+    "AREA",
+    "BGND_FILE",
+    "SYMB_FILE",
+    "NEXT_PAGE",
+    "PREV_PAGE",
+    "PAGE_INCL",
+    "ENTRY_FUNC",
+    "BGND_FUNC",
+    "EXIT_FUNC",
+    "COMMENT",
+    "SCANTIME",
+    "LOGDEVICE",
+    "READY_FUNC",
+    "CLUSTER",
+    "CINHERIT",
+    "IGNOREVQ",
+    "CON_TYPE",
+    "ACT_FUNC",
+    "DEACT_FUNC",
+    "PARENT"
+   ]
+  }
+ }
+}

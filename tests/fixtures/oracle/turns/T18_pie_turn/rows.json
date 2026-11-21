@@ -1,0 +1,131 @@
+{
+ "indexes": {},
+ "removed": [],
+ "tables": {
+  "FxMain/changes.DBF": {
+   "added": [
+    {
+     "KEY": "FxShapes",
+     "NAME": "pages",
+     "RECORD_NO": "1",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "NAME",
+    "KEY",
+    "RECORD_NO"
+   ]
+  },
+  "FxMain/pages.DBF": {
+   "added": [],
+   "changed": [],
+   "fields": [
+    "NAME",
+    "ALIAS",
+    "TITLE",
+    "AREA",
+    "BGND_FILE",
+    "SYMB_FILE",
+    "NEXT_PAGE",
+    "PREV_PAGE",
+    "PAGE_INCL",
+    "ENTRY_FUNC",
+    "BGND_FUNC",
+    "EXIT_FUNC",
+    "COMMENT",
+    "SCANTIME",
+    "LOGDEVICE",
+    "READY_FUNC",
+    "CLUSTER",
+    "CINHERIT",
+    "IGNOREVQ",
+    "CON_TYPE",
+    "ACT_FUNC",
+    "DEACT_FUNC",
+    "PARENT"
+   ]
+  },
+  "FxMain/pgdynobj.DBF": {
+   "added": [],
+   "changed": [
+    {
+     "fields": {},
+     "flag": [
+      " ",
+      "*"
+     ],
+     "index": 24
+    }
+   ],
+   "fields": [
+    "PAGE",
+    "TYPE",
+    "AN",
+    "GROUP",
+    "SZX",
+    "SZXMINPC",
+    "SZXMAXPC",
+    "SZXORG",
+    "SZXMODE",
+    "SZY",
+    "SZYMINPC",
+    "SZYMAXPC",
+    "SZYORG",
+    "SZYMODE",
+    "ROT",
+    "ROTSL",
+    "ROTMINPC",
+    "ROTMAXPC",
+    "ROTXORG",
+    "ROTYORG",
+    "ROTMODE",
+    "ROTSLMODE",
+    "MVX",
+    "MVXSL",
+    "MVXMINPT",
+    "MVXMAXPT",
+    "MVXMODE",
+    "MVXSLMODE",
+    "MVY",
+    "MVYSL",
+    "MVYMINPT",
+    "MVYMAXPT",
+    "MVYMODE",
+    "MVYSLMODE",
+    "VISIBLE",
+    "VISMODE",
+    "COL_A",
+    "COL_B",
+    "COL_C",
+    "COL_D",
+    "COL_E",
+    "COL_ARR",
+    "COL_EXP",
+    "COLMODE",
+    "TXT_A",
+    "TXT_B",
+    "TXT_C",
+    "TXT_D",
+    "TXT_E",
+    "TXT_STR",
+    "SET_ARR",
+    "TXTMODE",
+    "FIL",
+    "FILMINPC",
+    "FILMAXPC",
+    "FILMODE",
+    "DISABLED",
+    "DISMODE",
+    "GREY_STYLE",
+    "DESC",
+    "COMMENT",
+    "AREA",
+    "PRIV",
+    "MSG_LOG",
+    "DEVICE"
+   ]
+  }
+ }
+}

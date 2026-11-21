@@ -1,0 +1,30 @@
+{
+ "PageOpenEx": [
+  "FxLib",
+  "fxmany",
+  "fx_last_big",
+  0
+ ],
+ "PageSaveAsEx": [
+  "FxLib",
+  "fxmany",
+  "fx_appended"
+ ],
+ "elements": [
+  "fx_pump_small",
+  "fx_pump_large",
+  "fx_pump_side",
+  "fx_pmp_mark",
+  "fx_primp",
+  "fx_tank_tall",
+  "fx_tank_small",
+  "fx_motor",
+  "fx_fan",
+  "fx_valve_left",
+  "fx_valve_right",
+  "fx_agitator",
+  "fx_agitator_grey",
+  "fx_last_big",
+  "fx_appended"
+ ]
+}

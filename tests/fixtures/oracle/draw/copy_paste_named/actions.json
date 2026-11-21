@@ -1,0 +1,21 @@
+{
+ "copies": [
+  {
+   "an": [
+    52
+   ],
+   "names": [
+    "FxManyGroup1"
+   ]
+  },
+  {
+   "an": [
+    59
+   ],
+   "names": [
+    "FxManyPump1"
+   ]
+  }
+ ],
+ "page": "FxMany"
+}

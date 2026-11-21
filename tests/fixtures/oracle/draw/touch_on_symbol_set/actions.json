@@ -1,0 +1,18 @@
+{
+ "actions": [
+  [
+   "touch",
+   1,
+   "Beep()",
+   "",
+   0
+  ]
+ ],
+ "an": [
+  14
+ ],
+ "names": [
+  "FxOnOffSet"
+ ],
+ "page": "FxSymbols"
+}

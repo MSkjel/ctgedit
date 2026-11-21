@@ -1,0 +1,39 @@
+{
+ "actions": [
+  [
+   "place",
+   "FxLib",
+   "fxgenie",
+   "fx_pump",
+   "ctm",
+   300,
+   300,
+   [
+    [
+     "Tag",
+     "FX_PUMP1"
+    ],
+    [
+     "Label",
+     "Fx"
+    ]
+   ],
+   "type 0"
+  ],
+  [
+   "rect",
+   600,
+   100,
+   650,
+   140
+  ],
+  [
+   "rect",
+   600,
+   200,
+   650,
+   240
+  ]
+ ],
+ "page": "FxOracleGaps"
+}

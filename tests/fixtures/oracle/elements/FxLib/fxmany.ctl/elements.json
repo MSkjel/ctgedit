@@ -1,0 +1,36 @@
+{
+ "fresh_builder_before": [],
+ "missed": [],
+ "page_types": {
+  "fx_agitator": 0,
+  "fx_agitator_grey": 0,
+  "fx_fan": 0,
+  "fx_last_big": 0,
+  "fx_motor": 0,
+  "fx_pmp_mark": 0,
+  "fx_primp": 0,
+  "fx_pump_large": 0,
+  "fx_pump_side": 0,
+  "fx_pump_small": 0,
+  "fx_tank_small": 0,
+  "fx_tank_tall": 0,
+  "fx_valve_left": 0,
+  "fx_valve_right": 0
+ },
+ "saved": [
+  "fx_pump_small",
+  "fx_pump_large",
+  "fx_pump_side",
+  "fx_pmp_mark",
+  "fx_primp",
+  "fx_tank_tall",
+  "fx_tank_small",
+  "fx_motor",
+  "fx_fan",
+  "fx_valve_left",
+  "fx_valve_right",
+  "fx_agitator",
+  "fx_agitator_grey",
+  "fx_last_big"
+ ]
+}

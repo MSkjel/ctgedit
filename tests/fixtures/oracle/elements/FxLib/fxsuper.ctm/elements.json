@@ -1,0 +1,12 @@
+{
+ "fresh_builder_before": [],
+ "missed": [],
+ "page_types": {
+  "!fx_detail@SUPER": 1,
+  "!fx_popup@SUPER": 1
+ },
+ "saved": [
+  "!fx_popup@SUPER",
+  "!fx_detail@SUPER"
+ ]
+}

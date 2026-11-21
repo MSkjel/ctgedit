@@ -1,0 +1,24 @@
+{
+ "fresh_builder_before": [],
+ "missed": [],
+ "page_types": {
+  "fx_disabled": 0,
+  "fx_p1": 0,
+  "fx_p1_small": 0,
+  "fx_p2": 0,
+  "fx_p2_small": 0,
+  "fx_p3": 0,
+  "fx_p3_small": 0,
+  "fx_shelved": 0
+ },
+ "saved": [
+  "fx_p1",
+  "fx_p1_small",
+  "fx_p2",
+  "fx_p2_small",
+  "fx_p3",
+  "fx_p3_small",
+  "fx_shelved",
+  "fx_disabled"
+ ]
+}

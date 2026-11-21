@@ -1,0 +1,51 @@
+{
+ "indexes": {},
+ "removed": [],
+ "tables": {
+  "FxMain/changes.DBF": {
+   "added": [
+    {
+     "KEY": "FxTplMarker",
+     "NAME": "pages",
+     "RECORD_NO": "18",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "NAME",
+    "KEY",
+    "RECORD_NO"
+   ]
+  },
+  "FxMain/pages.DBF": {
+   "added": [],
+   "changed": [],
+   "fields": [
+    "NAME",
+    "ALIAS",
+    "TITLE",
+    "AREA",
+    "BGND_FILE",
+    "SYMB_FILE",
+    "NEXT_PAGE",
+    "PREV_PAGE",
+    "PAGE_INCL",
+    "ENTRY_FUNC",
+    "BGND_FUNC",
+    "EXIT_FUNC",
+    "COMMENT",
+    "SCANTIME",
+    "LOGDEVICE",
+    "READY_FUNC",
+    "CLUSTER",
+    "CINHERIT",
+    "IGNOREVQ",
+    "CON_TYPE",
+    "ACT_FUNC",
+    "DEACT_FUNC",
+    "PARENT"
+   ]
+  }
+ }
+}

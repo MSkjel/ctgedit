@@ -1,0 +1,116 @@
+{
+ "calls": [
+  {
+   "PageName": "template.Untitled1@XGA",
+   "PageNewTemplate": [
+    "FxStyle",
+    "fx_style",
+    "normal",
+    3,
+    true,
+    true
+   ]
+  },
+  {
+   "PageSaveAsEx": [
+    "FxStyle",
+    "fx_style",
+    "fxouter"
+   ],
+   "new elements": [
+    "fxouter@XGA"
+   ]
+  },
+  {
+   "AN": 12,
+   "DrawText": [
+    "%P%",
+    500,
+    500
+   ],
+   "open": "fxouter@XGA",
+   "stage": "param_added"
+  },
+  {
+   "LibraryObjectPlaceEx": [
+    "FxLib",
+    "fxnest",
+    "n0",
+    0,
+    false,
+    600,
+    600
+   ],
+   "open": "fxouter@XGA",
+   "puts": [
+    [
+     "Label",
+     "TL"
+    ]
+   ],
+   "puts refused": [],
+   "stage": "placed"
+  },
+  {
+   "LibraryObjectPlaceEx": [
+    "FxLib",
+    "fxgenie",
+    "fx_plain",
+    0,
+    false,
+    600,
+    650
+   ],
+   "open": "fxouter@XGA",
+   "puts": [],
+   "puts refused": [],
+   "stage": "placed"
+  },
+  {
+   "fresh Graphics Builder": true,
+   "library": "as after placed"
+  },
+  {
+   "open + save": "fxouter@XGA",
+   "page type": 3,
+   "stage": "fresh/fxouter@XGA"
+  },
+  {
+   "New Page": [
+    {
+     "PageNew": [
+      "FxMain",
+      "fx_style",
+      "fxouter",
+      3,
+      true,
+      true
+     ],
+     "PageSaveAs": [
+      "FxMain",
+      "FxOracleOuterGenie"
+     ],
+     "result": "PageNew: (-2147352567, 'Exception occurred.', (0, None, None, None, 0, -2147467259), None)"
+    },
+    {
+     "PageNew": [
+      "FxStyle",
+      "fx_style",
+      "fxouter",
+      3,
+      true,
+      true
+     ],
+     "PageSaveAs": [
+      "FxMain",
+      "FxOracleOuterGenie"
+     ],
+     "result": "saved"
+    }
+   ],
+   "stage": "fresh/new_page"
+  }
+ ],
+ "library": "FxStyle/fx_style.ctt",
+ "made": "fxouter@XGA"
+}

@@ -1,0 +1,91 @@
+{
+ "calls": [
+  {
+   "PageName": "template.Untitled1@XGA",
+   "PageNewTemplate": [
+    "FxStyle",
+    "fx_style",
+    "normal",
+    3,
+    true,
+    true
+   ]
+  },
+  {
+   "PageSaveAsEx": [
+    "FxStyle",
+    "fx_style",
+    "fxouter"
+   ],
+   "new elements": [
+    "fxouter@XGA"
+   ]
+  },
+  {
+   "New Page": [
+    {
+     "PageNew": [
+      "FxMain",
+      "fx_style",
+      "fxouter",
+      3,
+      true,
+      true
+     ],
+     "PageSaveAs": [
+      "FxMain",
+      "FxOracleOuterLinked"
+     ],
+     "result": "saved"
+    }
+   ],
+   "stage": "page_made"
+  },
+  {
+   "DrawRectangle": [
+    300,
+    300,
+    400,
+    360
+   ],
+   "open": "normal@XGA",
+   "stage": "inner_changed"
+  },
+  {
+   "AN": 12,
+   "Cut Link": "FxOracleOuterLinked",
+   "break_lock_posted": true,
+   "selected": "PageSelectObject(12)",
+   "stage": "same/cut",
+   "template": "fx_style.fxouter@XGA.<ctt",
+   "template_reference_left": false,
+   "unchanged": false
+  },
+  {
+   "fresh Graphics Builder": true,
+   "library": "as after inner_changed",
+   "page": "as made"
+  },
+  {
+   "open + save": "FxOracleOuterLinked",
+   "stage": "fresh/plain"
+  },
+  {
+   "fresh Graphics Builder": true,
+   "library": "as after inner_changed",
+   "page": "as made"
+  },
+  {
+   "AN": 12,
+   "Cut Link": "FxOracleOuterLinked",
+   "break_lock_posted": true,
+   "selected": "PageSelectObject(12)",
+   "stage": "fresh/cut",
+   "template": "fx_style.fxouter@XGA.<ctt",
+   "template_reference_left": false,
+   "unchanged": false
+  }
+ ],
+ "made": "fxouter@XGA",
+ "page": "FxMain/FxOracleOuterLinked"
+}

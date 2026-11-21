@@ -1,0 +1,32 @@
+{
+ "fresh_builder_before": [
+  "fx_set"
+ ],
+ "missed": [],
+ "page_types": {
+  "fx_bitmap": 0,
+  "fx_box": 0,
+  "fx_fault": 0,
+  "fx_flash": 0,
+  "fx_group": 0,
+  "fx_off": 0,
+  "fx_on": 0,
+  "fx_pump_tall": 0,
+  "fx_round": 0,
+  "fx_set": 0,
+  "fx_wmf": 0
+ },
+ "saved": [
+  "fx_box",
+  "fx_round",
+  "fx_group",
+  "fx_bitmap",
+  "fx_flash",
+  "fx_wmf",
+  "fx_on",
+  "fx_off",
+  "fx_fault",
+  "fx_pump_tall",
+  "fx_set"
+ ]
+}

@@ -1,0 +1,18 @@
+{
+ "actions": [
+  [
+   "touch",
+   1,
+   "Beep()",
+   "",
+   0
+  ]
+ ],
+ "an": [
+  2
+ ],
+ "names": [
+  "FxLinkedBox"
+ ],
+ "page": "FxSymbols"
+}

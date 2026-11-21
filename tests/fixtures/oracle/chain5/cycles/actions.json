@@ -1,0 +1,83 @@
+{
+ "calls": [
+  {
+   "LibraryObjectPlaceEx": [
+    "FxLib",
+    "fxnest",
+    "n0",
+    0,
+    false,
+    200,
+    10
+   ],
+   "builder ended": false,
+   "builder ended after the save": false,
+   "library changed": false,
+   "message boxes": [
+    "Attempt to save page with a link to itself.  Press OK to abort [OK]"
+   ],
+   "objects after": [
+    [
+     1,
+     "Text"
+    ],
+    [
+     2,
+     "Genie"
+    ]
+   ],
+   "objects before": [
+    [
+     1,
+     "Text"
+    ]
+   ],
+   "open": "n0",
+   "result": "returned None",
+   "save": "error: (-2147352567, 'Exception occurred.', (0, None, None, None, 0, -2147467259), None)",
+   "save seconds": 0.5,
+   "seconds": 0.0,
+   "stage": "n0_into_n0"
+  },
+  {
+   "LibraryObjectPlaceEx": [
+    "FxLib",
+    "fxnest",
+    "n2",
+    0,
+    false,
+    200,
+    60
+   ],
+   "builder ended": false,
+   "builder ended after the save": false,
+   "library changed": false,
+   "message boxes": [
+    "Attempt to save page with a link to itself.  Press OK to abort [OK]"
+   ],
+   "objects after": [
+    [
+     1,
+     "Text"
+    ],
+    [
+     6,
+     "Genie"
+    ]
+   ],
+   "objects before": [
+    [
+     1,
+     "Text"
+    ]
+   ],
+   "open": "n0",
+   "result": "returned None",
+   "save": "error: (-2147352567, 'Exception occurred.', (0, None, None, None, 0, -2147467259), None)",
+   "save seconds": 0.5,
+   "seconds": 0.0,
+   "stage": "n2_into_n0"
+  }
+ ],
+ "library": "FxLib/fxnest.ctm"
+}

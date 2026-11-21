@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TemplateMetadata TemplateId="b0c1d2e3-f405-4a16-8b27-c3d4e5f60718" Digest="CJSrltOitNNSzfK5y+R4GrndHcQ=">
+  <LibraryItemVersions>
+    <ItemVersion Project="FxLib" Library="fxparts" Item="fx_sets">
+      <Version>22a233a4-e06c-fb44-a7d5-77ce9c2ec732</Version>
+    </ItemVersion>
+    <ItemVersion Project="FxLib" Library="fxparts" Item="fx_alarm">
+      <Version>470da36c-f967-a444-9560-5ba93dc79046</Version>
+    </ItemVersion>
+    <ItemVersion Project="FxLib" Library="fxparts" Item="fx_bowtie">
+      <Version>53449b27-db04-d046-ac62-5ba473ae2dee</Version>
+    </ItemVersion>
+  </LibraryItemVersions>
+</TemplateMetadata>

@@ -1,0 +1,18 @@
+{
+ "_readme": [
+  "The corpus roles (tests_corpus/corpus.py). Committed files name only Example / ExampleSA, the projects AVEVA ships and our Fx names.",
+  "A tool or test that can also use a page of a project this machine has besides the shipped ones names a role; tests_corpus/local.json (git-ignored) maps each role to this machine's value.",
+  "local.json is a flat object: {\"sweep_pages\": [\"<Project>/<Page>.ctg\"], ...}. A role that is not set is left out (its tests skip).",
+  "A role ending in _project is a project folder, _page / _library a file 'Project/File.ctg' and _pages a list of them, relative to the install's User folder.",
+  "Each entry below gives the role's meaning and the shape of its value (an illustration with Example names, not a value to use)."
+ ],
+ "roles": {
+  "bench_page": {"meaning": "tools/sim_scene_bench.py: the big page it times when no page is given (else the biggest page of a project that is not shipped).", "shape": "Example/Mixer.ctg"},
+  "ctedit_compare_pages": {"meaning": "tools/live/ctedit_compare.py: pages compared with CtDraw, besides Example Mixer and ExampleSA Mixing_L3.", "shape": ["Example/Mixer.ctg"]},
+  "invalid_forms": {"meaning": "The genie form files CtDraw cannot use either (lower case file name -> the genies whose form is invalid, when pinned).", "shape": {"library.frm": ["genie"]}},
+  "session_soak_groups": {"meaning": "tools/session_soak.py: group name -> pages opened together (pages sharing libraries).", "shape": {"group": ["Example/Mixer.ctg", "Example/Genies.ctg"]}},
+  "sweep_pages": {"meaning": "tools/genie_recompose_sweep.py: pages always swept, besides the shipped ones.", "shape": ["Example/Mixer.ctg"]},
+  "soak_page": {"meaning": "A page for the Simulate start up soak's 'local' case (tools/sim_startup_soak.py).", "shape": "Example/Mixer.ctg"},
+  "soak_away_page": {"meaning": "Another page of soak_page's project (the soak's away page).", "shape": "Example/Genies.ctg"}
+ }
+}

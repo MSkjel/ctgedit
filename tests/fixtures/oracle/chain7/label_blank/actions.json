@@ -1,0 +1,65 @@
+{
+ "calls": [
+  {
+   "AN": 1,
+   "AttributeText put": " %Label%",
+   "open": "n0",
+   "stage": "n0_blank"
+  },
+  {
+   "open + save": "n1",
+   "page type": 1,
+   "stage": "n1_after/n1"
+  },
+  {
+   "LibraryObjectPlaceEx": [
+    "FxLib",
+    "fxnest",
+    "n0",
+    0,
+    false,
+    10,
+    70
+   ],
+   "open": "n1",
+   "puts": [
+    [
+     "Label",
+     " %Name% L1"
+    ]
+   ],
+   "puts refused": [],
+   "stage": "n1_bound"
+  },
+  {
+   "page": "FxOraclePlace",
+   "place": [
+    "FxLib",
+    "fxnest",
+    "n1",
+    "ctm",
+    200,
+    200,
+    [
+     [
+      "Name",
+      "P1"
+     ]
+    ]
+   ],
+   "property puts refused": [],
+   "stage": "page",
+   "type": 0
+  },
+  {
+   "fresh Graphics Builder": true,
+   "library": "as after n1_bound"
+  },
+  {
+   "open + save": "n1",
+   "page type": 1,
+   "stage": "fresh/n1"
+  }
+ ],
+ "library": "FxLib/fxnest.ctm"
+}

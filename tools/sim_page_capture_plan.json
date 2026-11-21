@@ -1,0 +1,533 @@
+{
+ "project": "ExampleSA",
+ "comment": "Pages and scenarios of tools/sim_page_capture.py run. Tags written are put back (value and override mode) when each case ends. Values are engineering units.",
+ "pages": [
+  {
+   "page": "Others",
+   "at": [
+    10,
+    10
+   ],
+   "cases": [
+    {
+     "name": "wind_compass",
+     "description": "Wind compass needles: rotation (ROT = WindPV / WindPVAvg), movement and scaling of the speed markers (WindSpeed), then a bad quality on WindPV.",
+     "frames": [
+      {
+       "name": "f0_baseline",
+       "description": "as found"
+      },
+      {
+       "name": "f1_wind_90",
+       "set": {
+        "Company.Library.WindCompass.WindPV": 90,
+        "Company.Library.WindCompass.WindSpeed": 25
+       }
+      },
+      {
+       "name": "f2_wind_225",
+       "set": {
+        "Company.Library.WindCompass.WindPV": 225,
+        "Company.Library.WindCompass.WindPVAvg": 200,
+        "Company.Library.WindCompass.WindSpeed": 70,
+        "Company.Library.WindCompass.WindSpeedAvg": 60
+       }
+      },
+      {
+       "name": "f3_windpv_bad",
+       "quality": {
+        "Company.Library.WindCompass.WindPV": "bad"
+       }
+      }
+     ]
+    },
+    {
+     "name": "polar_star",
+     "description": "Polar star polygon: vertex animation from the Peak / OffPeak / Shoulder totals.",
+     "frames": [
+      {
+       "name": "f0_baseline"
+      },
+      {
+       "name": "f1_peak_high",
+       "set": {
+        "Company.TopMilk.Production.Bottling.Totals.Peak.PV": 1800,
+        "Company.TopMilk.Production.Bottling.Totals.OffPeak.PV": 300,
+        "Company.TopMilk.Production.Bottling.Totals.Shoulder.PV": 900
+       }
+      },
+      {
+       "name": "f2_peak_low",
+       "set": {
+        "Company.TopMilk.Production.Bottling.Totals.Peak.PV": 200,
+        "Company.TopMilk.Production.Bottling.Totals.OffPeak.PV": 1500,
+        "Company.TopMilk.Production.Bottling.Totals.Shoulder.PV": 50
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "page": "Drives",
+   "at": [
+    10,
+    10
+   ],
+   "cases": [
+    {
+     "name": "drive01",
+     "description": "Drive01: on / off colour (Running), text array (CtrlMode), threshold colour (OP, FB), fill level (PV, computed by the runtime from the drive), a bad quality on FB.",
+     "frames": [
+      {
+       "name": "f0_baseline"
+      },
+      {
+       "name": "f1_running_manual",
+       "set": {
+        "Company.Library.Drive01.Running": 1,
+        "Company.Library.Drive01.CtrlMode": 1
+       }
+      },
+      {
+       "name": "f2_op_low",
+       "set": {
+        "Company.Library.Drive01.OP": 10,
+        "Company.Library.Drive01.FB": 10,
+        "Company.Library.Drive01.CtrlMode": 2
+       },
+       "settle": 5
+      },
+      {
+       "name": "f3_op_high",
+       "set": {
+        "Company.Library.Drive01.OP": 92,
+        "Company.Library.Drive01.FB": 88,
+        "Company.Library.Drive01.Running": 0
+       },
+       "settle": 5
+      },
+      {
+       "name": "f4_fb_bad",
+       "quality": {
+        "Company.Library.Drive01.FB": "bad"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "page": "Mining",
+   "at": [
+    10,
+    10
+   ],
+   "cases": [
+    {
+     "name": "mining_drive",
+     "description": "Mining drive: threshold colours (OP, FB), numeric display (OP), text array (CtrlMode), fill level (PV).",
+     "frames": [
+      {
+       "name": "f0_baseline"
+      },
+      {
+       "name": "f1_low",
+       "set": {
+        "Company.Library.Mining.OP": 20,
+        "Company.Library.Mining.FB": 15,
+        "Company.Library.Mining.CtrlMode": 1
+       },
+       "settle": 5
+      },
+      {
+       "name": "f2_high",
+       "set": {
+        "Company.Library.Mining.OP": 95,
+        "Company.Library.Mining.FB": 97,
+        "Company.Library.Mining.CtrlMode": 2
+       },
+       "settle": 5
+      },
+      {
+       "name": "f3_op_bad",
+       "quality": {
+        "Company.Library.Mining.OP": "bad"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "page": "Valves",
+   "at": [
+    10,
+    10
+   ],
+   "cases": [
+    {
+     "name": "valve",
+     "description": "Valve: threshold colours (OP / FB), text arrays (CtrlMode), symbol sets.",
+     "frames": [
+      {
+       "name": "f0_baseline"
+      },
+      {
+       "name": "f1_closed_auto",
+       "set": {
+        "Company.Library.Valve.OP": 0,
+        "Company.Library.Valve.FB": 0,
+        "Company.Library.Valve.CtrlMode": 0
+       }
+      },
+      {
+       "name": "f2_half_manual",
+       "set": {
+        "Company.Library.Valve.OP": 50,
+        "Company.Library.Valve.FB": 45,
+        "Company.Library.Valve.CtrlMode": 1
+       }
+      },
+      {
+       "name": "f3_open",
+       "set": {
+        "Company.Library.Valve.OP": 100,
+        "Company.Library.Valve.FB": 100,
+        "Company.Library.Valve.CtrlMode": 2
+       }
+      },
+      {
+       "name": "f4_fb_bad",
+       "quality": {
+        "Company.Library.Valve.FB": "bad"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "page": "Meters",
+   "at": [
+    10,
+    10
+   ],
+   "cases": [
+    {
+     "name": "meter",
+     "description": "Meter: movement of the bar / pointer markers, numeric displays, scaling (PV, OP).",
+     "frames": [
+      {
+       "name": "f0_baseline"
+      },
+      {
+       "name": "f1_pv_15",
+       "set": {
+        "Company.Library.Meter.PV": 15,
+        "Company.Library.Meter.OP": 20
+       }
+      },
+      {
+       "name": "f2_pv_85",
+       "set": {
+        "Company.Library.Meter.PV": 85,
+        "Company.Library.Meter.OP": 60,
+        "Company.Library.Meter.CtrlMode": 1
+       }
+      },
+      {
+       "name": "f3_pv_bad",
+       "quality": {
+        "Company.Library.Meter.PV": "bad"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "page": "Mixing_L3",
+   "at": [
+    10,
+    10
+   ],
+   "cases": [
+    {
+     "name": "tank_level",
+     "description": "Mixing tank level LS07: numeric displays (#.# and #!), bar movement, then a bad quality.",
+     "frames": [
+      {
+       "name": "f0_baseline"
+      },
+      {
+       "name": "f1_level_120",
+       "set": {
+        "Company.TopMilk.Mixing.LS07.PV": 120
+       }
+      },
+      {
+       "name": "f2_level_1350",
+       "set": {
+        "Company.TopMilk.Mixing.LS07.PV": 1350
+       }
+      },
+      {
+       "name": "f3_level_bad",
+       "quality": {
+        "Company.TopMilk.Mixing.LS07.PV": "bad"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "page": "Supply_L3",
+   "at": [
+    10,
+    10
+   ],
+   "cases": [
+    {
+     "name": "full_milk",
+     "description": "Full milk line: pump output (numeric ###, threshold colour), analyser AC01 (numeric), then a bad quality.",
+     "frames": [
+      {
+       "name": "f0_baseline"
+      },
+      {
+       "name": "f1_low",
+       "set": {
+        "Company.TopMilk.MilkSupply.FullMilk.PMP02.OP": 15,
+        "Company.TopMilk.MilkSupply.FullMilk.AC01.PV": 1000
+       }
+      },
+      {
+       "name": "f2_high",
+       "set": {
+        "Company.TopMilk.MilkSupply.FullMilk.PMP02.OP": 140,
+        "Company.TopMilk.MilkSupply.FullMilk.AC01.PV": 9000
+       }
+      },
+      {
+       "name": "f3_ac01_bad",
+       "quality": {
+        "Company.TopMilk.MilkSupply.FullMilk.AC01.PV": "bad"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "page": "Filling_L3",
+   "at": [
+    10,
+    10
+   ],
+   "cases": [
+    {
+     "name": "tank20",
+     "description": "Filling tank 20: level numeric display, conveyor control mode text array, then a bad quality.",
+     "frames": [
+      {
+       "name": "f0_baseline"
+      },
+      {
+       "name": "f1_low",
+       "set": {
+        "Company.TopMilk.Bottling.TNK20.PV": 100,
+        "Company.TopMilk.Bottling.CNV01.CtrlMode": 1
+       }
+      },
+      {
+       "name": "f2_high",
+       "set": {
+        "Company.TopMilk.Bottling.TNK20.PV": 1100,
+        "Company.TopMilk.Bottling.CNV01.CtrlMode": 2
+       }
+      },
+      {
+       "name": "f3_tnk20_bad",
+       "quality": {
+        "Company.TopMilk.Bottling.TNK20.PV": "bad"
+       }
+      }
+     ]
+    },
+    {
+     "name": "batch_id",
+     "description": "String displays of STRING tags (TXTMODE 3, no format): the tanks' batch ids, one longer than its box.",
+     "frames": [
+      {
+       "name": "f0_baseline"
+      },
+      {
+       "name": "f1_ids",
+       "set": {
+        "Company.TopMilk.Bottling.TNK20.BatchID": "CAP-01",
+        "Company.TopMilk.Bottling.TNK21.BatchID": "LONG-BATCH-NAME-0123456789"
+       }
+      },
+      {
+       "name": "f2_id_bad",
+       "quality": {
+        "Company.TopMilk.Bottling.TNK20.BatchID": "bad"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "page": "Overview_L2",
+   "at": [
+    10,
+    10
+   ],
+   "cases": [
+    {
+     "name": "sequence",
+     "description": "Overview: on / off colours of the mixing sequence steps (Step = n), multi-state colour of the conveyors (CNV01 / CNV02 Running), the polar star vertex animation.",
+     "frames": [
+      {
+       "name": "f0_baseline"
+      },
+      {
+       "name": "f1_step3",
+       "set": {
+        "Company.TopMilk.Mixing.Sequence.Step": 3,
+        "Company.TopMilk.Bottling.CNV01.Running": 0,
+        "Company.TopMilk.Bottling.CNV02.Running": 1
+       }
+      },
+      {
+       "name": "f2_step7",
+       "set": {
+        "Company.TopMilk.Mixing.Sequence.Step": 7,
+        "Company.TopMilk.Bottling.CNV01.Running": 1,
+        "Company.TopMilk.Bottling.CNV02.Running": 0,
+        "Company.TopMilk.Production.Bottling.Totals.Peak.PV": 1800
+       }
+      },
+      {
+       "name": "f3_step_bad",
+       "quality": {
+        "Company.TopMilk.Mixing.Sequence.Step": "bad"
+       }
+      }
+     ]
+    },
+    {
+     "name": "recipe_text",
+     "description": "String displays of the mixing sequence (Recipe, ID: STRING tags).",
+     "frames": [
+      {
+       "name": "f0_baseline"
+      },
+      {
+       "name": "f1_recipe",
+       "set": {
+        "Company.TopMilk.Mixing.Sequence.Recipe": "ChocoMilk",
+        "Company.TopMilk.Mixing.Sequence.ID": "B-42"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "page": "FP_Wind_HD1080",
+   "at": [
+    10,
+    10
+   ],
+   "associations": {
+    "__EquipmentRef": "Company.Library.WindCompass",
+    "__EquipmentName": "Company.Library.WindCompass"
+   },
+   "cases": [
+    {
+     "name": "faceplate",
+     "description": "Wind compass faceplate (super genie, associations __EquipmentRef / __EquipmentName): rotation, numeric displays, buttons disabled without a login.",
+     "frames": [
+      {
+       "name": "f0_baseline"
+      },
+      {
+       "name": "f1_wind_45",
+       "set": {
+        "Company.Library.WindCompass.WindPV": 45,
+        "Company.Library.WindCompass.WindSpeed": 30
+       }
+      },
+      {
+       "name": "f2_wind_300",
+       "set": {
+        "Company.Library.WindCompass.WindPV": 300,
+        "Company.Library.WindCompass.WindSpeed": 90,
+        "Company.Library.WindCompass.WindPVAvg": 280
+       }
+      },
+      {
+       "name": "f3_speed_bad",
+       "quality": {
+        "Company.Library.WindCompass.WindSpeed": "bad"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "page": "FP_PMP_HD1080",
+   "at": [
+    10,
+    10
+   ],
+   "associations": {
+    "__EquipmentRef": "Company.TopMilk.Mixing.PMP05",
+    "__EquipmentName": "Company.TopMilk.Mixing.PMP05"
+   },
+   "cases": [
+    {
+     "name": "pump05",
+     "description": "Pump faceplate (super genie): button disable from OOS / Maint / CtrlMode, on / off colours from Running, multi-state limit colours.",
+     "frames": [
+      {
+       "name": "f0_baseline"
+      },
+      {
+       "name": "f1_oos",
+       "set": {
+        "Company.TopMilk.Mixing.PMP05.OOS": 1
+       }
+      },
+      {
+       "name": "f2_maint",
+       "set": {
+        "Company.TopMilk.Mixing.PMP05.OOS": 0,
+        "Company.TopMilk.Mixing.PMP05.Maint": 1
+       }
+      },
+      {
+       "name": "f3_manual_running",
+       "set": {
+        "Company.TopMilk.Mixing.PMP05.Maint": 0,
+        "Company.TopMilk.Mixing.PMP05.CtrlMode": 1,
+        "Company.TopMilk.Mixing.PMP05.Running": 1
+       }
+      },
+      {
+       "name": "f4_running_bad",
+       "quality": {
+        "Company.TopMilk.Mixing.PMP05.Running": "bad"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

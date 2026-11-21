@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<VisualTemplate Guid="{7C2E4D3B-9E5F-4A6B-8C7D-8E9F0A1B2C3D}" Name="FxValveC" Thumbnail="fx_valve">
+  <Parameters>
+    <Parameter Name="Equipment" Label="Equipment" Type="String" NamingRules="Equipment"/>
+    <Parameter Name="ValveType" Label="Valve type" Type="String" DefaultValue="Block">
+      <Values><Value Id="0" Label="Block"/><Value Id="1" Label="Control"/>
+        <Value Id="2" Label="Damper"/><Value Id="3" Label="Hand"/></Values>
+    </Parameter>
+    <Parameter Name="DisplayAlarm" Label="Display alarm" Type="Bool" DefaultValue="false"/>
+  </Parameters>
+  <ContentItems>
+    <Content Id="1" Type="Genie" Project="FxLib" Library="fxgenie" Item="fx_plain"/>
+    <Content Id="2" Type="Genie" Project="FxLib" Library="fxparts" Item="fx_valve_left"/>
+  </ContentItems>
+  <Compositions>
+    <Composition Id="{7C2E4D3B-9E5F-4A6B-8C7D-8E9F0A1B2C3E}">
+      <Layout>
+        <Content ItemId="2" ZIndex="1"><Parameters>
+          <Parameter Name="Tag" TemplateParameter="Equipment"/></Parameters></Content>
+        <Content ItemId="1" ZIndex="2" VisibleWhen="ShowAlarm"/>
+      </Layout>
+    </Composition>
+  </Compositions>
+  <GlobalConditions>
+    <GlobalCondition Id="ShowAlarm">
+      <ParameterCondition Name="DisplayAlarm" Value="true"/></GlobalCondition>
+  </GlobalConditions>
+</VisualTemplate>

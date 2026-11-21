@@ -1,0 +1,58 @@
+{
+ "calls": [
+  {
+   "LibraryObjectPlaceEx": [
+    "FxLib",
+    "fxgenie",
+    "fx_plain",
+    0,
+    false,
+    100,
+    10
+   ],
+   "open": "n0",
+   "stage": "n0_pasted"
+  },
+  {
+   "open + save": "n1",
+   "page type": 1,
+   "stage": "pasted/n1"
+  },
+  {
+   "AN": 3,
+   "DrawText": [
+    "%P%",
+    0,
+    25
+   ],
+   "open": "fx_plain",
+   "stage": "inner_gained"
+  },
+  {
+   "open + save": "n0",
+   "page type": 1,
+   "stage": "same/n0"
+  },
+  {
+   "open + save": "n1",
+   "page type": 1,
+   "stage": "same/n1"
+  },
+  {
+   "fresh Graphics Builder": true,
+   "libraries": "fxnest.ctm as after pasted/n1, fxgenie.ctm as after inner_gained"
+  },
+  {
+   "open + save": "n0",
+   "page type": 1,
+   "stage": "fresh/n0"
+  },
+  {
+   "open + save": "n1",
+   "page type": 1,
+   "stage": "fresh/n1"
+  }
+ ],
+ "library": "FxLib/fxnest.ctm",
+ "pasted": "FxLib/fxgenie.ctm/fx_plain"
+}

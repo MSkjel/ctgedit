@@ -1,0 +1,32 @@
+{
+ "calls": [
+  {
+   "place": [
+    "FxLib",
+    "fxnest",
+    "n0",
+    "ctm",
+    200,
+    200,
+    [
+     [
+      "Label",
+      " L1"
+     ]
+    ]
+   ],
+   "stage": "placed",
+   "type": 0
+  },
+  {
+   "save": "FxOraclePlace",
+   "stage": "saved"
+  },
+  {
+   "fresh Graphics Builder": true,
+   "open + save": "FxOraclePlace",
+   "stage": "reopened"
+  }
+ ],
+ "page": "FxMain/FxOraclePlace"
+}

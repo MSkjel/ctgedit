@@ -1,0 +1,122 @@
+{
+ "indexes": {
+  "FxMain/pgalmind.NDX": {
+   "sha1": "5de3b0a6dce5f2608713fce94badf53cecec1f5c",
+   "size": 1024
+  },
+  "FxMain/pglang.NDX": {
+   "sha1": "8f3691a285340cbb61197e76e0f628725fd86da1",
+   "size": 2048
+  }
+ },
+ "removed": [],
+ "tables": {
+  "FxMain/changes.DBF": {
+   "added": [
+    {
+     "KEY": "FxAnim",
+     "NAME": "pages",
+     "RECORD_NO": "3",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "NAME",
+    "KEY",
+    "RECORD_NO"
+   ]
+  },
+  "FxMain/pages.DBF": {
+   "added": [],
+   "changed": [],
+   "fields": [
+    "NAME",
+    "ALIAS",
+    "TITLE",
+    "AREA",
+    "BGND_FILE",
+    "SYMB_FILE",
+    "NEXT_PAGE",
+    "PREV_PAGE",
+    "PAGE_INCL",
+    "ENTRY_FUNC",
+    "BGND_FUNC",
+    "EXIT_FUNC",
+    "COMMENT",
+    "SCANTIME",
+    "LOGDEVICE",
+    "READY_FUNC",
+    "CLUSTER",
+    "CINHERIT",
+    "IGNOREVQ",
+    "CON_TYPE",
+    "ACT_FUNC",
+    "DEACT_FUNC",
+    "PARENT"
+   ]
+  },
+  "FxMain/pgalmind.DBF": {
+   "added": [
+    {
+     "AN": "23",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank1",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "1",
+     "INCLUDE": "0",
+     "INSIDE": "0",
+     "PADDING": "5",
+     "PAGE": "FxAnim",
+     "WIDTH": "2",
+     "_flag": " "
+    },
+    {
+     "AN": "26",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank2",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "0",
+     "INCLUDE": "0",
+     "INSIDE": "1",
+     "PAGE": "FxAnim",
+     "WIDTH": "15",
+     "_flag": " "
+    }
+   ],
+   "changed": [
+    {
+     "fields": {},
+     "flag": [
+      " ",
+      "*"
+     ],
+     "index": 0
+    },
+    {
+     "fields": {},
+     "flag": [
+      " ",
+      "*"
+     ],
+     "index": 1
+    }
+   ],
+   "fields": [
+    "PAGE",
+    "AN",
+    "EXPR",
+    "INCLUDE",
+    "INSIDE",
+    "WIDTH",
+    "PADDING",
+    "COLOUR",
+    "FLAG_ON",
+    "FLAG_LOC",
+    "EQHIER"
+   ]
+  }
+ }
+}

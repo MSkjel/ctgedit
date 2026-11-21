@@ -1,0 +1,1123 @@
+{
+ "indexes": {
+  "FxMain/pgalmind.NDX": {
+   "sha1": "832ae9001ea2839287fbf70866a440c07d99298e",
+   "size": 6144
+  },
+  "FxMain/pgdynobj.NDX": {
+   "sha1": "92eeaab70534b9731b8e653f0bbf9ec0d3115a86",
+   "size": 73728
+  }
+ },
+ "removed": [],
+ "tables": {
+  "FxMain/pgalmind.DBF": {
+   "added": [
+    {
+     "AN": "3",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank1",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "0",
+     "INCLUDE": "0",
+     "INSIDE": "0",
+     "PADDING": "0",
+     "PAGE": "FxAlarms",
+     "WIDTH": "1",
+     "_flag": " "
+    },
+    {
+     "AN": "6",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank2",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "1",
+     "INCLUDE": "0",
+     "INSIDE": "0",
+     "PADDING": "1",
+     "PAGE": "FxAlarms",
+     "WIDTH": "2",
+     "_flag": " "
+    },
+    {
+     "AN": "9",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank3",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "0",
+     "INCLUDE": "0",
+     "INSIDE": "0",
+     "PADDING": "2",
+     "PAGE": "FxAlarms",
+     "WIDTH": "3",
+     "_flag": " "
+    },
+    {
+     "AN": "12",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank1",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "1",
+     "INCLUDE": "0",
+     "INSIDE": "0",
+     "PADDING": "3",
+     "PAGE": "FxAlarms",
+     "WIDTH": "1",
+     "_flag": " "
+    },
+    {
+     "AN": "15",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank2",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "0",
+     "INCLUDE": "0",
+     "INSIDE": "0",
+     "PADDING": "0",
+     "PAGE": "FxAlarms",
+     "WIDTH": "2",
+     "_flag": " "
+    },
+    {
+     "AN": "18",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank3",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "1",
+     "INCLUDE": "0",
+     "INSIDE": "0",
+     "PADDING": "1",
+     "PAGE": "FxAlarms",
+     "WIDTH": "3",
+     "_flag": " "
+    },
+    {
+     "AN": "21",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank1",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "0",
+     "INCLUDE": "0",
+     "INSIDE": "0",
+     "PADDING": "2",
+     "PAGE": "FxAlarms",
+     "WIDTH": "1",
+     "_flag": " "
+    },
+    {
+     "AN": "24",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank2",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "1",
+     "INCLUDE": "0",
+     "INSIDE": "0",
+     "PADDING": "3",
+     "PAGE": "FxAlarms",
+     "WIDTH": "2",
+     "_flag": " "
+    },
+    {
+     "AN": "27",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank3",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "0",
+     "INCLUDE": "0",
+     "INSIDE": "0",
+     "PADDING": "0",
+     "PAGE": "FxAlarms",
+     "WIDTH": "3",
+     "_flag": " "
+    },
+    {
+     "AN": "30",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank1",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "1",
+     "INCLUDE": "0",
+     "INSIDE": "0",
+     "PADDING": "1",
+     "PAGE": "FxAlarms",
+     "WIDTH": "1",
+     "_flag": " "
+    },
+    {
+     "AN": "33",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank2",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "0",
+     "INCLUDE": "0",
+     "INSIDE": "0",
+     "PADDING": "2",
+     "PAGE": "FxAlarms",
+     "WIDTH": "2",
+     "_flag": " "
+    },
+    {
+     "AN": "36",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank3",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "1",
+     "INCLUDE": "0",
+     "INSIDE": "0",
+     "PADDING": "3",
+     "PAGE": "FxAlarms",
+     "WIDTH": "3",
+     "_flag": " "
+    },
+    {
+     "AN": "39",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank1",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "0",
+     "INCLUDE": "0",
+     "INSIDE": "0",
+     "PADDING": "0",
+     "PAGE": "FxAlarms",
+     "WIDTH": "1",
+     "_flag": " "
+    },
+    {
+     "AN": "42",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank2",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "1",
+     "INCLUDE": "0",
+     "INSIDE": "0",
+     "PADDING": "1",
+     "PAGE": "FxAlarms",
+     "WIDTH": "2",
+     "_flag": " "
+    },
+    {
+     "AN": "45",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank3",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "0",
+     "INCLUDE": "0",
+     "INSIDE": "0",
+     "PADDING": "2",
+     "PAGE": "FxAlarms",
+     "WIDTH": "3",
+     "_flag": " "
+    },
+    {
+     "AN": "48",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank1",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "1",
+     "INCLUDE": "0",
+     "INSIDE": "0",
+     "PADDING": "3",
+     "PAGE": "FxAlarms",
+     "WIDTH": "1",
+     "_flag": " "
+    },
+    {
+     "AN": "51",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank2",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "0",
+     "INCLUDE": "0",
+     "INSIDE": "0",
+     "PADDING": "0",
+     "PAGE": "FxAlarms",
+     "WIDTH": "2",
+     "_flag": " "
+    },
+    {
+     "AN": "54",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank3",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "1",
+     "INCLUDE": "0",
+     "INSIDE": "0",
+     "PADDING": "1",
+     "PAGE": "FxAlarms",
+     "WIDTH": "3",
+     "_flag": " "
+    },
+    {
+     "AN": "57",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank1",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "0",
+     "INCLUDE": "0",
+     "INSIDE": "0",
+     "PADDING": "2",
+     "PAGE": "FxAlarms",
+     "WIDTH": "1",
+     "_flag": " "
+    },
+    {
+     "AN": "60",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank2",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "1",
+     "INCLUDE": "0",
+     "INSIDE": "0",
+     "PADDING": "3",
+     "PAGE": "FxAlarms",
+     "WIDTH": "2",
+     "_flag": " "
+    },
+    {
+     "AN": "63",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank3",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "0",
+     "INCLUDE": "0",
+     "INSIDE": "0",
+     "PADDING": "0",
+     "PAGE": "FxAlarms",
+     "WIDTH": "3",
+     "_flag": " "
+    },
+    {
+     "AN": "66",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank1",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "1",
+     "INCLUDE": "0",
+     "INSIDE": "0",
+     "PADDING": "1",
+     "PAGE": "FxAlarms",
+     "WIDTH": "1",
+     "_flag": " "
+    },
+    {
+     "AN": "69",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank2",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "0",
+     "INCLUDE": "0",
+     "INSIDE": "0",
+     "PADDING": "2",
+     "PAGE": "FxAlarms",
+     "WIDTH": "2",
+     "_flag": " "
+    },
+    {
+     "AN": "72",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank3",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "1",
+     "INCLUDE": "0",
+     "INSIDE": "0",
+     "PADDING": "3",
+     "PAGE": "FxAlarms",
+     "WIDTH": "3",
+     "_flag": " "
+    },
+    {
+     "AN": "75",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank1",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "0",
+     "INCLUDE": "0",
+     "INSIDE": "0",
+     "PADDING": "0",
+     "PAGE": "FxAlarms",
+     "WIDTH": "1",
+     "_flag": " "
+    },
+    {
+     "AN": "78",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank2",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "1",
+     "INCLUDE": "0",
+     "INSIDE": "0",
+     "PADDING": "1",
+     "PAGE": "FxAlarms",
+     "WIDTH": "2",
+     "_flag": " "
+    },
+    {
+     "AN": "81",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank3",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "0",
+     "INCLUDE": "0",
+     "INSIDE": "0",
+     "PADDING": "2",
+     "PAGE": "FxAlarms",
+     "WIDTH": "3",
+     "_flag": " "
+    },
+    {
+     "AN": "84",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank1",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "1",
+     "INCLUDE": "0",
+     "INSIDE": "0",
+     "PADDING": "3",
+     "PAGE": "FxAlarms",
+     "WIDTH": "1",
+     "_flag": " "
+    },
+    {
+     "AN": "87",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank2",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "0",
+     "INCLUDE": "0",
+     "INSIDE": "1",
+     "PAGE": "FxAlarms",
+     "WIDTH": "15",
+     "_flag": " "
+    },
+    {
+     "AN": "90",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank3",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "0",
+     "INCLUDE": "0",
+     "INSIDE": "1",
+     "PAGE": "FxAlarms",
+     "WIDTH": "15",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "PAGE",
+    "AN",
+    "EXPR",
+    "INCLUDE",
+    "INSIDE",
+    "WIDTH",
+    "PADDING",
+    "COLOUR",
+    "FLAG_ON",
+    "FLAG_LOC",
+    "EQHIER"
+   ]
+  },
+  "FxMain/pgdynobj.DBF": {
+   "added": [
+    {
+     "AN": "3",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "1",
+     "GROUP": "3",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "2",
+     "GROUP": "3",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "6",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "4",
+     "GROUP": "6",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "5",
+     "GROUP": "6",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "9",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "7",
+     "GROUP": "9",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "8",
+     "GROUP": "9",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "12",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "10",
+     "GROUP": "12",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "11",
+     "GROUP": "12",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "15",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "13",
+     "GROUP": "15",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "14",
+     "GROUP": "15",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "18",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "16",
+     "GROUP": "18",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "17",
+     "GROUP": "18",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "21",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "19",
+     "GROUP": "21",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "20",
+     "GROUP": "21",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "24",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "22",
+     "GROUP": "24",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "23",
+     "GROUP": "24",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "27",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "25",
+     "GROUP": "27",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "26",
+     "GROUP": "27",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "30",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "28",
+     "GROUP": "30",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "29",
+     "GROUP": "30",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "33",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "31",
+     "GROUP": "33",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "32",
+     "GROUP": "33",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "36",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "34",
+     "GROUP": "36",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "35",
+     "GROUP": "36",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "39",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "37",
+     "GROUP": "39",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "38",
+     "GROUP": "39",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "42",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "40",
+     "GROUP": "42",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "41",
+     "GROUP": "42",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "45",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "43",
+     "GROUP": "45",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "44",
+     "GROUP": "45",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "48",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "46",
+     "GROUP": "48",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "47",
+     "GROUP": "48",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "51",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "49",
+     "GROUP": "51",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "50",
+     "GROUP": "51",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "54",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "52",
+     "GROUP": "54",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "53",
+     "GROUP": "54",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "57",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "55",
+     "GROUP": "57",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "56",
+     "GROUP": "57",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "60",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "58",
+     "GROUP": "60",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "59",
+     "GROUP": "60",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "63",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "61",
+     "GROUP": "63",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "62",
+     "GROUP": "63",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "66",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "64",
+     "GROUP": "66",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "65",
+     "GROUP": "66",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "69",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "67",
+     "GROUP": "69",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "68",
+     "GROUP": "69",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "72",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "70",
+     "GROUP": "72",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "71",
+     "GROUP": "72",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "75",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "73",
+     "GROUP": "75",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "74",
+     "GROUP": "75",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "78",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "76",
+     "GROUP": "78",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "77",
+     "GROUP": "78",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "81",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "79",
+     "GROUP": "81",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "80",
+     "GROUP": "81",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "84",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "82",
+     "GROUP": "84",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "83",
+     "GROUP": "84",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "87",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "85",
+     "GROUP": "87",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "86",
+     "GROUP": "87",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "90",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "88",
+     "GROUP": "90",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "89",
+     "GROUP": "90",
+     "PAGE": "FxAlarms",
+     "TYPE": "0x0005",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "PAGE",
+    "TYPE",
+    "AN",
+    "GROUP",
+    "SZX",
+    "SZXMINPC",
+    "SZXMAXPC",
+    "SZXORG",
+    "SZXMODE",
+    "SZY",
+    "SZYMINPC",
+    "SZYMAXPC",
+    "SZYORG",
+    "SZYMODE",
+    "ROT",
+    "ROTSL",
+    "ROTMINPC",
+    "ROTMAXPC",
+    "ROTXORG",
+    "ROTYORG",
+    "ROTMODE",
+    "ROTSLMODE",
+    "MVX",
+    "MVXSL",
+    "MVXMINPT",
+    "MVXMAXPT",
+    "MVXMODE",
+    "MVXSLMODE",
+    "MVY",
+    "MVYSL",
+    "MVYMINPT",
+    "MVYMAXPT",
+    "MVYMODE",
+    "MVYSLMODE",
+    "VISIBLE",
+    "VISMODE",
+    "COL_A",
+    "COL_B",
+    "COL_C",
+    "COL_D",
+    "COL_E",
+    "COL_ARR",
+    "COL_EXP",
+    "COLMODE",
+    "TXT_A",
+    "TXT_B",
+    "TXT_C",
+    "TXT_D",
+    "TXT_E",
+    "TXT_STR",
+    "SET_ARR",
+    "TXTMODE",
+    "FIL",
+    "FILMINPC",
+    "FILMAXPC",
+    "FILMODE",
+    "DISABLED",
+    "DISMODE",
+    "GREY_STYLE",
+    "DESC",
+    "COMMENT",
+    "AREA",
+    "PRIV",
+    "MSG_LOG",
+    "DEVICE"
+   ]
+  }
+ }
+}

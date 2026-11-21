@@ -1,0 +1,20 @@
+{
+ "fresh_builder_before": [],
+ "missed": [],
+ "page_types": {
+  "fx_bg_dyn1": 0,
+  "fx_bg_dyn2": 0,
+  "fx_bg_dyn3": 0,
+  "fx_bg_static1": 0,
+  "fx_bg_static2": 0,
+  "fx_bg_static3": 0
+ },
+ "saved": [
+  "fx_bg_dyn1",
+  "fx_bg_static1",
+  "fx_bg_dyn2",
+  "fx_bg_static2",
+  "fx_bg_dyn3",
+  "fx_bg_static3"
+ ]
+}

@@ -1,0 +1,1076 @@
+{
+ "calls": [
+  {
+   "made": [
+    {
+     "anchor": [
+      20,
+      40
+     ],
+     "changes": {},
+     "name": "FxNum00",
+     "odd extent": false,
+     "rect2": [
+      20,
+      40,
+      100,
+      56
+     ],
+     "type_code": 4100,
+     "values": [
+      [
+       "EXPR",
+       "FX_LEVEL1"
+      ],
+      [
+       "FONT",
+       "FxSP"
+      ],
+      [
+       "__AN_NAME__",
+       "FxNum00"
+      ]
+     ]
+    },
+    {
+     "anchor": [
+      20,
+      90
+     ],
+     "changes": {},
+     "name": "FxNum01",
+     "odd extent": true,
+     "rect2": [
+      20,
+      50,
+      220,
+      130
+     ],
+     "type_code": 4100,
+     "values": [
+      [
+       "EXPR",
+       "FX_LEVEL1"
+      ],
+      [
+       "FONT",
+       "FxSP"
+      ],
+      [
+       "__AN_NAME__",
+       "FxNum01"
+      ]
+     ]
+    },
+    {
+     "anchor": [
+      20,
+      140
+     ],
+     "changes": {
+      "FONT": null
+     },
+     "name": "FxNum02",
+     "odd extent": false,
+     "rect2": [
+      20,
+      140,
+      100,
+      156
+     ],
+     "type_code": 4100,
+     "values": [
+      [
+       "EXPR",
+       "FX_LEVEL1"
+      ],
+      [
+       "__AN_NAME__",
+       "FxNum02"
+      ]
+     ]
+    },
+    {
+     "anchor": [
+      20,
+      190
+     ],
+     "changes": {
+      "FONT": "DefaultFont"
+     },
+     "name": "FxNum03",
+     "odd extent": false,
+     "rect2": [
+      20,
+      190,
+      100,
+      206
+     ],
+     "type_code": 4100,
+     "values": [
+      [
+       "EXPR",
+       "FX_LEVEL1"
+      ],
+      [
+       "FONT",
+       "DefaultFont"
+      ],
+      [
+       "__AN_NAME__",
+       "FxNum03"
+      ]
+     ]
+    },
+    {
+     "anchor": [
+      20,
+      240
+     ],
+     "changes": {
+      "FONT": "FxBig"
+     },
+     "name": "FxNum04",
+     "odd extent": false,
+     "rect2": [
+      20,
+      240,
+      100,
+      256
+     ],
+     "type_code": 4100,
+     "values": [
+      [
+       "EXPR",
+       "FX_LEVEL1"
+      ],
+      [
+       "FONT",
+       "FxBig"
+      ],
+      [
+       "__AN_NAME__",
+       "FxNum04"
+      ]
+     ]
+    },
+    {
+     "anchor": [
+      20,
+      290
+     ],
+     "changes": {
+      "FONT": "FxSmall"
+     },
+     "name": "FxNum05",
+     "odd extent": false,
+     "rect2": [
+      20,
+      290,
+      100,
+      306
+     ],
+     "type_code": 4100,
+     "values": [
+      [
+       "EXPR",
+       "FX_LEVEL1"
+      ],
+      [
+       "FONT",
+       "FxSmall"
+      ],
+      [
+       "__AN_NAME__",
+       "FxNum05"
+      ]
+     ]
+    },
+    {
+     "anchor": [
+      20,
+      340
+     ],
+     "changes": {
+      "FONT": "FxNoSuchFont"
+     },
+     "name": "FxNum06",
+     "odd extent": false,
+     "rect2": [
+      20,
+      340,
+      100,
+      356
+     ],
+     "type_code": 4100,
+     "values": [
+      [
+       "EXPR",
+       "FX_LEVEL1"
+      ],
+      [
+       "FONT",
+       "FxNoSuchFont"
+      ],
+      [
+       "__AN_NAME__",
+       "FxNum06"
+      ]
+     ]
+    },
+    {
+     "anchor": [
+      20,
+      390
+     ],
+     "changes": {
+      "EXPR": "FX_LEVEL1:#"
+     },
+     "name": "FxNum07",
+     "odd extent": false,
+     "rect2": [
+      20,
+      390,
+      100,
+      406
+     ],
+     "type_code": 4100,
+     "values": [
+      [
+       "EXPR",
+       "FX_LEVEL1:#"
+      ],
+      [
+       "FONT",
+       "FxSP"
+      ],
+      [
+       "__AN_NAME__",
+       "FxNum07"
+      ]
+     ]
+    },
+    {
+     "anchor": [
+      20,
+      440
+     ],
+     "changes": {
+      "EXPR": "FX_LEVEL1:##########.##"
+     },
+     "name": "FxNum08",
+     "odd extent": false,
+     "rect2": [
+      20,
+      440,
+      100,
+      456
+     ],
+     "type_code": 4100,
+     "values": [
+      [
+       "EXPR",
+       "FX_LEVEL1:##########.##"
+      ],
+      [
+       "FONT",
+       "FxSP"
+      ],
+      [
+       "__AN_NAME__",
+       "FxNum08"
+      ]
+     ]
+    },
+    {
+     "anchor": [
+      20,
+      490
+     ],
+     "changes": {
+      "EXPR": "Time()"
+     },
+     "name": "FxNum09",
+     "odd extent": false,
+     "rect2": [
+      20,
+      490,
+      100,
+      506
+     ],
+     "type_code": 4100,
+     "values": [
+      [
+       "EXPR",
+       "Time()"
+      ],
+      [
+       "FONT",
+       "FxSP"
+      ],
+      [
+       "__AN_NAME__",
+       "FxNum09"
+      ]
+     ]
+    },
+    {
+     "anchor": [
+      20,
+      540
+     ],
+     "changes": {
+      "EXPR": "FX_LEVEL1 + FX_LEVEL1 * 100 + FX_LEVEL1 * 10000"
+     },
+     "name": "FxNum10",
+     "odd extent": false,
+     "rect2": [
+      20,
+      540,
+      100,
+      556
+     ],
+     "type_code": 4100,
+     "values": [
+      [
+       "EXPR",
+       "FX_LEVEL1 + FX_LEVEL1 * 100 + FX_LEVEL1 * 10000"
+      ],
+      [
+       "FONT",
+       "FxSP"
+      ],
+      [
+       "__AN_NAME__",
+       "FxNum10"
+      ]
+     ]
+    },
+    {
+     "anchor": [
+      20,
+      590
+     ],
+     "changes": {
+      "EXPR": "FX_LEVEL1:##########.##",
+      "FONT": "FxBig"
+     },
+     "name": "FxNum11",
+     "odd extent": false,
+     "rect2": [
+      20,
+      590,
+      100,
+      606
+     ],
+     "type_code": 4100,
+     "values": [
+      [
+       "EXPR",
+       "FX_LEVEL1:##########.##"
+      ],
+      [
+       "FONT",
+       "FxBig"
+      ],
+      [
+       "__AN_NAME__",
+       "FxNum11"
+      ]
+     ]
+    },
+    {
+     "anchor": [
+      20,
+      640
+     ],
+     "changes": {
+      "EXPR": "FX_LEVEL1:###",
+      "FONT": null
+     },
+     "name": "FxNum12",
+     "odd extent": true,
+     "rect2": [
+      20,
+      600,
+      220,
+      680
+     ],
+     "type_code": 4100,
+     "values": [
+      [
+       "EXPR",
+       "FX_LEVEL1:###"
+      ],
+      [
+       "__AN_NAME__",
+       "FxNum12"
+      ]
+     ]
+    },
+    {
+     "anchor": [
+      540,
+      40
+     ],
+     "changes": {},
+     "name": "FxStr00",
+     "odd extent": false,
+     "rect2": [
+      540,
+      28,
+      604,
+      45
+     ],
+     "type_code": 4101,
+     "values": [
+      [
+       "OFF_FONT",
+       "DefaultFont"
+      ],
+      [
+       "ON_FONT",
+       "DefaultFont"
+      ],
+      [
+       "EXPR",
+       "FX_PUMP1"
+      ],
+      [
+       "OFF_TEXT",
+       "\"@(Fx OK)\""
+      ],
+      [
+       "ON_TEXT",
+       "\"@(Fx Run)\""
+      ],
+      [
+       "COMMENT",
+       ""
+      ],
+      [
+       "__AN_NAME__",
+       "FxStr00"
+      ],
+      [
+       "FONT",
+       "FxSP"
+      ]
+     ]
+    },
+    {
+     "anchor": [
+      540,
+      90
+     ],
+     "changes": {},
+     "name": "FxStr01",
+     "odd extent": true,
+     "rect2": [
+      540,
+      50,
+      740,
+      130
+     ],
+     "type_code": 4101,
+     "values": [
+      [
+       "OFF_FONT",
+       "DefaultFont"
+      ],
+      [
+       "ON_FONT",
+       "DefaultFont"
+      ],
+      [
+       "EXPR",
+       "FX_PUMP1"
+      ],
+      [
+       "OFF_TEXT",
+       "\"@(Fx OK)\""
+      ],
+      [
+       "ON_TEXT",
+       "\"@(Fx Run)\""
+      ],
+      [
+       "COMMENT",
+       ""
+      ],
+      [
+       "__AN_NAME__",
+       "FxStr01"
+      ],
+      [
+       "FONT",
+       "FxSP"
+      ]
+     ]
+    },
+    {
+     "anchor": [
+      540,
+      140
+     ],
+     "changes": {
+      "FONT": null
+     },
+     "name": "FxStr02",
+     "odd extent": false,
+     "rect2": [
+      540,
+      128,
+      604,
+      145
+     ],
+     "type_code": 4101,
+     "values": [
+      [
+       "OFF_FONT",
+       "DefaultFont"
+      ],
+      [
+       "ON_FONT",
+       "DefaultFont"
+      ],
+      [
+       "EXPR",
+       "FX_PUMP1"
+      ],
+      [
+       "OFF_TEXT",
+       "\"@(Fx OK)\""
+      ],
+      [
+       "ON_TEXT",
+       "\"@(Fx Run)\""
+      ],
+      [
+       "COMMENT",
+       ""
+      ],
+      [
+       "__AN_NAME__",
+       "FxStr02"
+      ]
+     ]
+    },
+    {
+     "anchor": [
+      540,
+      190
+     ],
+     "changes": {
+      "FONT": null,
+      "OFF_FONT": "FxBig",
+      "ON_FONT": "FxBig"
+     },
+     "name": "FxStr03",
+     "odd extent": false,
+     "rect2": [
+      540,
+      178,
+      604,
+      195
+     ],
+     "type_code": 4101,
+     "values": [
+      [
+       "OFF_FONT",
+       "FxBig"
+      ],
+      [
+       "ON_FONT",
+       "FxBig"
+      ],
+      [
+       "EXPR",
+       "FX_PUMP1"
+      ],
+      [
+       "OFF_TEXT",
+       "\"@(Fx OK)\""
+      ],
+      [
+       "ON_TEXT",
+       "\"@(Fx Run)\""
+      ],
+      [
+       "COMMENT",
+       ""
+      ],
+      [
+       "__AN_NAME__",
+       "FxStr03"
+      ]
+     ]
+    },
+    {
+     "anchor": [
+      540,
+      240
+     ],
+     "changes": {
+      "FONT": null,
+      "OFF_FONT": "FxSmall",
+      "ON_FONT": "FxSmall"
+     },
+     "name": "FxStr04",
+     "odd extent": false,
+     "rect2": [
+      540,
+      228,
+      604,
+      245
+     ],
+     "type_code": 4101,
+     "values": [
+      [
+       "OFF_FONT",
+       "FxSmall"
+      ],
+      [
+       "ON_FONT",
+       "FxSmall"
+      ],
+      [
+       "EXPR",
+       "FX_PUMP1"
+      ],
+      [
+       "OFF_TEXT",
+       "\"@(Fx OK)\""
+      ],
+      [
+       "ON_TEXT",
+       "\"@(Fx Run)\""
+      ],
+      [
+       "COMMENT",
+       ""
+      ],
+      [
+       "__AN_NAME__",
+       "FxStr04"
+      ]
+     ]
+    },
+    {
+     "anchor": [
+      540,
+      290
+     ],
+     "changes": {
+      "FONT": null,
+      "OFF_FONT": "FxSmall",
+      "ON_FONT": "FxBig"
+     },
+     "name": "FxStr05",
+     "odd extent": false,
+     "rect2": [
+      540,
+      278,
+      604,
+      295
+     ],
+     "type_code": 4101,
+     "values": [
+      [
+       "OFF_FONT",
+       "FxSmall"
+      ],
+      [
+       "ON_FONT",
+       "FxBig"
+      ],
+      [
+       "EXPR",
+       "FX_PUMP1"
+      ],
+      [
+       "OFF_TEXT",
+       "\"@(Fx OK)\""
+      ],
+      [
+       "ON_TEXT",
+       "\"@(Fx Run)\""
+      ],
+      [
+       "COMMENT",
+       ""
+      ],
+      [
+       "__AN_NAME__",
+       "FxStr05"
+      ]
+     ]
+    },
+    {
+     "anchor": [
+      540,
+      340
+     ],
+     "changes": {
+      "FONT": null,
+      "OFF_FONT": "FxSP",
+      "ON_FONT": "FxSP"
+     },
+     "name": "FxStr06",
+     "odd extent": false,
+     "rect2": [
+      540,
+      328,
+      604,
+      345
+     ],
+     "type_code": 4101,
+     "values": [
+      [
+       "OFF_FONT",
+       "FxSP"
+      ],
+      [
+       "ON_FONT",
+       "FxSP"
+      ],
+      [
+       "EXPR",
+       "FX_PUMP1"
+      ],
+      [
+       "OFF_TEXT",
+       "\"@(Fx OK)\""
+      ],
+      [
+       "ON_TEXT",
+       "\"@(Fx Run)\""
+      ],
+      [
+       "COMMENT",
+       ""
+      ],
+      [
+       "__AN_NAME__",
+       "FxStr06"
+      ]
+     ]
+    },
+    {
+     "anchor": [
+      540,
+      390
+     ],
+     "changes": {
+      "FONT": null,
+      "OFF_TEXT": "\"Hi\"",
+      "ON_TEXT": "\"Hi\""
+     },
+     "name": "FxStr07",
+     "odd extent": false,
+     "rect2": [
+      540,
+      378,
+      604,
+      395
+     ],
+     "type_code": 4101,
+     "values": [
+      [
+       "OFF_FONT",
+       "DefaultFont"
+      ],
+      [
+       "ON_FONT",
+       "DefaultFont"
+      ],
+      [
+       "EXPR",
+       "FX_PUMP1"
+      ],
+      [
+       "OFF_TEXT",
+       "\"Hi\""
+      ],
+      [
+       "ON_TEXT",
+       "\"Hi\""
+      ],
+      [
+       "COMMENT",
+       ""
+      ],
+      [
+       "__AN_NAME__",
+       "FxStr07"
+      ]
+     ]
+    },
+    {
+     "anchor": [
+      540,
+      440
+     ],
+     "changes": {
+      "FONT": null,
+      "OFF_TEXT": "\"A much longer string\"",
+      "ON_TEXT": "\"x\""
+     },
+     "name": "FxStr08",
+     "odd extent": false,
+     "rect2": [
+      540,
+      428,
+      604,
+      445
+     ],
+     "type_code": 4101,
+     "values": [
+      [
+       "OFF_FONT",
+       "DefaultFont"
+      ],
+      [
+       "ON_FONT",
+       "DefaultFont"
+      ],
+      [
+       "EXPR",
+       "FX_PUMP1"
+      ],
+      [
+       "OFF_TEXT",
+       "\"A much longer string\""
+      ],
+      [
+       "ON_TEXT",
+       "\"x\""
+      ],
+      [
+       "COMMENT",
+       ""
+      ],
+      [
+       "__AN_NAME__",
+       "FxStr08"
+      ]
+     ]
+    },
+    {
+     "anchor": [
+      540,
+      490
+     ],
+     "changes": {
+      "FONT": null,
+      "OFF_TEXT": "",
+      "ON_TEXT": ""
+     },
+     "name": "FxStr09",
+     "odd extent": false,
+     "rect2": [
+      540,
+      478,
+      604,
+      495
+     ],
+     "type_code": 4101,
+     "values": [
+      [
+       "OFF_FONT",
+       "DefaultFont"
+      ],
+      [
+       "ON_FONT",
+       "DefaultFont"
+      ],
+      [
+       "EXPR",
+       "FX_PUMP1"
+      ],
+      [
+       "OFF_TEXT",
+       ""
+      ],
+      [
+       "ON_TEXT",
+       ""
+      ],
+      [
+       "COMMENT",
+       ""
+      ],
+      [
+       "__AN_NAME__",
+       "FxStr09"
+      ]
+     ]
+    },
+    {
+     "anchor": [
+      540,
+      540
+     ],
+     "changes": {
+      "FONT": null,
+      "OFF_TEXT": "FX_TEXT",
+      "ON_TEXT": "\"On\""
+     },
+     "name": "FxStr10",
+     "odd extent": false,
+     "rect2": [
+      540,
+      528,
+      604,
+      545
+     ],
+     "type_code": 4101,
+     "values": [
+      [
+       "OFF_FONT",
+       "DefaultFont"
+      ],
+      [
+       "ON_FONT",
+       "DefaultFont"
+      ],
+      [
+       "EXPR",
+       "FX_PUMP1"
+      ],
+      [
+       "OFF_TEXT",
+       "FX_TEXT"
+      ],
+      [
+       "ON_TEXT",
+       "\"On\""
+      ],
+      [
+       "COMMENT",
+       ""
+      ],
+      [
+       "__AN_NAME__",
+       "FxStr10"
+      ]
+     ]
+    },
+    {
+     "anchor": [
+      540,
+      590
+     ],
+     "changes": {
+      "FONT": null,
+      "OFF_FONT": "FxNoSuchFont",
+      "ON_FONT": "FxNoSuchFont"
+     },
+     "name": "FxStr11",
+     "odd extent": false,
+     "rect2": [
+      540,
+      578,
+      604,
+      595
+     ],
+     "type_code": 4101,
+     "values": [
+      [
+       "OFF_FONT",
+       "FxNoSuchFont"
+      ],
+      [
+       "ON_FONT",
+       "FxNoSuchFont"
+      ],
+      [
+       "EXPR",
+       "FX_PUMP1"
+      ],
+      [
+       "OFF_TEXT",
+       "\"@(Fx OK)\""
+      ],
+      [
+       "ON_TEXT",
+       "\"@(Fx Run)\""
+      ],
+      [
+       "COMMENT",
+       ""
+      ],
+      [
+       "__AN_NAME__",
+       "FxStr11"
+      ]
+     ]
+    },
+    {
+     "anchor": [
+      540,
+      640
+     ],
+     "changes": {
+      "FONT": "FxBig",
+      "OFF_FONT": null,
+      "ON_FONT": null
+     },
+     "name": "FxStr12",
+     "odd extent": true,
+     "rect2": [
+      540,
+      600,
+      740,
+      680
+     ],
+     "type_code": 4101,
+     "values": [
+      [
+       "EXPR",
+       "FX_PUMP1"
+      ],
+      [
+       "OFF_TEXT",
+       "\"@(Fx OK)\""
+      ],
+      [
+       "ON_TEXT",
+       "\"@(Fx Run)\""
+      ],
+      [
+       "COMMENT",
+       ""
+      ],
+      [
+       "__AN_NAME__",
+       "FxStr12"
+      ],
+      [
+       "FONT",
+       "FxBig"
+      ]
+     ]
+    }
+   ],
+   "stage": "input"
+  },
+  {
+   "open + save": "FxOracleLegacy",
+   "stage": "loaded"
+  },
+  {
+   "fresh Graphics Builder": true,
+   "page": "as after loaded"
+  },
+  {
+   "open + save": "FxOracleLegacy",
+   "stage": "again"
+  }
+ ],
+ "dpi": {
+  "LOGPIXELSX": 96,
+  "LOGPIXELSY": 96
+ },
+ "page": "FxMain/FxOracleLegacy"
+}

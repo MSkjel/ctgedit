@@ -1,0 +1,26 @@
+{
+ "fresh_builder_before": [],
+ "missed": [],
+ "page_types": {
+  "fx_bitmaps": 1,
+  "fx_keys": 1,
+  "fx_lamp": 1,
+  "fx_pane": 1,
+  "fx_plain": 1,
+  "fx_popper": 1,
+  "fx_pump": 1,
+  "fx_value": 1,
+  "fx_valve": 1
+ },
+ "saved": [
+  "fx_pump",
+  "fx_valve",
+  "fx_keys",
+  "fx_value",
+  "fx_plain",
+  "fx_pane",
+  "fx_lamp",
+  "fx_bitmaps",
+  "fx_popper"
+ ]
+}

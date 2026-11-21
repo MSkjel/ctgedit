@@ -1,0 +1,645 @@
+{
+ "calls": [
+  {
+   "ANs": {
+    "Mirror back": 3,
+    "Mirror wide": 4,
+    "Plain tall": 2,
+    "Plain wide": 1
+   },
+   "DrawText": [
+    [
+     "Plain wide",
+     100,
+     100
+    ],
+    [
+     "Plain tall",
+     400,
+     100
+    ],
+    [
+     "Mirror back",
+     100,
+     300
+    ],
+    [
+     "Mirror wide",
+     400,
+     300
+    ]
+   ],
+   "stage": "drawn"
+  },
+  {
+   "AN": 3,
+   "PositionMirrorHorizontal": "Mirror back",
+   "getters": {
+    "AttributeBaseCoordinates": [
+     100,
+     300,
+     171,
+     316
+    ],
+    "AttributeExtentX": 171,
+    "AttributeExtentY": 316,
+    "AttributeTransformationMatrixGet": [
+     -1.0,
+     0.0,
+     -0.0,
+     1.0,
+     271.0,
+     0.0
+    ],
+    "AttributeX": 100,
+    "AttributeXEx": 100,
+    "AttributeY": 300,
+    "AttributeYEx": 300
+   },
+   "stage": "mirrored"
+  },
+  {
+   "AN": 4,
+   "PositionMirrorHorizontal": "Mirror wide",
+   "getters": {
+    "AttributeBaseCoordinates": [
+     400,
+     300,
+     469,
+     316
+    ],
+    "AttributeExtentX": 469,
+    "AttributeExtentY": 316,
+    "AttributeTransformationMatrixGet": [
+     -1.0,
+     0.0,
+     -0.0,
+     1.0,
+     869.0,
+     0.0
+    ],
+    "AttributeX": 400,
+    "AttributeXEx": 400,
+    "AttributeY": 300,
+    "AttributeYEx": 300
+   },
+   "stage": "mirrored"
+  },
+  {
+   "AN": 1,
+   "AttributeTransformationMatrixPut": [
+    2.0,
+    0.0,
+    0.0,
+    1.0,
+    -100.0,
+    0.0
+   ],
+   "composed onto": [
+    1.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0
+   ],
+   "factors": [
+    2.0,
+    1.0
+   ],
+   "getters after": {
+    "AttributeBaseCoordinates": [
+     100,
+     100,
+     163,
+     116
+    ],
+    "AttributeExtentX": 226,
+    "AttributeExtentY": 116,
+    "AttributeTransformationMatrixGet": [
+     2.0,
+     0.0,
+     0.0,
+     1.0,
+     -100.0,
+     0.0
+    ],
+    "AttributeX": 100,
+    "AttributeXEx": 100,
+    "AttributeY": 100,
+    "AttributeYEx": 100
+   },
+   "getters before": {
+    "AttributeBaseCoordinates": [
+     100,
+     100,
+     163,
+     116
+    ],
+    "AttributeExtentX": 163,
+    "AttributeExtentY": 116,
+    "AttributeTransformationMatrixGet": [
+     1.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    "AttributeX": 100,
+    "AttributeXEx": 100,
+    "AttributeY": 100,
+    "AttributeYEx": 100
+   },
+   "record before": {
+    "an": 1,
+    "anchor": [
+     100,
+     113
+    ],
+    "rect1": [
+     100,
+     100,
+     163,
+     116
+    ],
+    "rect2": [
+     100,
+     100,
+     163,
+     116
+    ],
+    "slots": [
+     [
+      0,
+      [
+       1.0,
+       0.0,
+       0.0,
+       1.0,
+       0.0,
+       0.0
+      ]
+     ],
+     [
+      0,
+      [
+       1.0,
+       0.0,
+       0.0,
+       1.0,
+       0.0,
+       0.0
+      ]
+     ],
+     [
+      0,
+      [
+       1.0,
+       0.0,
+       0.0,
+       1.0,
+       0.0,
+       0.0
+      ]
+     ]
+    ],
+    "type_code": 5
+   },
+   "scaled": "Plain wide",
+   "stage": "resized"
+  },
+  {
+   "AN": 2,
+   "AttributeTransformationMatrixPut": [
+    1.0,
+    0.0,
+    0.0,
+    2.0,
+    0.0,
+    -100.0
+   ],
+   "composed onto": [
+    1.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0
+   ],
+   "factors": [
+    1.0,
+    2.0
+   ],
+   "getters after": {
+    "AttributeBaseCoordinates": [
+     400,
+     100,
+     453,
+     116
+    ],
+    "AttributeExtentX": 453,
+    "AttributeExtentY": 132,
+    "AttributeTransformationMatrixGet": [
+     1.0,
+     0.0,
+     0.0,
+     2.0,
+     0.0,
+     -100.0
+    ],
+    "AttributeX": 400,
+    "AttributeXEx": 400,
+    "AttributeY": 100,
+    "AttributeYEx": 100
+   },
+   "getters before": {
+    "AttributeBaseCoordinates": [
+     400,
+     100,
+     453,
+     116
+    ],
+    "AttributeExtentX": 453,
+    "AttributeExtentY": 116,
+    "AttributeTransformationMatrixGet": [
+     1.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    "AttributeX": 400,
+    "AttributeXEx": 400,
+    "AttributeY": 100,
+    "AttributeYEx": 100
+   },
+   "record before": {
+    "an": 2,
+    "anchor": [
+     400,
+     113
+    ],
+    "rect1": [
+     400,
+     100,
+     453,
+     116
+    ],
+    "rect2": [
+     400,
+     100,
+     453,
+     116
+    ],
+    "slots": [
+     [
+      0,
+      [
+       1.0,
+       0.0,
+       0.0,
+       1.0,
+       0.0,
+       0.0
+      ]
+     ],
+     [
+      0,
+      [
+       1.0,
+       0.0,
+       0.0,
+       1.0,
+       0.0,
+       0.0
+      ]
+     ],
+     [
+      0,
+      [
+       1.0,
+       0.0,
+       0.0,
+       1.0,
+       0.0,
+       0.0
+      ]
+     ]
+    ],
+    "type_code": 5
+   },
+   "scaled": "Plain tall",
+   "stage": "resized"
+  },
+  {
+   "AN": 3,
+   "AttributeTransformationMatrixPut": [
+    -2.0,
+    0.0,
+    -0.0,
+    2.0,
+    442.0,
+    -300.0
+   ],
+   "composed onto": [
+    -1.0,
+    0.0,
+    -0.0,
+    1.0,
+    271.0,
+    0.0
+   ],
+   "factors": [
+    2.0,
+    2.0
+   ],
+   "getters after": {
+    "AttributeBaseCoordinates": [
+     100,
+     300,
+     171,
+     316
+    ],
+    "AttributeExtentX": 242,
+    "AttributeExtentY": 332,
+    "AttributeTransformationMatrixGet": [
+     -2.0,
+     0.0,
+     -0.0,
+     2.0,
+     442.0,
+     -300.0
+    ],
+    "AttributeX": 100,
+    "AttributeXEx": 100,
+    "AttributeY": 300,
+    "AttributeYEx": 300
+   },
+   "getters before": {
+    "AttributeBaseCoordinates": [
+     100,
+     300,
+     171,
+     316
+    ],
+    "AttributeExtentX": 171,
+    "AttributeExtentY": 316,
+    "AttributeTransformationMatrixGet": [
+     -1.0,
+     0.0,
+     -0.0,
+     1.0,
+     271.0,
+     0.0
+    ],
+    "AttributeX": 100,
+    "AttributeXEx": 100,
+    "AttributeY": 300,
+    "AttributeYEx": 300
+   },
+   "record before": {
+    "an": 3,
+    "anchor": [
+     171,
+     313
+    ],
+    "rect1": [
+     100,
+     300,
+     171,
+     316
+    ],
+    "rect2": [
+     100,
+     300,
+     171,
+     316
+    ],
+    "slots": [
+     [
+      3,
+      [
+       -1.0,
+       0.0,
+       0.0,
+       1.0,
+       271.0,
+       0.0
+      ]
+     ],
+     [
+      3,
+      [
+       -1.0,
+       0.0,
+       0.0,
+       1.0,
+       271.0,
+       0.0
+      ]
+     ],
+     [
+      3,
+      [
+       -1.0,
+       0.0,
+       0.0,
+       1.0,
+       271.0,
+       0.0
+      ]
+     ]
+    ],
+    "type_code": 5
+   },
+   "scaled": "Mirror back",
+   "stage": "resized"
+  },
+  {
+   "AN": 4,
+   "AttributeTransformationMatrixPut": [
+    -2.0,
+    0.0,
+    -0.0,
+    1.0,
+    1338.0,
+    0.0
+   ],
+   "composed onto": [
+    -1.0,
+    0.0,
+    -0.0,
+    1.0,
+    869.0,
+    0.0
+   ],
+   "factors": [
+    2.0,
+    1.0
+   ],
+   "getters after": {
+    "AttributeBaseCoordinates": [
+     400,
+     300,
+     469,
+     316
+    ],
+    "AttributeExtentX": 538,
+    "AttributeExtentY": 316,
+    "AttributeTransformationMatrixGet": [
+     -2.0,
+     0.0,
+     -0.0,
+     1.0,
+     1338.0,
+     0.0
+    ],
+    "AttributeX": 400,
+    "AttributeXEx": 400,
+    "AttributeY": 300,
+    "AttributeYEx": 300
+   },
+   "getters before": {
+    "AttributeBaseCoordinates": [
+     400,
+     300,
+     469,
+     316
+    ],
+    "AttributeExtentX": 469,
+    "AttributeExtentY": 316,
+    "AttributeTransformationMatrixGet": [
+     -1.0,
+     0.0,
+     -0.0,
+     1.0,
+     869.0,
+     0.0
+    ],
+    "AttributeX": 400,
+    "AttributeXEx": 400,
+    "AttributeY": 300,
+    "AttributeYEx": 300
+   },
+   "record before": {
+    "an": 4,
+    "anchor": [
+     469,
+     313
+    ],
+    "rect1": [
+     400,
+     300,
+     469,
+     316
+    ],
+    "rect2": [
+     400,
+     300,
+     469,
+     316
+    ],
+    "slots": [
+     [
+      3,
+      [
+       -1.0,
+       0.0,
+       0.0,
+       1.0,
+       869.0,
+       0.0
+      ]
+     ],
+     [
+      3,
+      [
+       -1.0,
+       0.0,
+       0.0,
+       1.0,
+       869.0,
+       0.0
+      ]
+     ],
+     [
+      3,
+      [
+       -1.0,
+       0.0,
+       0.0,
+       1.0,
+       869.0,
+       0.0
+      ]
+     ]
+    ],
+    "type_code": 5
+   },
+   "scaled": "Mirror wide",
+   "stage": "resized"
+  },
+  {
+   "AN": 3,
+   "PositionMirrorHorizontal": "Mirror back",
+   "getters": {
+    "AttributeBaseCoordinates": [
+     100,
+     300,
+     171,
+     316
+    ],
+    "AttributeExtentX": 242,
+    "AttributeExtentY": 332,
+    "AttributeTransformationMatrixGet": [
+     2.0,
+     0.0,
+     0.0,
+     2.0,
+     -100.0,
+     -300.0
+    ],
+    "AttributeX": 100,
+    "AttributeXEx": 100,
+    "AttributeY": 300,
+    "AttributeYEx": 300
+   },
+   "stage": "mirrored_back"
+  },
+  {
+   "AN": 4,
+   "PositionMirrorHorizontal": "Mirror wide",
+   "getters": {
+    "AttributeBaseCoordinates": [
+     400,
+     300,
+     469,
+     316
+    ],
+    "AttributeExtentX": 538,
+    "AttributeExtentY": 316,
+    "AttributeTransformationMatrixGet": [
+     2.0,
+     0.0,
+     0.0,
+     1.0,
+     -400.0,
+     0.0
+    ],
+    "AttributeX": 400,
+    "AttributeXEx": 400,
+    "AttributeY": 300,
+    "AttributeYEx": 300
+   },
+   "stage": "mirrored_back"
+  },
+  {
+   "fresh Graphics Builder": true,
+   "open + save": "FxOracleDraw",
+   "stage": "reopened"
+  }
+ ],
+ "page": "FxMain/FxOracleDraw"
+}

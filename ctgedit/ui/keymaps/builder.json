@@ -1,0 +1,9 @@
+{
+ "name": "builder",
+ "title": "Graphics Builder (S = Symbol)",
+ "description": "S is the Symbol tool, Shift+S opens the command palette at the pointer.",
+ "keys": {
+  "tool.symbol": ["S"],
+  "act_palette_here": ["Shift+S"]
+ }
+}

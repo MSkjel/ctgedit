@@ -1,0 +1,7 @@
+// FxSa's Cicode stand-ins (our own; the runtime's workspace code is not here)
+FUNCTION Workspace_Init()
+END
+
+FUNCTION FxShow(STRING page)
+    PageDisplay(page);
+END

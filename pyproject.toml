@@ -1,0 +1,63 @@
+# ctgedit -- a modern editor for AVEVA Plant SCADA / Citect graphics pages.
+#
+# The version is the newest vX.Y.Z git tag (ctgedit/buildinfo.py). The dependency pins
+# below are the versions the release is built and tested with; the complete
+# locked set (with hashes, for an offline or reproducible install) is
+# requirements.lock -- regenerate it with tools/lock_requirements.py after
+# changing a pin here or in requirements.txt.
+
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ctgedit"
+dynamic = ["version"]
+description = "A modern editor for AVEVA Plant SCADA (Citect) graphics pages, symbols, genies and templates"
+readme = "README.md"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+requires-python = ">=3.14,<3.15"
+dependencies = [
+    "PySide6==6.12.0",
+    "numpy==2.5.5",
+    "dbfread==2.0.7",
+    "pywin32==312; sys_platform == 'win32'",
+]
+
+[project.optional-dependencies]
+dev = ["pytest==9.2.0", "Pillow==13.0.0"]
+build = ["pyinstaller==6.22.3"]
+
+[project.gui-scripts]
+ctgedit = "ctgedit.app:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "ctgedit.__version__"}
+
+[tool.setuptools.packages.find]
+include = ["ctgedit*"]
+
+[tool.setuptools.package-data]
+"ctgedit.format" = ["*.json"]
+"ctgedit.help" = ["*.json", "pages/*.md", "images/*"]
+"ctgedit.ui" = ["keymaps/*.json"]
+"ctgedit.native" = ["*.cs"]
+
+[tool.pytest.ini_options]
+# the hermetic suite only: tests_corpus/ and tests_live/ run when named on the command line
+# (docs/TESTING.md; tools/run_tests.py --suite corpus|live|all)
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py314"
+extend-exclude = ["external", "build", "dist"]
+
+[tool.ruff.lint]
+# syntax errors and every pyflakes check (unused imports / variables, undefined names, ...)
+select = ["E9", "F"]
+
+[tool.ruff.lint.per-file-ignores]
+# a test takes a fixture imported from another test module as a parameter (pytest)
+"tests*/**" = ["F811"]

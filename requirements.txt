@@ -1,0 +1,12 @@
+# Pinned to the versions the release is built and tested with (Python 3.14).
+# The full locked set with hashes is requirements.lock (tools/lock_requirements.py).
+
+# Runtime
+PySide6==6.12.0                         # Qt UI
+numpy==2.5.5                            # render / library-panel helpers
+dbfread==2.0.7                          # read Citect project DBFs (tags)
+pywin32==312; sys_platform == "win32"   # Graphics Builder COM / window helpers
+
+# Dev
+pytest==9.2.0
+Pillow==13.0.0                          # the simulator capture / compare tools and their tests

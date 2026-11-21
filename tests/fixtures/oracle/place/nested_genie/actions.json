@@ -1,0 +1,30 @@
+{
+ "actions": [
+  [
+   "place",
+   "FxLib",
+   "fxnest",
+   "n4",
+   "ctm",
+   200,
+   200,
+   [
+    [
+     "Name",
+     "Pump"
+    ],
+    [
+     "Extra",
+     "X"
+    ]
+   ],
+   "type 0"
+  ],
+  [
+   "name",
+   "FxNested",
+   "AN 10"
+  ]
+ ],
+ "page": "FxOraclePlace"
+}

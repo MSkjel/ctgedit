@@ -1,0 +1,916 @@
+{
+ "indexes": {
+  "FxMain/pgalmind.NDX": {
+   "sha1": "097672ebc920f0b11e6cbede20b562da0bfb110b",
+   "size": 1024
+  },
+  "FxMain/pgdynobj.NDX": {
+   "sha1": "f06134c16e5b9a8280ec952adec03e6a365fd79a",
+   "size": 77312
+  },
+  "FxMain/pgtouch.NDX": {
+   "sha1": "885eb6121cb5f0fb5851e24024b1f3d86d10032f",
+   "size": 6144
+  }
+ },
+ "removed": [],
+ "tables": {
+  "FxMain/pgalmind.DBF": {
+   "added": [
+    {
+     "AN": "84",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank1",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "1",
+     "INCLUDE": "0",
+     "INSIDE": "0",
+     "PADDING": "3",
+     "PAGE": "FxMany",
+     "WIDTH": "2",
+     "_flag": " "
+    },
+    {
+     "AN": "88",
+     "COLOUR": "12566463",
+     "EQHIER": "1",
+     "EXPR": "FxPlant.Tank2",
+     "FLAG_LOC": "0",
+     "FLAG_ON": "1",
+     "INCLUDE": "0",
+     "INSIDE": "0",
+     "PADDING": "3",
+     "PAGE": "FxMany",
+     "WIDTH": "2",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "PAGE",
+    "AN",
+    "EXPR",
+    "INCLUDE",
+    "INSIDE",
+    "WIDTH",
+    "PADDING",
+    "COLOUR",
+    "FLAG_ON",
+    "FLAG_LOC",
+    "EQHIER"
+   ]
+  },
+  "FxMain/pgdynobj.DBF": {
+   "added": [
+    {
+     "AN": "3",
+     "PAGE": "FxMany",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "1",
+     "COL_A": "FX_V1_ON",
+     "GROUP": "3",
+     "PAGE": "FxMany",
+     "TYPE": "0x0010",
+     "_flag": " "
+    },
+    {
+     "AN": "2",
+     "GROUP": "3",
+     "PAGE": "FxMany",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "4",
+     "PAGE": "FxMany",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "5",
+     "COL_A": "FX_V2_ON",
+     "GROUP": "4",
+     "PAGE": "FxMany",
+     "TYPE": "0x0010",
+     "_flag": " "
+    },
+    {
+     "AN": "6",
+     "GROUP": "4",
+     "PAGE": "FxMany",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "7",
+     "PAGE": "FxMany",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "8",
+     "COL_A": "FX_V3_ON",
+     "GROUP": "7",
+     "PAGE": "FxMany",
+     "TYPE": "0x0010",
+     "_flag": " "
+    },
+    {
+     "AN": "9",
+     "GROUP": "7",
+     "PAGE": "FxMany",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "10",
+     "PAGE": "FxMany",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "11",
+     "COL_A": "FX_V4_ON",
+     "GROUP": "10",
+     "PAGE": "FxMany",
+     "TYPE": "0x0010",
+     "_flag": " "
+    },
+    {
+     "AN": "12",
+     "GROUP": "10",
+     "PAGE": "FxMany",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "13",
+     "PAGE": "FxMany",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "14",
+     "COL_A": "FX_V5_ON",
+     "GROUP": "13",
+     "PAGE": "FxMany",
+     "TYPE": "0x0010",
+     "_flag": " "
+    },
+    {
+     "AN": "15",
+     "GROUP": "13",
+     "PAGE": "FxMany",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "16",
+     "PAGE": "FxMany",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "17",
+     "COL_A": "FX_V6_ON",
+     "GROUP": "16",
+     "PAGE": "FxMany",
+     "TYPE": "0x0010",
+     "_flag": " "
+    },
+    {
+     "AN": "18",
+     "GROUP": "16",
+     "PAGE": "FxMany",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "19",
+     "PAGE": "FxMany",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "20",
+     "COL_A": "FX_V7_ON",
+     "GROUP": "19",
+     "PAGE": "FxMany",
+     "TYPE": "0x0010",
+     "_flag": " "
+    },
+    {
+     "AN": "21",
+     "GROUP": "19",
+     "PAGE": "FxMany",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "22",
+     "PAGE": "FxMany",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "23",
+     "COL_A": "FX_V8_ON",
+     "GROUP": "22",
+     "PAGE": "FxMany",
+     "TYPE": "0x0010",
+     "_flag": " "
+    },
+    {
+     "AN": "24",
+     "GROUP": "22",
+     "PAGE": "FxMany",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "25",
+     "PAGE": "FxMany",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "26",
+     "PAGE": "FxMany",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "27",
+     "PAGE": "FxMany",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "28",
+     "PAGE": "FxMany",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "29",
+     "PAGE": "FxMany",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "30",
+     "PAGE": "FxMany",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "31",
+     "PAGE": "FxMany",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "32",
+     "PAGE": "FxMany",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "33",
+     "PAGE": "FxMany",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "34",
+     "PAGE": "FxMany",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "35",
+     "PAGE": "FxMany",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "36",
+     "PAGE": "FxMany",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "37",
+     "PAGE": "FxMany",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "38",
+     "PAGE": "FxMany",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "39",
+     "PAGE": "FxMany",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "40",
+     "PAGE": "FxMany",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "41",
+     "PAGE": "FxMany",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "42",
+     "PAGE": "FxMany",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "43",
+     "PAGE": "FxMany",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "44",
+     "PAGE": "FxMany",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "45",
+     "PAGE": "FxMany",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "46",
+     "PAGE": "FxMany",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "47",
+     "PAGE": "FxMany",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "48",
+     "PAGE": "FxMany",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "49",
+     "PAGE": "FxMany",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "52",
+     "PAGE": "FxMany",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "50",
+     "GROUP": "52",
+     "PAGE": "FxMany",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "51",
+     "GROUP": "52",
+     "PAGE": "FxMany",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "55",
+     "PAGE": "FxMany",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "53",
+     "GROUP": "55",
+     "PAGE": "FxMany",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "54",
+     "GROUP": "55",
+     "PAGE": "FxMany",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "58",
+     "PAGE": "FxMany",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "56",
+     "GROUP": "58",
+     "PAGE": "FxMany",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "57",
+     "GROUP": "58",
+     "PAGE": "FxMany",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "59",
+     "PAGE": "FxMany",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "60",
+     "COL_A": "FX_PUMP1",
+     "GROUP": "59",
+     "PAGE": "FxMany",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "61",
+     "GROUP": "59",
+     "PAGE": "FxMany",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "62",
+     "GROUP": "59",
+     "PAGE": "FxMany",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_PUMP1",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "63",
+     "PAGE": "FxMany",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "64",
+     "COL_A": "FX_PUMP2",
+     "GROUP": "63",
+     "PAGE": "FxMany",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "65",
+     "GROUP": "63",
+     "PAGE": "FxMany",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "66",
+     "GROUP": "63",
+     "PAGE": "FxMany",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_PUMP2",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "67",
+     "PAGE": "FxMany",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "68",
+     "COL_A": "FX_PUMP3",
+     "GROUP": "67",
+     "PAGE": "FxMany",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "69",
+     "GROUP": "67",
+     "PAGE": "FxMany",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "70",
+     "GROUP": "67",
+     "PAGE": "FxMany",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_PUMP3",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "71",
+     "PAGE": "FxMany",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "72",
+     "COL_A": "FX_PUMP1",
+     "GROUP": "71",
+     "PAGE": "FxMany",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "73",
+     "GROUP": "71",
+     "PAGE": "FxMany",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "74",
+     "GROUP": "71",
+     "PAGE": "FxMany",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_PUMP1",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "75",
+     "PAGE": "FxMany",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "76",
+     "COL_A": "FX_PUMP2",
+     "GROUP": "75",
+     "PAGE": "FxMany",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "77",
+     "GROUP": "75",
+     "PAGE": "FxMany",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "78",
+     "GROUP": "75",
+     "PAGE": "FxMany",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_PUMP2",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "79",
+     "PAGE": "FxMany",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "80",
+     "COL_A": "FX_PUMP3",
+     "GROUP": "79",
+     "PAGE": "FxMany",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "81",
+     "GROUP": "79",
+     "PAGE": "FxMany",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "82",
+     "GROUP": "79",
+     "PAGE": "FxMany",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_PUMP3",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "83",
+     "PAGE": "FxMany",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "84",
+     "GROUP": "83",
+     "PAGE": "FxMany",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "85",
+     "GROUP": "84",
+     "PAGE": "FxMany",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "86",
+     "GROUP": "84",
+     "PAGE": "FxMany",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "87",
+     "PAGE": "FxMany",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "88",
+     "GROUP": "87",
+     "PAGE": "FxMany",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "89",
+     "GROUP": "88",
+     "PAGE": "FxMany",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "90",
+     "GROUP": "88",
+     "PAGE": "FxMany",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "91",
+     "PAGE": "FxMany",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "92",
+     "PAGE": "FxMany",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "93",
+     "PAGE": "FxMany",
+     "TYPE": "0x0001",
+     "_flag": " "
+    },
+    {
+     "AN": "94",
+     "PAGE": "FxMany",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "95",
+     "PAGE": "FxMany",
+     "TYPE": "0x0010",
+     "_flag": " "
+    },
+    {
+     "AN": "96",
+     "PAGE": "FxMany",
+     "TYPE": "0x000B",
+     "_flag": " "
+    },
+    {
+     "AN": "97",
+     "PAGE": "FxMany",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "100",
+     "PAGE": "FxMany",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "101",
+     "GROUP": "100",
+     "PAGE": "FxMany",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "102",
+     "GROUP": "100",
+     "PAGE": "FxMany",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "103",
+     "PAGE": "FxMany",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "104",
+     "COL_A": "FX_PUMP1",
+     "GROUP": "103",
+     "PAGE": "FxMany",
+     "TYPE": "0x000F",
+     "_flag": " "
+    },
+    {
+     "AN": "105",
+     "GROUP": "103",
+     "PAGE": "FxMany",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "106",
+     "GROUP": "103",
+     "PAGE": "FxMany",
+     "TXTMODE": "3",
+     "TXT_STR": "FX_PUMP1",
+     "TYPE": "0x0005",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "PAGE",
+    "TYPE",
+    "AN",
+    "GROUP",
+    "SZX",
+    "SZXMINPC",
+    "SZXMAXPC",
+    "SZXORG",
+    "SZXMODE",
+    "SZY",
+    "SZYMINPC",
+    "SZYMAXPC",
+    "SZYORG",
+    "SZYMODE",
+    "ROT",
+    "ROTSL",
+    "ROTMINPC",
+    "ROTMAXPC",
+    "ROTXORG",
+    "ROTYORG",
+    "ROTMODE",
+    "ROTSLMODE",
+    "MVX",
+    "MVXSL",
+    "MVXMINPT",
+    "MVXMAXPT",
+    "MVXMODE",
+    "MVXSLMODE",
+    "MVY",
+    "MVYSL",
+    "MVYMINPT",
+    "MVYMAXPT",
+    "MVYMODE",
+    "MVYSLMODE",
+    "VISIBLE",
+    "VISMODE",
+    "COL_A",
+    "COL_B",
+    "COL_C",
+    "COL_D",
+    "COL_E",
+    "COL_ARR",
+    "COL_EXP",
+    "COLMODE",
+    "TXT_A",
+    "TXT_B",
+    "TXT_C",
+    "TXT_D",
+    "TXT_E",
+    "TXT_STR",
+    "SET_ARR",
+    "TXTMODE",
+    "FIL",
+    "FILMINPC",
+    "FILMAXPC",
+    "FILMODE",
+    "DISABLED",
+    "DISMODE",
+    "GREY_STYLE",
+    "DESC",
+    "COMMENT",
+    "AREA",
+    "PRIV",
+    "MSG_LOG",
+    "DEVICE"
+   ]
+  },
+  "FxMain/pgtouch.DBF": {
+   "added": [
+    {
+     "ACTION": "KEY_LBUTTON",
+     "AN": "60",
+     "CMD": "FxToggle(FX_PUMP1)",
+     "PAGE": "FxMany",
+     "RPT_RATE": "500",
+     "_flag": " "
+    },
+    {
+     "ACTION": "KEY_LBUTTON",
+     "AN": "64",
+     "CMD": "FxToggle(FX_PUMP2)",
+     "PAGE": "FxMany",
+     "RPT_RATE": "500",
+     "_flag": " "
+    },
+    {
+     "ACTION": "KEY_LBUTTON",
+     "AN": "68",
+     "CMD": "FxToggle(FX_PUMP3)",
+     "PAGE": "FxMany",
+     "RPT_RATE": "500",
+     "_flag": " "
+    },
+    {
+     "ACTION": "KEY_LBUTTON",
+     "AN": "72",
+     "CMD": "FxToggle(FX_PUMP1)",
+     "PAGE": "FxMany",
+     "RPT_RATE": "500",
+     "_flag": " "
+    },
+    {
+     "ACTION": "KEY_LBUTTON",
+     "AN": "76",
+     "CMD": "FxToggle(FX_PUMP2)",
+     "PAGE": "FxMany",
+     "RPT_RATE": "500",
+     "_flag": " "
+    },
+    {
+     "ACTION": "KEY_LBUTTON",
+     "AN": "80",
+     "CMD": "FxToggle(FX_PUMP3)",
+     "PAGE": "FxMany",
+     "RPT_RATE": "500",
+     "_flag": " "
+    },
+    {
+     "ACTION": "KEY_LBUTTON",
+     "AN": "104",
+     "CMD": "FxToggle(FX_PUMP1)",
+     "PAGE": "FxMany",
+     "RPT_RATE": "500",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "PAGE",
+    "AN",
+    "ACTION",
+    "RPT_RATE",
+    "CMD",
+    "DOWN_CMD",
+    "DBLCLK_CMD",
+    "REPEAT_CMD",
+    "MSG_LOG",
+    "MSG_LOGDN",
+    "MSG_LOGDBL",
+    "MSG_LOGRPT"
+   ]
+  }
+ }
+}

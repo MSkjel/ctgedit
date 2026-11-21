@@ -1,0 +1,882 @@
+{
+ "indexes": {
+  "FxMain/activex.NDX": {
+   "sha1": "54ff1ad712e223cb3538306130fed5c67f055200",
+   "size": 7680
+  },
+  "FxMain/pgdynobj.NDX": {
+   "sha1": "6f0691391fefef875258b3637ed97a1dea0c6cb9",
+   "size": 64000
+  }
+ },
+ "removed": [],
+ "tables": {
+  "FxMain/activex.DBF": {
+   "added": [
+    {
+     "AN": "1",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "2",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "3",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "4",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "5",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "6",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "7",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "8",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "9",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "10",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "11",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "12",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "13",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "14",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "15",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "16",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "17",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "18",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "19",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "20",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "21",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "22",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "23",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "24",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "25",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "26",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "27",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "28",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "29",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "30",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "31",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "32",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "33",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "34",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "35",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "36",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "37",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "38",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "39",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "40",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "41",
+     "OBJ_GUID": "{37D4F22A-7950-45DF-B1F6-DD78E503D7A9}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "42",
+     "OBJ_GUID": "{C21CD4A3-BAA4-4473-8A16-8D22B2664E6B}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    },
+    {
+     "AN": "43",
+     "OBJ_GUID": "{6A3F1C2E-5B7D-4E8A-9C0F-1D2E3F405162}",
+     "PAGE": "FxActiveX",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "PAGE",
+    "AN",
+    "OBJ_NAME",
+    "OBJ_GUID"
+   ]
+  },
+  "FxMain/changes.DBF": {
+   "added": [
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "3",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "4",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "5",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "6",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "7",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "8",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "9",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "10",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "11",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "12",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "13",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "14",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "15",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "16",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "17",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "18",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "19",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "20",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "21",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "22",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "23",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "24",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "25",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "26",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "27",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "28",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "29",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "30",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "31",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "32",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "33",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "34",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "35",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "36",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "37",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "38",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "39",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "40",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "41",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "42",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "43",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "44",
+     "_flag": " "
+    },
+    {
+     "KEY": "FxActiveX",
+     "NAME": "activex",
+     "RECORD_NO": "45",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "NAME",
+    "KEY",
+    "RECORD_NO"
+   ]
+  },
+  "FxMain/pgdynobj.DBF": {
+   "added": [
+    {
+     "AN": "1",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "2",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "3",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "4",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "5",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "6",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "7",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "8",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "9",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "10",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "11",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "12",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "13",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "14",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "15",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "16",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "17",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "18",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "19",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "20",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "21",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "22",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "23",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "24",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "25",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "26",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "27",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "28",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "29",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "30",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "31",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "32",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "33",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "34",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "35",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "36",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "37",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "38",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "39",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "40",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "41",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "42",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    },
+    {
+     "AN": "43",
+     "PAGE": "FxActiveX",
+     "TYPE": "0x000D",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "PAGE",
+    "TYPE",
+    "AN",
+    "GROUP",
+    "SZX",
+    "SZXMINPC",
+    "SZXMAXPC",
+    "SZXORG",
+    "SZXMODE",
+    "SZY",
+    "SZYMINPC",
+    "SZYMAXPC",
+    "SZYORG",
+    "SZYMODE",
+    "ROT",
+    "ROTSL",
+    "ROTMINPC",
+    "ROTMAXPC",
+    "ROTXORG",
+    "ROTYORG",
+    "ROTMODE",
+    "ROTSLMODE",
+    "MVX",
+    "MVXSL",
+    "MVXMINPT",
+    "MVXMAXPT",
+    "MVXMODE",
+    "MVXSLMODE",
+    "MVY",
+    "MVYSL",
+    "MVYMINPT",
+    "MVYMAXPT",
+    "MVYMODE",
+    "MVYSLMODE",
+    "VISIBLE",
+    "VISMODE",
+    "COL_A",
+    "COL_B",
+    "COL_C",
+    "COL_D",
+    "COL_E",
+    "COL_ARR",
+    "COL_EXP",
+    "COLMODE",
+    "TXT_A",
+    "TXT_B",
+    "TXT_C",
+    "TXT_D",
+    "TXT_E",
+    "TXT_STR",
+    "SET_ARR",
+    "TXTMODE",
+    "FIL",
+    "FILMINPC",
+    "FILMAXPC",
+    "FILMODE",
+    "DISABLED",
+    "DISMODE",
+    "GREY_STYLE",
+    "DESC",
+    "COMMENT",
+    "AREA",
+    "PRIV",
+    "MSG_LOG",
+    "DEVICE"
+   ]
+  }
+ }
+}

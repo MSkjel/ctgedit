@@ -1,0 +1,92 @@
+{
+ "calls": [
+  {
+   "New Page": [
+    {
+     "PageNew": [
+      "FxMain",
+      "fx_style",
+      "normal",
+      3,
+      true,
+      true
+     ],
+     "PageSaveAs": [
+      "FxMain",
+      "FxOracleOrder"
+     ],
+     "result": "PageNew: (-2147352567, 'Exception occurred.', (0, None, None, None, 0, -2147467259), None)"
+    },
+    {
+     "PageNew": [
+      "FxStyle",
+      "fx_style",
+      "normal",
+      3,
+      true,
+      true
+     ],
+     "PageSaveAs": [
+      "FxMain",
+      "FxOracleOrder"
+     ],
+     "result": "saved"
+    }
+   ],
+   "stage": "new_page"
+  },
+  {
+   "place": [
+    "FxLib",
+    "fxgenie",
+    "fx_value",
+    "ctm",
+    300,
+    300,
+    [
+     [
+      "Description",
+      "Fx Start"
+     ]
+    ]
+   ],
+   "stage": "page_made",
+   "type": 0
+  },
+  {
+   "DrawRectangle": [
+    [
+     0,
+     40,
+     50,
+     60
+    ],
+    [
+     70,
+     40,
+     120,
+     60
+    ]
+   ],
+   "open": "fx_value",
+   "stage": "genie_changed"
+  },
+  {
+   "open + save": "normal@XGA",
+   "stage": "template_saved"
+  },
+  {
+   "open + save": "FxOracleOrder",
+   "stage": "same"
+  },
+  {
+   "fresh Graphics Builder": true,
+   "page": "as page_made"
+  },
+  {
+   "open + save": "FxOracleOrder",
+   "stage": "fresh"
+  }
+ ],
+ "page": "FxMain/FxOracleOrder"
+}

@@ -1,0 +1,20 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<CompositeInstance TemplateId="8d3f5e4c-af60-4b7c-9d8e-9fa0b1c2d3e4" Digest="xoVLTtjSst4QE1NKxdQ+Zq3aeok=">
+  <Parameters>
+    <Parameter Name="Equipment" Type="String" Value="FxPlant.Pump1" />
+    <Parameter Name="MEO" Type="Int" Value="1" />
+    <Parameter Name="DisplayLabel" Type="String" Value="Above" />
+    <Parameter Name="Label" Type="String" Value="Spray" />
+    <Parameter Name="DriveType" Type="String" Value="Sprayer" />
+    <Parameter Name="DisplayStatus" Type="String" Value="Inside Right" />
+    <Parameter Name="Orientation" Type="String" Value="Right" />
+  </Parameters>
+  <LibraryItemVersions>
+    <ItemVersion Project="FxLib" Library="fxgenie" Item="fx_pump">
+      <Version>64712d36-ff03-cf41-8acf-a2f26769bbae</Version>
+    </ItemVersion>
+    <ItemVersion Project="FxLib" Library="fxgenie" Item="fx_value">
+      <Version>5dc5a41e-4285-8b4e-bf8e-a141a8d2721e</Version>
+    </ItemVersion>
+  </LibraryItemVersions>
+</CompositeInstance>

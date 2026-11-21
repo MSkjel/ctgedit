@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<VisualTemplate Guid="{B0C1D2E3-F405-4A16-8B27-C3D4E5F60718}" Name="FxStatusC" Thumbnail="fx_status">
+  <Parameters>
+    <Parameter Name="Equipment" Label="Equipment" Type="String" NamingRules="Equipment"/>
+  </Parameters>
+  <ContentItems>
+    <Content Id="1" Type="Genie" Project="FxLib" Library="fxparts" Item="fx_sets"/>
+    <Content Id="2" Type="Genie" Project="FxLib" Library="fxparts" Item="fx_alarm"/>
+    <Content Id="3" Type="Genie" Project="FxLib" Library="fxparts" Item="fx_bowtie"/>
+  </ContentItems>
+  <Compositions>
+    <Composition Id="{B0C1D2E3-F405-4A16-8B27-C3D4E5F60719}">
+      <Layout>
+        <Content ItemId="2" ZIndex="1"><Parameters>
+          <Parameter Name="Equipment" TemplateParameter="Equipment"/></Parameters></Content>
+        <Content ItemId="1" ZIndex="2"/>
+        <Content ItemId="3" ZIndex="3"/>
+      </Layout>
+    </Composition>
+  </Compositions>
+</VisualTemplate>

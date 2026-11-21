@@ -1,0 +1,135 @@
+{
+ "calls": [
+  {
+   "AN": 3,
+   "DrawText": [
+    "@(Running)",
+    0,
+    40
+   ],
+   "PropertiesDisplayValuePut": [
+    1,
+    "FX_A",
+    "FX_B",
+    "",
+    "",
+    ""
+   ],
+   "PropertiesDisplayValueTextPut": [
+    "@(Running)",
+    "@(Stopped)",
+    "@(Fault)",
+    "@(Manual)"
+   ],
+   "getters": {
+    "PropertiesDisplayValueGet": [
+     1,
+     "FX_A",
+     "FX_B",
+     "",
+     "",
+     ""
+    ],
+    "PropertiesDisplayValueTextGet": [
+     "@(Running)",
+     "@(Stopped)",
+     "@(Fault)",
+     "@(Manual)"
+    ]
+   },
+   "stage": "saved"
+  },
+  {
+   "AN": 4,
+   "DrawText": [
+    "@(Auto)",
+    0,
+    60
+   ],
+   "PropertiesDisplayValuePut": [
+    2,
+    "FX_IDX",
+    "",
+    "",
+    "",
+    ""
+   ],
+   "PropertiesDisplayValueTextPut": [
+    "@(Auto)",
+    "@(Hand)",
+    "@(Off Mode)"
+   ],
+   "getters": {
+    "PropertiesDisplayValueGet": [
+     2,
+     "FX_IDX",
+     "",
+     "",
+     "",
+     ""
+    ],
+    "PropertiesDisplayValueTextGet": [
+     "@(Auto)",
+     "@(Hand)",
+     "@(Off Mode)"
+    ]
+   },
+   "stage": "saved"
+  },
+  {
+   "AN": 5,
+   "DrawText": [
+    "@(Fx Off)",
+    0,
+    80
+   ],
+   "PropertiesDisplayValuePut": [
+    0,
+    "FX_BIT",
+    "",
+    "",
+    "",
+    ""
+   ],
+   "PropertiesDisplayValueTextPut": [
+    "@(Fx Off)",
+    "@(Fx On)"
+   ],
+   "getters": {
+    "PropertiesDisplayValueGet": [
+     0,
+     "FX_BIT",
+     "",
+     "",
+     "",
+     ""
+    ],
+    "PropertiesDisplayValueTextGet": [
+     "@(Fx Off)",
+     "@(Fx On)"
+    ]
+   },
+   "stage": "saved"
+  },
+  {
+   "open + save": "fx_plain",
+   "page type": 1,
+   "stage": "reopened/fx_plain"
+  },
+  {
+   "page": "FxOraclePlace",
+   "place": [
+    "FxLib",
+    "fxgenie",
+    "fx_plain",
+    "ctm",
+    100,
+    100,
+    []
+   ],
+   "stage": "page",
+   "type": 0
+  }
+ ],
+ "library": "FxLib/fxgenie.ctm"
+}

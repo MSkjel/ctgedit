@@ -1,0 +1,259 @@
+{
+ "indexes": {
+  "FxMain/pgnum.NDX": {
+   "sha1": "1785df80d338a6e01aa45fd0f4b7ca49106dbed0",
+   "size": 2560
+  },
+  "FxMain/pgstr.NDX": {
+   "sha1": "b170022bd14c06fc6b614e7329c8bbf5cf829217",
+   "size": 2560
+  }
+ },
+ "removed": [],
+ "tables": {
+  "FxMain/pgnum.DBF": {
+   "added": [
+    {
+     "AN": "1",
+     "EXPR": "FX_LEVEL1",
+     "FONT": "FxSP",
+     "PAGE": "FxOracleLegacy",
+     "_flag": " "
+    },
+    {
+     "AN": "2",
+     "EXPR": "FX_LEVEL1",
+     "FONT": "FxSP",
+     "PAGE": "FxOracleLegacy",
+     "_flag": " "
+    },
+    {
+     "AN": "3",
+     "EXPR": "FX_LEVEL1",
+     "PAGE": "FxOracleLegacy",
+     "_flag": " "
+    },
+    {
+     "AN": "4",
+     "EXPR": "FX_LEVEL1",
+     "FONT": "DefaultFont",
+     "PAGE": "FxOracleLegacy",
+     "_flag": " "
+    },
+    {
+     "AN": "5",
+     "EXPR": "FX_LEVEL1",
+     "FONT": "FxBig",
+     "PAGE": "FxOracleLegacy",
+     "_flag": " "
+    },
+    {
+     "AN": "6",
+     "EXPR": "FX_LEVEL1",
+     "FONT": "FxSmall",
+     "PAGE": "FxOracleLegacy",
+     "_flag": " "
+    },
+    {
+     "AN": "7",
+     "EXPR": "FX_LEVEL1",
+     "FONT": "FxNoSuchFont",
+     "PAGE": "FxOracleLegacy",
+     "_flag": " "
+    },
+    {
+     "AN": "8",
+     "EXPR": "FX_LEVEL1:#",
+     "FONT": "FxSP",
+     "PAGE": "FxOracleLegacy",
+     "_flag": " "
+    },
+    {
+     "AN": "9",
+     "EXPR": "FX_LEVEL1:##########.##",
+     "FONT": "FxSP",
+     "PAGE": "FxOracleLegacy",
+     "_flag": " "
+    },
+    {
+     "AN": "10",
+     "EXPR": "Time()",
+     "FONT": "FxSP",
+     "PAGE": "FxOracleLegacy",
+     "_flag": " "
+    },
+    {
+     "AN": "11",
+     "EXPR": "FX_LEVEL1 + FX_LEVEL1 * 100 + FX_LEVEL1 * 10000",
+     "FONT": "FxSP",
+     "PAGE": "FxOracleLegacy",
+     "_flag": " "
+    },
+    {
+     "AN": "12",
+     "EXPR": "FX_LEVEL1:##########.##",
+     "FONT": "FxBig",
+     "PAGE": "FxOracleLegacy",
+     "_flag": " "
+    },
+    {
+     "AN": "13",
+     "EXPR": "FX_LEVEL1:###",
+     "PAGE": "FxOracleLegacy",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "PAGE",
+    "AN",
+    "EXPR",
+    "FONT",
+    "COMMENT",
+    "VISIBLE"
+   ]
+  },
+  "FxMain/pgstr.DBF": {
+   "added": [
+    {
+     "AN": "14",
+     "EXPR": "FX_PUMP1",
+     "OFF_FONT": "DefaultFont",
+     "OFF_TEXT": "\"@(Fx OK)\"",
+     "ON_FONT": "DefaultFont",
+     "ON_TEXT": "\"@(Fx Run)\"",
+     "PAGE": "FxOracleLegacy",
+     "_flag": " "
+    },
+    {
+     "AN": "15",
+     "EXPR": "FX_PUMP1",
+     "OFF_FONT": "DefaultFont",
+     "OFF_TEXT": "\"@(Fx OK)\"",
+     "ON_FONT": "DefaultFont",
+     "ON_TEXT": "\"@(Fx Run)\"",
+     "PAGE": "FxOracleLegacy",
+     "_flag": " "
+    },
+    {
+     "AN": "16",
+     "EXPR": "FX_PUMP1",
+     "OFF_FONT": "DefaultFont",
+     "OFF_TEXT": "\"@(Fx OK)\"",
+     "ON_FONT": "DefaultFont",
+     "ON_TEXT": "\"@(Fx Run)\"",
+     "PAGE": "FxOracleLegacy",
+     "_flag": " "
+    },
+    {
+     "AN": "17",
+     "EXPR": "FX_PUMP1",
+     "OFF_FONT": "FxBig",
+     "OFF_TEXT": "\"@(Fx OK)\"",
+     "ON_FONT": "FxBig",
+     "ON_TEXT": "\"@(Fx Run)\"",
+     "PAGE": "FxOracleLegacy",
+     "_flag": " "
+    },
+    {
+     "AN": "18",
+     "EXPR": "FX_PUMP1",
+     "OFF_FONT": "FxSmall",
+     "OFF_TEXT": "\"@(Fx OK)\"",
+     "ON_FONT": "FxSmall",
+     "ON_TEXT": "\"@(Fx Run)\"",
+     "PAGE": "FxOracleLegacy",
+     "_flag": " "
+    },
+    {
+     "AN": "19",
+     "EXPR": "FX_PUMP1",
+     "OFF_FONT": "FxSmall",
+     "OFF_TEXT": "\"@(Fx OK)\"",
+     "ON_FONT": "FxBig",
+     "ON_TEXT": "\"@(Fx Run)\"",
+     "PAGE": "FxOracleLegacy",
+     "_flag": " "
+    },
+    {
+     "AN": "20",
+     "EXPR": "FX_PUMP1",
+     "OFF_FONT": "FxSP",
+     "OFF_TEXT": "\"@(Fx OK)\"",
+     "ON_FONT": "FxSP",
+     "ON_TEXT": "\"@(Fx Run)\"",
+     "PAGE": "FxOracleLegacy",
+     "_flag": " "
+    },
+    {
+     "AN": "21",
+     "EXPR": "FX_PUMP1",
+     "OFF_FONT": "DefaultFont",
+     "OFF_TEXT": "\"Hi\"",
+     "ON_FONT": "DefaultFont",
+     "ON_TEXT": "\"Hi\"",
+     "PAGE": "FxOracleLegacy",
+     "_flag": " "
+    },
+    {
+     "AN": "22",
+     "EXPR": "FX_PUMP1",
+     "OFF_FONT": "DefaultFont",
+     "OFF_TEXT": "\"A much longer string\"",
+     "ON_FONT": "DefaultFont",
+     "ON_TEXT": "\"x\"",
+     "PAGE": "FxOracleLegacy",
+     "_flag": " "
+    },
+    {
+     "AN": "23",
+     "EXPR": "FX_PUMP1",
+     "OFF_FONT": "DefaultFont",
+     "ON_FONT": "DefaultFont",
+     "PAGE": "FxOracleLegacy",
+     "_flag": " "
+    },
+    {
+     "AN": "24",
+     "EXPR": "FX_PUMP1",
+     "OFF_FONT": "DefaultFont",
+     "OFF_TEXT": "FX_TEXT",
+     "ON_FONT": "DefaultFont",
+     "ON_TEXT": "\"On\"",
+     "PAGE": "FxOracleLegacy",
+     "_flag": " "
+    },
+    {
+     "AN": "25",
+     "EXPR": "FX_PUMP1",
+     "OFF_FONT": "FxNoSuchFont",
+     "OFF_TEXT": "\"@(Fx OK)\"",
+     "ON_FONT": "FxNoSuchFont",
+     "ON_TEXT": "\"@(Fx Run)\"",
+     "PAGE": "FxOracleLegacy",
+     "_flag": " "
+    },
+    {
+     "AN": "26",
+     "EXPR": "FX_PUMP1",
+     "OFF_TEXT": "\"@(Fx OK)\"",
+     "ON_TEXT": "\"@(Fx Run)\"",
+     "PAGE": "FxOracleLegacy",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "PAGE",
+    "AN",
+    "EXPR",
+    "OFF_TEXT",
+    "OFF_FONT",
+    "ON_TEXT",
+    "ON_FONT",
+    "COMMENT",
+    "VISIBLE"
+   ]
+  }
+ }
+}

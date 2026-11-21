@@ -1,0 +1,1014 @@
+{
+  "properties": [
+    {
+      "key": "TXTMODE",
+      "value_kind": "mode_digit",
+      "family": "DisplayValue",
+      "applies": [
+        "text",
+        "number"
+      ]
+    },
+    {
+      "key": "TXT_OFF",
+      "value_kind": "display_expr",
+      "family": "DisplayValue",
+      "applies": [
+        "text",
+        "number"
+      ],
+      "note": "data-driven"
+    },
+    {
+      "key": "TXT_ON",
+      "value_kind": "display_expr",
+      "family": "DisplayValue",
+      "applies": [
+        "text",
+        "number"
+      ]
+    },
+    {
+      "key": "TXT_STR",
+      "value_kind": "cicode",
+      "family": "DisplayValue",
+      "applies": [
+        "text",
+        "number"
+      ]
+    },
+    {
+      "key": "TXT_A",
+      "value_kind": "display_expr",
+      "family": "DisplayValue",
+      "applies": [
+        "text",
+        "number"
+      ]
+    },
+    {
+      "key": "ARRAY_<n>",
+      "value_kind": "display_expr",
+      "family": "DisplayValue",
+      "applies": [
+        "text"
+      ],
+      "array": true,
+      "note": "'ARRAY_' + '%s%d': the Array display value texts 0..255"
+    },
+    {
+      "key": "TXT_B",
+      "value_kind": "display_expr",
+      "family": "DisplayValue",
+      "applies": [
+        "text",
+        "number"
+      ]
+    },
+    {
+      "key": "TXT_C",
+      "value_kind": "display_expr",
+      "family": "DisplayValue",
+      "applies": [
+        "text",
+        "number"
+      ]
+    },
+    {
+      "key": "TXT_D",
+      "value_kind": "display_expr",
+      "family": "DisplayValue",
+      "applies": [
+        "text",
+        "number"
+      ]
+    },
+    {
+      "key": "TXT_E",
+      "value_kind": "display_expr",
+      "family": "DisplayValue",
+      "applies": [
+        "text",
+        "number"
+      ]
+    },
+    {
+      "key": "FORMAT",
+      "value_kind": "enum",
+      "family": "DisplayValue",
+      "applies": [
+        "number"
+      ]
+    },
+    {
+      "key": "ENG_ZERO",
+      "value_kind": "integer",
+      "family": "DisplayValue",
+      "applies": [
+        "number"
+      ]
+    },
+    {
+      "key": "ENG_FULL",
+      "value_kind": "integer",
+      "family": "DisplayValue",
+      "applies": [
+        "number"
+      ]
+    },
+    {
+      "key": "ENG_UNITS",
+      "value_kind": "enum",
+      "family": "DisplayValue",
+      "applies": [
+        "number"
+      ]
+    },
+    {
+      "key": "RAW_ZERO",
+      "value_kind": "integer",
+      "family": "DisplayValue",
+      "applies": [
+        "number"
+      ]
+    },
+    {
+      "key": "RAW_FULL",
+      "value_kind": "integer",
+      "family": "DisplayValue",
+      "applies": [
+        "number"
+      ]
+    },
+    {
+      "key": "DIGITAL",
+      "value_kind": "enum",
+      "family": "DisplayValue",
+      "applies": [
+        "number"
+      ]
+    },
+    {
+      "key": "COLMODE",
+      "value_kind": "mode_digit",
+      "family": "FillColour",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "COL_MAXON",
+      "value_kind": "color_pair",
+      "family": "FillColour",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "!COL_STATIC",
+      "value_kind": "color_pair",
+      "family": "FillColour",
+      "applies": [
+        "*"
+      ],
+      "note": "used when AN=0"
+    },
+    {
+      "key": "COL_A",
+      "value_kind": "cicode",
+      "family": "FillColour",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "COL_B",
+      "value_kind": "cicode",
+      "family": "FillColour",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "COL_C",
+      "value_kind": "cicode",
+      "family": "FillColour",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "COL_D",
+      "value_kind": "cicode",
+      "family": "FillColour",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "COL_E",
+      "value_kind": "cicode",
+      "family": "FillColour",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "COL_EXP",
+      "value_kind": "cicode",
+      "family": "FillColour",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "COL_ARR",
+      "value_kind": "color_pair",
+      "family": "FillColour",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "COL_STA_<n>",
+      "value_kind": "color_pair",
+      "family": "FillColour",
+      "applies": [
+        "*"
+      ],
+      "array": true
+    },
+    {
+      "key": "COL_ARR_<n>",
+      "value_kind": "color_pair",
+      "family": "FillColour",
+      "applies": [
+        "*"
+      ],
+      "array": true
+    },
+    {
+      "key": "COL_THR_<n>",
+      "value_kind": "color_pair",
+      "family": "FillColour",
+      "applies": [
+        "*"
+      ],
+      "array": true
+    },
+    {
+      "key": "FILMODE",
+      "value_kind": "mode_digit",
+      "family": "FillLevel",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "FILMINPC",
+      "value_kind": "integer",
+      "family": "FillLevel",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "FILMAXPC",
+      "value_kind": "integer",
+      "family": "FillLevel",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "FILCOL",
+      "value_kind": "color_pair",
+      "family": "FillLevel",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "MVXMINPT",
+      "value_kind": "integer",
+      "family": "Transformation",
+      "applies": [
+        "*"
+      ],
+      "action": "MovementHoriz/SliderHoriz"
+    },
+    {
+      "key": "MVXMAXPT",
+      "value_kind": "integer",
+      "family": "Transformation",
+      "applies": [
+        "*"
+      ],
+      "action": "MovementHoriz/SliderHoriz"
+    },
+    {
+      "key": "MVXSLMODE",
+      "value_kind": "mode_digit",
+      "family": "Transformation",
+      "applies": [
+        "*"
+      ],
+      "action": "SliderHoriz"
+    },
+    {
+      "key": "MVYMINPT",
+      "value_kind": "integer",
+      "family": "Transformation",
+      "applies": [
+        "*"
+      ],
+      "action": "MovementVert/SliderVert"
+    },
+    {
+      "key": "MVYMAXPT",
+      "value_kind": "integer",
+      "family": "Transformation",
+      "applies": [
+        "*"
+      ],
+      "action": "MovementVert/SliderVert"
+    },
+    {
+      "key": "MVYSLMODE",
+      "value_kind": "mode_digit",
+      "family": "Transformation",
+      "applies": [
+        "*"
+      ],
+      "action": "SliderVert"
+    },
+    {
+      "key": "MVX",
+      "value_kind": "cicode",
+      "family": "Transformation",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "MVY",
+      "value_kind": "cicode",
+      "family": "Transformation",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "ROTMINPC",
+      "value_kind": "integer",
+      "family": "Transformation",
+      "applies": [
+        "*"
+      ],
+      "action": "Rotational/SliderRot"
+    },
+    {
+      "key": "ROTMAXPC",
+      "value_kind": "integer",
+      "family": "Transformation",
+      "applies": [
+        "*"
+      ],
+      "action": "Rotational/SliderRot"
+    },
+    {
+      "key": "ROTMODE",
+      "value_kind": "mode_digit",
+      "family": "Transformation",
+      "applies": [
+        "*"
+      ],
+      "action": "Rotational"
+    },
+    {
+      "key": "ROTSLMODE",
+      "value_kind": "mode_digit",
+      "family": "Transformation",
+      "applies": [
+        "*"
+      ],
+      "action": "SliderRot"
+    },
+    {
+      "key": "ROTXORG",
+      "value_kind": "integer",
+      "family": "Transformation",
+      "applies": [
+        "*"
+      ],
+      "action": "Rotational/SliderRot"
+    },
+    {
+      "key": "ROTYORG",
+      "value_kind": "integer",
+      "family": "Transformation",
+      "applies": [
+        "*"
+      ],
+      "action": "Rotational/SliderRot"
+    },
+    {
+      "key": "SZXMINPC",
+      "value_kind": "integer",
+      "family": "Transformation",
+      "applies": [
+        "*"
+      ],
+      "action": "ScalingHoriz"
+    },
+    {
+      "key": "SZXMAXPC",
+      "value_kind": "integer",
+      "family": "Transformation",
+      "applies": [
+        "*"
+      ],
+      "action": "ScalingHoriz"
+    },
+    {
+      "key": "SZXMODE",
+      "value_kind": "mode_digit",
+      "family": "Transformation",
+      "applies": [
+        "*"
+      ],
+      "action": "ScalingHoriz"
+    },
+    {
+      "key": "SZXORG",
+      "value_kind": "integer",
+      "family": "Transformation",
+      "applies": [
+        "*"
+      ],
+      "action": "ScalingHoriz"
+    },
+    {
+      "key": "SZX",
+      "value_kind": "cicode",
+      "family": "Transformation",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "SZYMINPC",
+      "value_kind": "integer",
+      "family": "Transformation",
+      "applies": [
+        "*"
+      ],
+      "action": "ScalingVert"
+    },
+    {
+      "key": "SZYMAXPC",
+      "value_kind": "integer",
+      "family": "Transformation",
+      "applies": [
+        "*"
+      ],
+      "action": "ScalingVert"
+    },
+    {
+      "key": "SZYMODE",
+      "value_kind": "mode_digit",
+      "family": "Transformation",
+      "applies": [
+        "*"
+      ],
+      "action": "ScalingVert"
+    },
+    {
+      "key": "SZYORG",
+      "value_kind": "integer",
+      "family": "Transformation",
+      "applies": [
+        "*"
+      ],
+      "action": "ScalingVert"
+    },
+    {
+      "key": "SZY",
+      "value_kind": "cicode",
+      "family": "Transformation",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "SYMBOL",
+      "value_kind": "enum",
+      "family": "SymbolSet",
+      "applies": [
+        "symbolset",
+        "symbol"
+      ],
+      "note": "value = library.element"
+    },
+    {
+      "key": "SET_ARR",
+      "value_kind": "cicode",
+      "family": "SymbolSet",
+      "applies": [
+        "symbolset"
+      ]
+    },
+    {
+      "key": "STATE_<n>",
+      "value_kind": "enum",
+      "family": "SymbolSet",
+      "applies": [
+        "symbolset"
+      ],
+      "array": true
+    },
+    {
+      "key": "SYMBOL_<n>",
+      "value_kind": "enum",
+      "family": "SymbolSet",
+      "applies": [
+        "symbolset"
+      ],
+      "array": true
+    },
+    {
+      "key": "KEY_SEQ",
+      "value_kind": "key_seq",
+      "family": "InputKeyboard",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "KEY_LBUTTON",
+      "value_kind": "enum",
+      "family": "InputKeyboard",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "CMD",
+      "value_kind": "cicode",
+      "family": "InputKeyboard",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "ACTION",
+      "value_kind": "enum",
+      "family": "InputTouch",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "RPT_RATE",
+      "value_kind": "integer",
+      "family": "InputTouch",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "DOWN_CMD",
+      "value_kind": "cicode",
+      "family": "InputTouch",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "REPEAT_CMD",
+      "value_kind": "cicode",
+      "family": "InputTouch",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "MSG_LOG",
+      "value_kind": "cicode",
+      "family": "InputTouch",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "MSG_LOGDN",
+      "value_kind": "cicode",
+      "family": "InputTouch",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "MSG_LOGRPT",
+      "value_kind": "cicode",
+      "family": "InputTouch",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "DISABLED",
+      "value_kind": "cicode",
+      "family": "AccessDisable",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "DISMODE",
+      "value_kind": "enum",
+      "family": "AccessDisable",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "GREY_STYLE",
+      "value_kind": "enum",
+      "family": "AccessDisable",
+      "applies": [
+        "*"
+      ],
+      "values": [
+        "GRAY_SUNK",
+        "GRAY_PART",
+        "GRAY_HIDE",
+        "GRAY_UNCHANGED"
+      ]
+    },
+    {
+      "key": "VIS_MODE",
+      "value_kind": "enum",
+      "family": "Visibility",
+      "applies": [
+        "*"
+      ],
+      "values": [
+        "TARGET",
+        "XP_STYLE",
+        "NORMAL",
+        "BORDER",
+        "BORDER_3D"
+      ]
+    },
+    {
+      "key": "VISIBLE",
+      "value_kind": "cicode",
+      "family": "Visibility",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "METADATA_<n>",
+      "value_kind": "metadata",
+      "family": "Metadata",
+      "applies": [
+        "*"
+      ],
+      "array": true
+    },
+    {
+      "key": "WIDTH",
+      "value_kind": "integer",
+      "family": "geometry",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "HEIGHT",
+      "value_kind": "integer",
+      "family": "geometry",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "TARGET",
+      "value_kind": "cicode",
+      "family": "misc",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "COMMENT",
+      "value_kind": "display_expr",
+      "family": "misc",
+      "applies": [
+        "*"
+      ]
+    },
+    {
+      "key": "VERTEX_VERTFROMX<n>",
+      "value_kind": "integer",
+      "family": "geometry",
+      "applies": [
+        "polygon",
+        "pipe"
+      ],
+      "array": true
+    },
+    {
+      "key": "VERTEX_VERTFROMY<n>",
+      "value_kind": "integer",
+      "family": "geometry",
+      "applies": [
+        "polygon",
+        "pipe"
+      ],
+      "array": true
+    },
+    {
+      "key": "VERTEX_VERTTOX<n>",
+      "value_kind": "integer",
+      "family": "geometry",
+      "applies": [
+        "polygon",
+        "pipe"
+      ],
+      "array": true
+    },
+    {
+      "key": "VERTEX_VERTTOY<n>",
+      "value_kind": "integer",
+      "family": "geometry",
+      "applies": [
+        "polygon",
+        "pipe"
+      ],
+      "array": true
+    },
+    {
+      "key": "VERTEX_VERTEXP<n>",
+      "value_kind": "cicode",
+      "family": "geometry",
+      "applies": [
+        "polygon",
+        "pipe"
+      ],
+      "array": true
+    },
+    {
+      "key": "ID",
+      "value_kind": "enum",
+      "family": "misc",
+      "applies": [
+        "*"
+      ],
+      "values": [
+        "tbl",
+        "tab"
+      ]
+    }
+  ],
+  "object_types": [
+    {
+      "name": "Line",
+      "kind": "line",
+      "type_codes": [
+        1
+      ]
+    },
+    {
+      "name": "Rectangle",
+      "kind": "rectangle",
+      "type_codes": [
+        15,
+        14,
+        3
+      ]
+    },
+    {
+      "name": "Ellipse",
+      "kind": "ellipse",
+      "type_codes": [
+        17,
+        4
+      ]
+    },
+    {
+      "name": "Polygon",
+      "kind": "polygon",
+      "type_codes": [
+        16,
+        10
+      ]
+    },
+    {
+      "name": "Pipe",
+      "kind": "pipe",
+      "type_codes": [
+        11
+      ]
+    },
+    {
+      "name": "Text",
+      "kind": "text",
+      "type_codes": [
+        5
+      ]
+    },
+    {
+      "name": "Number",
+      "kind": "number",
+      "type_codes": [
+        4100
+      ]
+    },
+    {
+      "name": "Button",
+      "kind": "button",
+      "type_codes": [
+        4097
+      ]
+    },
+    {
+      "name": "SymbolSet",
+      "kind": "symbol_set",
+      "type_codes": [
+        12,
+        4109
+      ]
+    },
+    {
+      "name": "Trend",
+      "kind": "trend",
+      "type_codes": [
+        4099
+      ]
+    },
+    {
+      "name": "Bar",
+      "kind": "number",
+      "type_codes": [
+        4098
+      ]
+    },
+    {
+      "name": "Symbol",
+      "kind": "symbol",
+      "type_codes": [
+        4103
+      ]
+    },
+    {
+      "name": "Bitmap",
+      "kind": "symbol",
+      "type_codes": [
+        7
+      ]
+    },
+    {
+      "name": "Group",
+      "kind": "group",
+      "type_codes": [
+        8
+      ]
+    },
+    {
+      "name": "ActiveX",
+      "kind": "unknown",
+      "type_codes": [
+        13
+      ]
+    },
+    {
+      "name": "WebContent",
+      "kind": "unknown",
+      "type_codes": [
+        19
+      ]
+    },
+    {
+      "name": "AnPoint",
+      "kind": "unknown",
+      "type_codes": [
+        4096
+      ]
+    },
+    {
+      "name": "AdvancedAnimation",
+      "kind": "unknown",
+      "type_codes": [
+        4105
+      ]
+    },
+    {
+      "name": "Keyboard",
+      "kind": "unknown",
+      "type_codes": [
+        4107
+      ]
+    },
+    {
+      "name": "Touch",
+      "kind": "unknown",
+      "type_codes": [
+        4112
+      ]
+    },
+    {
+      "name": "String",
+      "kind": "unknown",
+      "type_codes": [
+        4101
+      ]
+    },
+    {
+      "name": "TextAn",
+      "kind": "unknown",
+      "type_codes": [
+        4102
+      ]
+    },
+    {
+      "name": "ColourAn",
+      "kind": "unknown",
+      "type_codes": [
+        4104
+      ]
+    },
+    {
+      "name": "Slider",
+      "kind": "unknown",
+      "type_codes": [
+        4111
+      ]
+    },
+    {
+      "name": "SizeMove",
+      "kind": "unknown",
+      "type_codes": [
+        4110
+      ]
+    },
+    {
+      "name": "Sparkle",
+      "kind": "unknown",
+      "type_codes": [
+        6
+      ]
+    },
+    {
+      "name": "MetaFile",
+      "kind": "unknown",
+      "type_codes": [
+        9
+      ]
+    },
+    {
+      "name": "Draw/Rail/Select/Edit(tools)",
+      "kind": "unknown",
+      "type_codes": [
+        0,
+        2,
+        18
+      ]
+    },
+    {
+      "name": "DummyMarker",
+      "kind": "unknown",
+      "type_codes": [
+        65535
+      ]
+    }
+  ],
+  "key_seq_value_enum": [
+    "LBUTTON_CMD_UP",
+    "LBUTTON_CMD_DNS",
+    "LBUTTON_CMD_DNC",
+    "LBUTTON_CMD_UPS",
+    "LBUTTON_CMD_UPC",
+    "RBUTTON_CMD_UP",
+    "LBUTTON_DBL",
+    "ENTER",
+    "ENTER_ALT",
+    "ENTER_CTRL",
+    "ENTER_SHIFT",
+    "UP",
+    "DOWN",
+    "LEFT",
+    "RIGHT",
+    "UP_CTRL",
+    "UP_SHIFT",
+    "DOWN_CTRL",
+    "DOWN_SHIFT",
+    "LEFT_CTRL",
+    "LEFT_SHIFT",
+    "RIGHT_CTRL",
+    "RIGHT_SHIFT",
+    "SELECT_ALL"
+  ]
+}

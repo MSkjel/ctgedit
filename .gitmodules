@@ -1,0 +1,3 @@
+[submodule "external/cicode-sim"]
+	path = external/cicode-sim
+	url = https://github.com/MSkjel/ctsim.git

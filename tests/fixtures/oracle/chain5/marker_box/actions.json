@@ -1,0 +1,64 @@
+{
+ "calls": [
+  {
+   "PageName": "template.Untitled1@XGA",
+   "PageNewTemplate": [
+    "FxStyle",
+    "fx_style",
+    "normal",
+    3,
+    true,
+    true
+   ]
+  },
+  {
+   "PageSaveAsEx": [
+    "FxStyle",
+    "fx_style",
+    "fxouter"
+   ],
+   "new elements": [
+    "fxouter@XGA"
+   ]
+  },
+  {
+   "AN": 12,
+   "DrawText": [
+    "%P%",
+    500,
+    500
+   ],
+   "open": "fxouter@XGA",
+   "stage": "param_added"
+  },
+  {
+   "box": [
+    [
+     700,
+     118
+    ],
+    [
+     700,
+     100,
+     803,
+     119
+    ],
+    [
+     700,
+     100,
+     803,
+     119
+    ]
+   ],
+   "marker": 11,
+   "stage": "patched"
+  },
+  {
+   "open + save": "fxouter@XGA",
+   "page type": 3,
+   "stage": "plain/fxouter@XGA"
+  }
+ ],
+ "library": "FxStyle/fx_style.ctt",
+ "made": "fxouter@XGA"
+}

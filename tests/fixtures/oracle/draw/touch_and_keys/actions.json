@@ -1,0 +1,28 @@
+{
+ "actions": [
+  [
+   "rect",
+   300,
+   100,
+   400,
+   160
+  ],
+  [
+   "touch",
+   1,
+   "Beep()",
+   "",
+   0
+  ],
+  [
+   "key",
+   0,
+   "ENTER",
+   "WinFree()",
+   "",
+   "",
+   ""
+  ]
+ ],
+ "page": "FxOracleDraw"
+}

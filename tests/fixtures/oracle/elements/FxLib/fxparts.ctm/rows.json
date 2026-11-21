@@ -1,0 +1,312 @@
+{
+ "indexes": {
+  "FxLib/pgadv.NDX": {
+   "sha1": "afd0961b72b96d2aff5acdca4378e0409ef49958",
+   "size": 1024
+  },
+  "FxLib/pgbutton.NDX": {
+   "sha1": "69f5ca6315a027e0c2889c781bc6e9400c2315dc",
+   "size": 1024
+  },
+  "FxLib/pgdynobj.NDX": {
+   "sha1": "c4bb01475e1cc4c7e318f624ce9ecde26c06b643",
+   "size": 1024
+  }
+ },
+ "removed": [],
+ "tables": {
+  "FxLib/changes.DBF": {
+   "added": [
+    {
+     "KEY": "!fx_detail",
+     "NAME": "pages",
+     "RECORD_NO": "1",
+     "_flag": " "
+    },
+    {
+     "KEY": "!fx_detail",
+     "NAME": "pages",
+     "RECORD_NO": "1",
+     "_flag": " "
+    },
+    {
+     "KEY": "!fx_popup",
+     "NAME": "pages",
+     "RECORD_NO": "2",
+     "_flag": " "
+    },
+    {
+     "KEY": "!fx_popup",
+     "NAME": "pages",
+     "RECORD_NO": "2",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "NAME",
+    "KEY",
+    "RECORD_NO"
+   ]
+  },
+  "FxLib/pages.DBF": {
+   "added": [
+    {
+     "NAME": "!fx_detail",
+     "TITLE": "!fx_detail",
+     "_flag": " "
+    },
+    {
+     "NAME": "!fx_popup",
+     "TITLE": "!fx_popup",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "NAME",
+    "ALIAS",
+    "TITLE",
+    "AREA",
+    "BGND_FILE",
+    "SYMB_FILE",
+    "NEXT_PAGE",
+    "PREV_PAGE",
+    "PAGE_INCL",
+    "ENTRY_FUNC",
+    "BGND_FUNC",
+    "EXIT_FUNC",
+    "COMMENT",
+    "SCANTIME",
+    "LOGDEVICE",
+    "READY_FUNC",
+    "CLUSTER",
+    "CINHERIT",
+    "IGNOREVQ",
+    "CON_TYPE",
+    "ACT_FUNC",
+    "DEACT_FUNC",
+    "PARENT"
+   ]
+  },
+  "FxLib/pgadv.DBF": {
+   "added": [
+    {
+     "AN": "8",
+     "CMD": "FxSet(?DIGITAL 3?, 0)",
+     "PAGE": "!fx_detail",
+     "_flag": " "
+    },
+    {
+     "AN": "9",
+     "CMD": "FxShowTitle(AssTitle())",
+     "PAGE": "!fx_detail",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "PAGE",
+    "AN",
+    "CMD",
+    "COMMENT",
+    "SYMBOL"
+   ]
+  },
+  "FxLib/pgbutton.DBF": {
+   "added": [
+    {
+     "AN": "1",
+     "CMD": "WinFree();",
+     "FONT": "ButtonFont",
+     "HEIGHT": "30",
+     "PAGE": "!fx_detail",
+     "TEXT": "Close",
+     "VIS_MODE": "XP_STYLE",
+     "WIDTH": "100",
+     "_flag": " "
+    },
+    {
+     "AN": "2",
+     "CMD": "?DIGITAL 2?=1",
+     "FONT": "ButtonFont",
+     "HEIGHT": "30",
+     "PAGE": "!fx_detail",
+     "TEXT": "Set",
+     "VIS_MODE": "XP_STYLE",
+     "WIDTH": "100",
+     "_flag": " "
+    },
+    {
+     "AN": "1",
+     "CMD": "WinFree();",
+     "FONT": "ButtonFont",
+     "HEIGHT": "30",
+     "PAGE": "!fx_popup",
+     "TEXT": "Close",
+     "VIS_MODE": "XP_STYLE",
+     "WIDTH": "100",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "PAGE",
+    "AN",
+    "TEXT",
+    "FONT",
+    "WIDTH",
+    "HEIGHT",
+    "CMD",
+    "PRIV",
+    "MSG_LOG",
+    "DEVICE",
+    "UP_AN",
+    "DOWN_AN",
+    "LEFT_AN",
+    "RIGHT_AN",
+    "COMMENT",
+    "DOWN_CMD",
+    "REPEAT_CMD",
+    "DISMODE",
+    "DISABLED",
+    "GREY_STYLE",
+    "VIS_MODE",
+    "VISIBLE",
+    "AREA",
+    "RPT_RATE",
+    "MVX",
+    "MVXMINPT",
+    "MVXMAXPT",
+    "MVXMODE",
+    "MVY",
+    "MVYMINPT",
+    "MVYMAXPT",
+    "MVYMODE"
+   ]
+  },
+  "FxLib/pgdynobj.DBF": {
+   "added": [
+    {
+     "AN": "3",
+     "GROUP": "11",
+     "PAGE": "!fx_detail",
+     "TXTMODE": "0",
+     "TXT_A": "?DIGITAL 1?",
+     "TYPE": "0x000C",
+     "_flag": " "
+    },
+    {
+     "AN": "4",
+     "GROUP": "3",
+     "PAGE": "!fx_detail",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "5",
+     "GROUP": "4",
+     "PAGE": "!fx_detail",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "6",
+     "GROUP": "3",
+     "PAGE": "!fx_detail",
+     "TYPE": "0x0008",
+     "_flag": " "
+    },
+    {
+     "AN": "7",
+     "GROUP": "6",
+     "PAGE": "!fx_detail",
+     "TYPE": "0x0011",
+     "_flag": " "
+    },
+    {
+     "AN": "10",
+     "GROUP": "11",
+     "PAGE": "!fx_detail",
+     "TYPE": "0x0005",
+     "_flag": " "
+    },
+    {
+     "AN": "2",
+     "GROUP": "3",
+     "PAGE": "!fx_popup",
+     "TYPE": "0x0005",
+     "_flag": " "
+    }
+   ],
+   "changed": [],
+   "fields": [
+    "PAGE",
+    "TYPE",
+    "AN",
+    "GROUP",
+    "SZX",
+    "SZXMINPC",
+    "SZXMAXPC",
+    "SZXORG",
+    "SZXMODE",
+    "SZY",
+    "SZYMINPC",
+    "SZYMAXPC",
+    "SZYORG",
+    "SZYMODE",
+    "ROT",
+    "ROTSL",
+    "ROTMINPC",
+    "ROTMAXPC",
+    "ROTXORG",
+    "ROTYORG",
+    "ROTMODE",
+    "ROTSLMODE",
+    "MVX",
+    "MVXSL",
+    "MVXMINPT",
+    "MVXMAXPT",
+    "MVXMODE",
+    "MVXSLMODE",
+    "MVY",
+    "MVYSL",
+    "MVYMINPT",
+    "MVYMAXPT",
+    "MVYMODE",
+    "MVYSLMODE",
+    "VISIBLE",
+    "VISMODE",
+    "COL_A",
+    "COL_B",
+    "COL_C",
+    "COL_D",
+    "COL_E",
+    "COL_ARR",
+    "COL_EXP",
+    "COLMODE",
+    "TXT_A",
+    "TXT_B",
+    "TXT_C",
+    "TXT_D",
+    "TXT_E",
+    "TXT_STR",
+    "SET_ARR",
+    "TXTMODE",
+    "FIL",
+    "FILMINPC",
+    "FILMAXPC",
+    "FILMODE",
+    "DISABLED",
+    "DISMODE",
+    "GREY_STYLE",
+    "DESC",
+    "COMMENT",
+    "AREA",
+    "PRIV",
+    "MSG_LOG",
+    "DEVICE"
+   ]
+  }
+ }
+}

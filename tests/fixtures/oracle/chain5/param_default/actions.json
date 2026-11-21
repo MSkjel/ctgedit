@@ -1,0 +1,93 @@
+{
+ "calls": [
+  {
+   "AN": 1,
+   "AttributeText put": "%Label% %Q=5%",
+   "open": "n0",
+   "stage": "q5/n0"
+  },
+  {
+   "open + save": "n1",
+   "page type": 1,
+   "stage": "q5/n1"
+  },
+  {
+   "page": "FxOraclePlace",
+   "place": [
+    "FxLib",
+    "fxnest",
+    "n1",
+    "ctm",
+    200,
+    200,
+    [
+     [
+      "Name",
+      "P1"
+     ]
+    ]
+   ],
+   "stage": "q5/page",
+   "type": 0
+  },
+  {
+   "AN": 1,
+   "AttributeText put": "%Label% %Q=7%",
+   "open": "n0",
+   "stage": "q7/n0"
+  },
+  {
+   "open + save": "n1",
+   "page type": 1,
+   "stage": "q7/n1"
+  },
+  {
+   "page": "FxOraclePlace",
+   "place": [
+    "FxLib",
+    "fxnest",
+    "n1",
+    "ctm",
+    200,
+    200,
+    [
+     [
+      "Name",
+      "P1"
+     ]
+    ]
+   ],
+   "stage": "q7/page",
+   "type": 0
+  },
+  {
+   "fresh Graphics Builder": true,
+   "library": "as after q7/n0"
+  },
+  {
+   "open + save": "n1",
+   "page type": 1,
+   "stage": "q7_fresh/n1"
+  },
+  {
+   "page": "FxOraclePlace",
+   "place": [
+    "FxLib",
+    "fxnest",
+    "n1",
+    "ctm",
+    200,
+    200,
+    [
+     [
+      "Name",
+      "P1"
+     ]
+    ]
+   ],
+   "stage": "q7_fresh/page",
+   "type": 0
+  }
+ ],
+ "library": "FxLib/fxnest.ctm"
+}

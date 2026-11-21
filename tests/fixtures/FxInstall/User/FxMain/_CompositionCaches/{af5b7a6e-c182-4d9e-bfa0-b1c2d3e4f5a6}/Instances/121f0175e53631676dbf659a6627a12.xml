@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<CompositeInstance TemplateId="af5b7a6e-c182-4d9e-bfa0-b1c2d3e4f5a6" Digest="cl5GXfkPT9XWRvRTng9nGF9wdgs=">
+  <Parameters>
+    <Parameter Name="Equipment" Type="String" Value="FxPlant.Tank2" />
+    <Parameter Name="DisplayOutput" Type="Bool" Value="True" />
+    <Parameter Name="DisplayReadback" Type="Bool" Value="False" />
+    <Parameter Name="DisplayTrend" Type="Bool" Value="True" />
+    <Parameter Name="TrendType" Type="String" Value="Line" />
+    <Parameter Name="Span" Type="Int" Value="60" />
+    <Parameter Name="DisplaySecond" Type="Bool" Value="True" />
+    <Parameter Name="Equipment2" Type="String" Value="FxPlant.Tank1" />
+    <Parameter Name="ReferenceEquipment" Type="String" Value="FxPlant" />
+  </Parameters>
+  <LibraryItemVersions>
+    <ItemVersion Project="FxLib" Library="fxgenie" Item="fx_value">
+      <Version>5dc5a41e-4285-8b4e-bf8e-a141a8d2721e</Version>
+    </ItemVersion>
+    <ItemVersion Project="FxLib" Library="fxgenie" Item="fx_plain">
+      <Version>391178e4-f2f2-044a-86c7-d14f669335ae</Version>
+    </ItemVersion>
+  </LibraryItemVersions>
+</CompositeInstance>
