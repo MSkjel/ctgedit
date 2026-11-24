@@ -2478,7 +2478,15 @@ class PageFiles:
             if not CACHE_NOTICE_RUN["waiting"]:
                 CACHE_NOTICE_RUN["waiting"] = warn
             return
-        self.statusBar().showMessage("Saved. Restart the Graphics Builder to see this change there.", 8000)
+        from ..builder_close import auto_close
+
+        warn = auto_close(self, warn)  # (the option: the builder is closed instead)
+        if not warn:
+            return
+        self.statusBar().showMessage(
+            "Saved. Close the Graphics Builder to see this change there (Tools > Close Graphics Builder).",
+            8000,
+        )
         if CACHE_NOTICE_RUN["shown"]:
             return
         CACHE_NOTICE_RUN["shown"] = True
@@ -2486,12 +2494,21 @@ class PageFiles:
 
     def _show_cache_notice_box(self, warn: str) -> None:
         """The non-blocking box of _library_cache_notice (a seam: tests count it)."""
+        from ..builder_close import add_close_button
+
         box = QtWidgets.QMessageBox(
             QtWidgets.QMessageBox.Information, "Graphics Builder", warn, QtWidgets.QMessageBox.Ok, self
         )
+        add_close_button(box, self)
         box.setModal(False)
         box.setAttribute(QtCore.Qt.WA_DeleteOnClose)
         box.show()
+
+    def _close_graphics_builder(self) -> None:
+        """Tools > Close Graphics Builder (ui/builder_close)."""
+        from ..builder_close import close_builder
+
+        close_builder(self)
 
     @contextlib.contextmanager
     def _cache_notice_held(self):

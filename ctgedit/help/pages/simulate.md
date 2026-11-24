@@ -249,6 +249,10 @@ Type a tag name or a function call with literal arguments and press Enter. Its v
 every second, run in the page's window. A call that changes something changes it every time, so
 use watches for reading. **Call a function in the page's window** runs a call once.
 
+Both boxes help like an expression field (see [Colours, underlines and hints](properties.md#colours-underlines-and-hints)):
+they suggest the page's tags and functions as you type, colour the Cicode and show a function's
+arguments. Hold the pointer over a tag to see its value now.
+
 ## Scenarios and snapshots
 
 **Scenario** on the toolbar:
@@ -352,6 +356,10 @@ Hardware errors in page code are reported in VS Code's Debug Console but don't s
 
 **Copy Image** ([[Ctrl+Shift+C]]) copies the whole page at its own size, with its pinned windows
 and popups, regardless of zoom. The Simulate window's own marks are left out.
+
+Cicode's `WinFile`, `WinPrint` and `WinCopy` take the same picture of the window they run in, at
+the scale they ask for. `WinFile` writes it as a .bmp file in the simulator's sandbox, `WinPrint`
+puts it in the sandbox's Printers folder, and `WinCopy` puts it on the clipboard.
 
 ## How the states are drawn
 

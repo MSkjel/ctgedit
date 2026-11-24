@@ -5077,7 +5077,7 @@ FUNCTION DemoStart()
         T201_LEVEL = 41;
         P101_SPEED = 64;
         LINE_RUN = 1;
-        TaskNew("DemoProcess", "", 0);
+        TaskNew("DemoProcess", "", 0, "");
     END
 END
 

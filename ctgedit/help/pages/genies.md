@@ -32,8 +32,18 @@ A genie inside another genie is set through the outer genie, so double-click ope
 one. For a genie inside a plain group, select it in the Objects panel and click **Genie
 Parameters…** in the Properties panel.
 
-Tag and equipment parameters suggest names as you type. Situational Awareness genies get pickers
-(see [Situational Awareness pages](situational-awareness.md)).
+Each field is made for what the genie does with its value:
+
+- **Expression or command**: suggests tags as you type, and the Wizard inserts tags and Cicode
+  functions. A name that is not a tag in the project gets a warning.
+- **Part of tag names** (the genie uses `%Tag%_PV`, `%Tag%_SP`): suggests the values that make
+  the project's tags, with how many of the genie's tags each one makes. A value whose tags are
+  missing gets a warning that names them.
+- **Text** (captions, tool tips): a plain box.
+
+Under the form, the dialog shows where the genie uses the parameter you are editing, with your
+values filled in, and which of its tags are in the project. Situational Awareness genies get
+pickers (see [Situational Awareness pages](situational-awareness.md)).
 
 Drag a tag from the [Tags panel](tags-panel.md) onto a genie: if it has one tag or equipment
 parameter, the tag is bound at once.

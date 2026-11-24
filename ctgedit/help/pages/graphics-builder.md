@@ -21,8 +21,24 @@ For the same reason:
 - Pack Libraries is refused while the Graphics Builder runs;
 - the Graphics Builder keeps every library element it has loaded in memory until it is closed,
   and writes its copy back when it saves that element. After changing a library in ctgedit,
-  restart the Graphics Builder before you work with that library there. ctgedit reminds you once
-  per session.
+  close the Graphics Builder before you work with that library there (see below). ctgedit
+  reminds you once per session.
+
+## Close the Graphics Builder
+
+Tools > **Close Graphics Builder** (also on the reminder) closes it, so that it reads the
+libraries again when it next opens. Studio goes on without it.
+
+- With no page or library element open there, it has nothing to save and ends at once.
+- With a page open, ctgedit names the open pages and asks first. **Close It** closes it as its
+  own Close button does, so it asks about the changes you have not saved there. If it is still
+  open after 15 seconds, ctgedit asks again: **Wait** gives it more time, for example while you
+  answer its question about saving; **End It** ends it at once, and what it has not saved is
+  lost; **Cancel** leaves it open.
+
+Settings > Pages and libraries > **Close the Graphics Builder after saving a library** does
+this by itself each time you save a library element, rename or delete one, or update genies.
+It warns about open pages in the same way.
 
 ## A page changed by another program
 

@@ -18,7 +18,7 @@ _STATUS = [
         "x",
         "five-class chooser (Page/Template/Symbol/Genie/Super Genie); library classes create the element",
     ),
-    (r"^Open", "x", "file dialog; class-tab browser missing"),
+    (r"^Open", "x", "page browser: a tab per class, thumbnails, every project"),
     (r"^Close", "x", ""),
     (
         r"^Save \(",

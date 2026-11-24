@@ -23,7 +23,8 @@ A leftover `.ctgedit-tmp` file next to a page is from an interrupted save and ca
   File > Compile Project ([[Alt+F10]]).
 - **The Graphics Builder still has the old page**: close it there without saving and reopen it
   ([Working alongside the Graphics Builder](graphics-builder.md)).
-- **The Graphics Builder shows an old library element**: restart it.
+- **The Graphics Builder shows an old library element**: close it with Tools > Close Graphics
+  Builder ([Close the Graphics Builder](graphics-builder.md#close-the-graphics-builder)).
 
 ## A genie, symbol or template is missing or empty
 

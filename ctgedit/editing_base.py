@@ -193,6 +193,14 @@ def forget_derived() -> None:
     caches.clear("libraries")
 
 
+#: what a library save says while the Graphics Builder runs (ctdraw_cache_warning)
+CTDRAW_CACHE_WARNING = (
+    "The Graphics Builder is running and still has the old version of this element in memory. "
+    "Close it (Tools > Close Graphics Builder) before you edit or place the element there, "
+    "or it saves the old version back."
+)
+
+
 def ctdraw_cache_warning() -> str:
     """CtDraw keeps every library element it has loaded in RAM for its whole
     session and never re-reads the file: with a Graphics Builder running, it keeps
@@ -205,11 +213,7 @@ def ctdraw_cache_warning() -> str:
         running = False
     if not running:
         return ""
-    return (
-        "The Graphics Builder is running and still has the old version of this element in memory. "
-        "Restart it (or Plant SCADA Studio) before you edit or place the element there, or it "
-        "saves the old version back."
-    )
+    return CTDRAW_CACHE_WARNING
 
 
 # ---------------------------------------------------------------------------

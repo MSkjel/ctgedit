@@ -436,6 +436,7 @@ class CanvasEdits:
             problems=problems,
             ref="%s.%s" % link[:2] if link is not None else "",
             pickers=self._genie_pickers(root),
+            uses=self.doc.genie_param_uses(root),
         )
         dlg.groupRequested.connect(
             lambda d=dlg, r=root: self._genie_object_forms(getattr(d, "_ctg_index", r))

@@ -46,6 +46,28 @@ def _notice(parent, title: str, text: str) -> None:
     box.show()
 
 
+def _builder_notice(parent, text: str) -> None:
+    """The notice that the Graphics Builder still holds the old elements, with its Close
+    Graphics Builder button (ui/builder_close)."""
+    from .builder_close import add_close_button, auto_close
+
+    window = parent.window() if parent is not None else None
+    text = auto_close(window, text)  # (the option: the builder is closed instead)
+    if not text:
+        return
+    box = QtWidgets.QMessageBox(
+        QtWidgets.QMessageBox.Information,
+        "Close the Graphics Builder",
+        text,
+        QtWidgets.QMessageBox.Ok,
+        parent,
+    )
+    add_close_button(box, window)
+    box.setModal(False)
+    box.setAttribute(QtCore.Qt.WA_DeleteOnClose)
+    box.show()
+
+
 def _page_stem(path: str) -> str:
     return os.path.splitext(os.path.basename(path))[0]
 
@@ -288,7 +310,7 @@ def delete_element(
     _after(after)
     note = _library_written(lib_path, catalog)
     if note:
-        _notice(parent, "Restart the Graphics Builder", note)
+        _builder_notice(parent, note)
     return True
 
 
@@ -367,5 +389,5 @@ def rename_element(
     _after(after)
     note = _library_written(lib_path, catalog)
     if note:
-        _notice(parent, "Restart the Graphics Builder", note)
+        _builder_notice(parent, note)
     return written

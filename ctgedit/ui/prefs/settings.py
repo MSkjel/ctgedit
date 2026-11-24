@@ -51,9 +51,11 @@ OPTION_DEFAULTS = {
     # a double-click on a text edits its words on the page (off: it opens the properties,
     # as the Graphics Builder does)
     "dblclick_edits_text": True,
-    # an expression field compiles its text with the project's Cicode (the simulator) at
-    # every pause in typing; off: only the field's Check action does
-    "live_expression_check": False,
+    # an expression or command field colours its Cicode and underlines what is wrong or
+    # not known (ui/objprops/cicode_assist)
+    "colour_cicode": True,
+    # the arguments of the function being typed show above the field
+    "function_hints": True,
     "confirm_delete": False,
     "unlock_template": False,
     "developer_tools": False,
@@ -92,6 +94,9 @@ OPTION_DEFAULTS = {
     "stretch_texts": True,
     "warn_shipped_template": True,
     "save_supergenie_warning": True,
+    # after a library is saved, the Graphics Builder is closed (ui/builder_close): it reads
+    # the library again when it next opens; with a page open there it asks first
+    "auto_close_builder": False,
     "watch_files": True,
     # Settings > Canvas: the mouse wheel scrolls the page (Ctrl + the wheel zooms); off: the
     # wheel zooms

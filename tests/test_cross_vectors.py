@@ -31,14 +31,14 @@ def test_cicode_names_are_the_vectors_ones():
 
 
 def test_the_tokenizers_take_code_page_names():
-    """The expression advice, the rest-state evaluator and the association scan cut a name
+    """The field tokens, the rest-state evaluator and the association scan cut a name
     by the same rule (a Norwegian tag is one name, not 'R' + 'r_Temp')."""
-    from ctgedit.ui.objprops import validators as V
+    from ctgedit import cicode_lex as L
     from ctgedit.io import cicode_rest as C
     from ctgedit.format import supergenie as S
 
     name = "R\u00f8r_Temp"
-    assert [m.group(0) for m in V._IDENT.finditer(name + ".PV + 1")] == [name + ".PV"]
-    assert [m.group(1) for m in V._CALL.finditer("M\u00e5ling(1)")] == ["M\u00e5ling"]
+    assert [r.text for r in L.references(name + ".PV + 1")] == [name + ".PV"]
+    assert [(r.text, r.kind) for r in L.references("M\u00e5ling(1)")] == [("M\u00e5ling", L.FUNCTION)]
     assert C._tokenize(name + " <> 1")[0] == ("id", name)
     assert S._TOKEN.findall("?" + name + "?") == [name]

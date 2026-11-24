@@ -9,6 +9,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from . import buttons as _btn
+from . import rtf_html as _rtf
 from .scene import PAGE_INDEX_ROLE, SIM_CHILD_ROLE
 from ..format import codes as _codes
 from ..infra.logsetup import note_exception as _note_exc
@@ -19,6 +20,9 @@ Z_DRAWN = 100000.0
 ANM_DELAY_MS = 500
 _CICODE_OBJECT = 0x1009
 _FULL_SIZE = 32000.0
+#: a rich text box's horizontal scroll unit and tab stop (pixels; the engine's RichTextView)
+RICH_CHAR_PX = 8.0
+RICH_TAB_PX = 48.0
 
 
 def _num(v, default=None):
@@ -72,6 +76,75 @@ def _clip_rect(v) -> Optional[QtCore.QRectF]:
     if r <= l or b <= t:
         return None
     return QtCore.QRectF(l, t, r - l, b - t)
+
+
+#: a plot pen's dashes by style (GDI's 1-pixel pens, in pixels)
+_PLOT_DASHES = {1: [18.0, 6.0], 2: [3.0, 3.0], 3: [9.0, 6.0, 3.0, 6.0], 4: [9.0, 3.0, 3.0, 3.0, 3.0, 3.0]}
+#: a plot text's turn by orientation (1 upwards, 2 right to left, 3 downwards)
+_PLOT_TURN = {1: -90.0, 2: 180.0, 3: 90.0}
+
+
+def _plot_pen(v) -> QtGui.QPen:
+    """A plot primitive's pen {style, colour, width}: style 5 or a transparent colour draws no
+    line; a pen wider than 1 draws solid."""
+    if not isinstance(v, dict):
+        return QtGui.QPen(QtCore.Qt.NoPen)
+    style = int(_num(v.get("style"), 0) or 0)
+    colour = _colour(v.get("colour"))
+    if style == 5 or colour is None:
+        return QtGui.QPen(QtCore.Qt.NoPen)
+    width = max(1, min(32, int(_num(v.get("width"), 1) or 1)))
+    pen = QtGui.QPen(colour)
+    pen.setWidth(width)
+    if width > 1:
+        pen.setCapStyle(QtCore.Qt.RoundCap)
+        pen.setJoinStyle(QtCore.Qt.RoundJoin)
+    elif style in _PLOT_DASHES:
+        pen.setDashPattern(_PLOT_DASHES[style])
+    return pen
+
+
+def _plot_brush(v) -> QtGui.QBrush:
+    c = _colour(v)
+    return QtGui.QBrush(c) if c is not None else QtGui.QBrush(QtCore.Qt.NoBrush)
+
+
+def _plot_box(p: dict, x0: float, y0: float) -> QtCore.QRectF:
+    x1, y1 = _num(p.get("x1"), 0.0), _num(p.get("y1"), 0.0)
+    x2, y2 = _num(p.get("x2"), 0.0), _num(p.get("y2"), 0.0)
+    return QtCore.QRectF(x0 + min(x1, x2), y0 + min(y1, y2), abs(x2 - x1), abs(y2 - y1))
+
+
+def _plot_marker_path(style: int, x: float, y: float, size: float) -> QtGui.QPainterPath:
+    """A built-in marker centred on (x, y): 1 / 5 triangle, 2 / 6 square, 3 / 7 circle, 4 / 8
+    diamond; another style a square."""
+    h = size / 2.0
+    path = QtGui.QPainterPath()
+    kind = style - 4 if style > 4 else style
+    if kind == 1:
+        path.addPolygon(
+            QtGui.QPolygonF(
+                [QtCore.QPointF(x, y - h), QtCore.QPointF(x + h, y + h), QtCore.QPointF(x - h, y + h)]
+            )
+        )
+        path.closeSubpath()
+    elif kind == 3:
+        path.addEllipse(QtCore.QPointF(x, y), h, h)
+    elif kind == 4:
+        path.addPolygon(
+            QtGui.QPolygonF(
+                [
+                    QtCore.QPointF(x, y - h),
+                    QtCore.QPointF(x + h, y),
+                    QtCore.QPointF(x, y + h),
+                    QtCore.QPointF(x - h, y),
+                ]
+            )
+        )
+        path.closeSubpath()
+    else:
+        path.addRect(QtCore.QRectF(x - h, y - h, size, size))
+    return path
 
 
 def font_of(info: Optional[dict]) -> QtGui.QFont:
@@ -741,21 +814,172 @@ class DrawnLayer:
         return holder
 
     def _k_file(self, b: _Built, e: dict):
-        args = e.get("args") or {}
-        f = self._tf(font_of(e.get("fontInfo")))
-        fm = QtGui.QFontMetricsF(f)
-        w = (_num(args.get("width"), 40) or 40) * fm.averageCharWidth()
-        h = (_num(args.get("height"), 10) or 10) * fm.height()
-        return self._box(e, w, h, str(e.get("text") or ""))
+        """A file display: the lines its window shows, each on its own AN (args.lines)."""
+        lines = (e.get("args") or {}).get("lines")
+        if not isinstance(lines, list):
+            return None
+        holder = _holder()
+        for line in lines:
+            if not isinstance(line, dict):
+                continue
+            item = self._k_text(
+                b,
+                {
+                    "text": line.get("text"),
+                    "x": line.get("x"),
+                    "y": line.get("y"),
+                    "fontInfo": e.get("fontInfo"),
+                },
+            )
+            if item is not None:
+                item.setParentItem(holder)
+        return holder if holder.childItems() else None
+
+    def _k_plot(self, b: _Built, e: dict):
+        """A plot PlotClose showed: its primitives (args.prims) in order, each at coordinates
+        relative to the AN."""
+        prims = (e.get("args") or {}).get("prims")
+        if not isinstance(prims, list):
+            return None
+        x0, y0 = _num(e.get("x"), 0.0), _num(e.get("y"), 0.0)
+        holder = _holder()
+        for p in prims:
+            if not isinstance(p, dict):
+                continue
+            item = self._plot_item(p, x0, y0)
+            if item is not None:
+                item.setParentItem(holder)
+        return holder if holder.childItems() else None
+
+    def _plot_item(self, p: dict, x0: float, y0: float):
+        op = p.get("op")
+        pen = _plot_pen(p.get("pen"))
+        if op in ("rect", "ellipse"):
+            box = _plot_box(p, x0, y0)
+            it = QtWidgets.QGraphicsRectItem(box) if op == "rect" else QtWidgets.QGraphicsEllipseItem(box)
+            it.setPen(pen)
+            it.setBrush(_plot_brush(p.get("fill")))
+            return it
+        if op == "line":
+            it = QtWidgets.QGraphicsLineItem(
+                x0 + _num(p.get("x1"), 0.0),
+                y0 + _num(p.get("y1"), 0.0),
+                x0 + _num(p.get("x2"), 0.0),
+                y0 + _num(p.get("y2"), 0.0),
+            )
+            it.setPen(pen)
+            return it
+        if op == "point":
+            if pen.style() == QtCore.Qt.NoPen:
+                return None
+            w = float(pen.width())
+            x, y = x0 + _num(p.get("x"), 0.0), y0 + _num(p.get("y"), 0.0)
+            it = QtWidgets.QGraphicsRectItem(x - (w - 1) // 2, y - (w - 1) // 2, w, w)
+            it.setPen(QtGui.QPen(QtCore.Qt.NoPen))
+            it.setBrush(QtGui.QBrush(pen.color()))
+            return it
+        if op == "polyline":
+            pts = p.get("points")
+            if not isinstance(pts, list) or len(pts) < 4:
+                return None
+            path = QtGui.QPainterPath()
+            for k in range(0, len(pts) - 1, 2):
+                q = QtCore.QPointF(x0 + _num(pts[k], 0.0), y0 + _num(pts[k + 1], 0.0))
+                if k == 0:
+                    path.moveTo(q)
+                else:
+                    path.lineTo(q)
+            it = QtWidgets.QGraphicsPathItem(path)
+            it.setPen(pen)
+            it.setBrush(QtGui.QBrush(QtCore.Qt.NoBrush))
+            return it
+        if op == "text":
+            return self._plot_text(p, x0, y0)
+        if op == "marker":
+            return self._plot_marker(p, x0, y0)
+        return None
+
+    def _plot_text(self, p: dict, x0: float, y0: float):
+        """A plot text: its baseline starts at (x, y), turned by its orientation."""
+        text = p.get("text")
+        if not isinstance(text, str) or not text:
+            return None
+        info = p.get("fontInfo") if isinstance(p.get("fontInfo"), dict) else {}
+        font = self._tf(font_of(info))
+        fm = QtGui.QFontMetricsF(font)
+        g = _holder()
+        g.setPos(x0 + _num(p.get("x"), 0.0), y0 + _num(p.get("y"), 0.0))
+        g.setRotation(_PLOT_TURN.get(int(_num(p.get("orient"), 0) or 0), 0.0))
+        fg, _off = _pair(info.get("fg"), QtGui.QColor(0, 0, 0))
+        bg, _off = _pair(info.get("bg"), None)
+        if bg is not None:
+            r = QtWidgets.QGraphicsRectItem(0.0, -fm.ascent(), fm.horizontalAdvance(text), fm.height(), g)
+            r.setPen(QtGui.QPen(QtCore.Qt.NoPen))
+            r.setBrush(QtGui.QBrush(bg))
+        t = QtWidgets.QGraphicsSimpleTextItem(text, g)
+        t.setFont(font)
+        t.setPos(0.0, -fm.ascent())
+        t.setPen(QtGui.QPen(QtCore.Qt.NoPen))
+        t.setBrush(QtGui.QBrush(fg) if fg is not None else QtGui.QBrush(QtCore.Qt.NoBrush))
+        return g
+
+    def _plot_marker(self, p: dict, x0: float, y0: float):
+        """A plot marker centred on (x, y): a built-in shape, or the registered symbol with its
+        hot spot there (a dashed square when the symbol cannot be drawn)."""
+        x, y = x0 + _num(p.get("x"), 0.0), y0 + _num(p.get("y"), 0.0)
+        style = int(_num(p.get("marker"), 0) or 0)
+        size = max(2.0, _num(p.get("size"), 8.0) or 8.0)
+        colour = _colour(p.get("colour"))
+        if style >= 20:
+            sym = p.get("symbol")
+            item = self._symbol_item(sym, x, y, 1.0, 1.0) if isinstance(sym, str) and sym else None
+            if item is not None:
+                return item
+        it = QtWidgets.QGraphicsPathItem(_plot_marker_path(style, x, y, size))
+        pen = QtGui.QPen(colour) if colour is not None else QtGui.QPen(QtCore.Qt.NoPen)
+        pen.setWidth(0)
+        if style >= 20:
+            pen.setStyle(QtCore.Qt.DashLine)
+        it.setPen(pen)
+        filled = 5 <= style <= 8 and colour is not None
+        it.setBrush(QtGui.QBrush(colour) if filled else QtGui.QBrush(QtCore.Qt.NoBrush))
+        return it
 
     def _k_richText(self, b: _Built, e: dict):  # noqa: N802 -- the engine's kind name
+        """A rich text box: its RTF (args.rtf) on a white box of args.width x args.height at the
+        AN, clipped to it, scrolled to paragraph args.row and args.col characters of
+        RICH_CHAR_PX. Read-only."""
         args = e.get("args") or {}
-        return self._box(
-            e,
-            _num(args.get("width"), 100) or 100,
-            _num(args.get("height"), 50) or 50,
-            str(e.get("text") or ""),
-        )
+        x, y = _num(e.get("x"), 0.0), _num(e.get("y"), 0.0)
+        w = max(1.0, _num(args.get("width"), 0.0) or 0.0)
+        h = max(1.0, _num(args.get("height"), 0.0) or 0.0)
+        holder = _holder(QtCore.QRectF(x, y, w, h))
+        holder.setBrush(QtGui.QBrush(QtGui.QColor(0xFF, 0xFF, 0xFF)))
+        rtf = args.get("rtf")
+        if isinstance(rtf, str) and rtf:
+            t = QtWidgets.QGraphicsTextItem()
+            doc = t.document()
+            doc.setDocumentMargin(1.0)
+            doc.setDefaultFont(self._tf(QtGui.QFont("Arial")))
+            opt = doc.defaultTextOption()
+            opt.setTabStopDistance(RICH_TAB_PX)
+            opt.setWrapMode(QtGui.QTextOption.NoWrap)
+            doc.setDefaultTextOption(opt)
+            t.setHtml(_rtf.rtf_to_html(rtf))
+            dy = 0.0
+            row = int(_num(args.get("row"), 0) or 0)
+            block = doc.findBlockByNumber(row) if row > 0 else QtGui.QTextBlock()
+            if block.isValid():
+                dy = doc.documentLayout().blockBoundingRect(block).top()
+            dx = max(0, int(_num(args.get("col"), 0) or 0)) * RICH_CHAR_PX
+            t.setPos(x - dx, y - dy)
+            t.setParentItem(holder)
+        frame = QtWidgets.QGraphicsRectItem(x, y, w, h, holder)
+        pen = QtGui.QPen(QtGui.QColor(0x80, 0x80, 0x80))
+        pen.setWidth(0)
+        frame.setPen(pen)
+        frame.setBrush(QtGui.QBrush(QtCore.Qt.NoBrush))
+        return holder
 
     def _k_bar(self, b: _Built, e: dict):
         args = e.get("args") or {}

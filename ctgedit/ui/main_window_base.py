@@ -235,6 +235,7 @@ DESCRIPTIONS = {
     "act_copy_to_lib": "Save the selected objects as a symbol or genie in a library.",
     "act_pack_libs": "Make library files smaller by removing deleted elements.",
     "act_update_pages": "Bring the symbols and genies of the project's pages up to date.",
+    "act_close_builder": "Close the Graphics Builder so that it reads the changed libraries again.",
     "act_attach_super": "Attach super genies to the genie, to open from its buttons.",
     "act_genie_form": "Design the form a genie's values are entered in.",
     "act_replace_genie": "Put another genie in place of placed genies, keeping their values.",

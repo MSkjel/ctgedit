@@ -29,7 +29,7 @@ see only what you've changed.
 - **Text**: double-click to edit in place, whether an uneven resize stretches text (on, as the
   Graphics Builder does), and whether Enter starts a new line or finishes. See
   [Text, numbers and fonts](text-and-numbers.md).
-- **Expressions**: check Cicode while typing, and after how long a pause. How many letters
+- **Expressions**: how long a pause in typing before the Cicode is checked. How many letters
   before name suggestions appear. See [Check](properties.md#check) and
   [Expressions](properties.md#expressions).
 - **New objects**: colours of new objects, the style they take (see
@@ -185,7 +185,9 @@ Shortcuts.
   update after saving a template, offer Update Pages after a super genie save, what to do with
   the genies and closed pages that use a saved genie, symbol or template (ask, update in the
   background, or leave them; see [When you save a genie](library-elements.md#when-you-save-a-genie)
-  and [When a template changes](templates.md#when-a-template-changes)), and warn before saving
+  and [When a template changes](templates.md#when-a-template-changes)), close the Graphics
+  Builder after saving a library (see [Close the Graphics
+  Builder](graphics-builder.md#close-the-graphics-builder)), and warn before saving
   into a library that ships with Plant SCADA.
 - **Pages**: the default name for new pages, allow editing template objects on pages, list
   system pages in Page Properties' Previous and Next lists, and the default print orientation.

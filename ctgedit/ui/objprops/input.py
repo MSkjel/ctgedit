@@ -132,13 +132,16 @@ class CommandEdit(LinesMixin, QtWidgets.QPlainTextEdit):
         self.counter.setObjectName("dim")
         self.textChanged.connect(self._update_counter)
         self._update_counter()
-        # the Cicode check (ui/expression_check): Check compiles the command as the page
-        # compiler would; the verdict shows under the field
+        # the Cicode check (ui/expression_check): the command is compiled as the page
+        # compiler would at every pause in typing; the verdict shows under the field
         self._checker = None
         self.verdict = QtWidgets.QLabel()
         self.verdict.setWordWrap(True)
         self.verdict.hide()
         self._checked_text: Optional[str] = None
+        self._check_timer = QtCore.QTimer(self)
+        self._check_timer.setSingleShot(True)
+        self._check_timer.timeout.connect(self.check_now)
         self.textChanged.connect(self._text_edited)
 
     def set_checker(self, checker) -> None:
@@ -149,13 +152,11 @@ class CommandEdit(LinesMixin, QtWidgets.QPlainTextEdit):
 
     def check_now(self) -> bool:
         """Compile the command now; the verdict under the field. False without a checker."""
+        self._check_timer.stop()
         text = self.value().replace("\r\n", "\n").strip()
         if self._checker is None or not text:
             self.verdict.hide()
             return False
-        self.verdict.setText("Checking…")
-        set_note_role(self.verdict, "text_dim")
-        self.verdict.show()
         self._checker.check(text, "command", lambda result, t=text: self._checked(t, result))
         return True
 
@@ -166,6 +167,10 @@ class CommandEdit(LinesMixin, QtWidgets.QPlainTextEdit):
 
         said = summary(result)
         self._checked_text = text
+        assist = getattr(self, "cicode_assist", None)
+        if assist is not None and "\n" not in text:
+            # (the compiler's column is a place in a one-line text)
+            assist.set_check_result(text, result)
         if result.get("error"):
             self.verdict.setText(said)
             set_note_role(self.verdict, "warn")
@@ -183,6 +188,10 @@ class CommandEdit(LinesMixin, QtWidgets.QPlainTextEdit):
     def _text_edited(self) -> None:
         if self._checked_text is not None and self.verdict.isVisible():
             self.verdict.hide()  # (the verdict was the old text's)
+        if self._checker is not None and not self.isReadOnly():
+            from ..prefs import timing_options
+
+            self._check_timer.start(timing_options.EXPRESSION_CHECK_MS)  # (a pause: the check)
 
     def value(self) -> str:
         text = self.toPlainText()
@@ -428,22 +437,10 @@ class InputCommandsTab(FitTabWidget):
             b.setAutoRaise(True)
             ed.wizard = b
             row.addWidget(b)
-            # Check: the command compiled by the project's Cicode (the simulator), nothing run
+            # the command compiled by the project's Cicode (the simulator) as it is typed
             from ..expression_check import checker_for
 
-            checker = checker_for(getattr(self._context, "project_dir", None))
-            if checker is not None:
-                ed.set_checker(checker)
-                cb = QtWidgets.QToolButton()
-                cb.setText("Check")
-                cb.setAutoRaise(True)
-                cb.setToolTip(
-                    "Compile this command with the project's Cicode (the simulator); "
-                    "nothing runs. The verdict shows under the field"
-                )
-                cb.clicked.connect(ed.check_now)
-                ed.check_button = cb
-                row.addWidget(cb)
+            ed.set_checker(checker_for(getattr(self._context, "project_dir", None)))
         row.addStretch(1)
         row.addWidget(ed.counter, 0, QtCore.Qt.AlignRight)
         return row

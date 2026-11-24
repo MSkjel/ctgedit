@@ -73,6 +73,7 @@ REQUESTS = (
     "pageModel",
     "windows",
     "answer",
+    "windowImage",
     "alarms",
     "equipment",
     "setAlarm",
@@ -92,6 +93,7 @@ EVENTS = (
     "modelWanted",
     "dialog",
     "dialogClosed",
+    "imageWanted",
     "alarmsChanged",
 )
 #: the engine's protocol revision this client needs (engine/PROTOCOL.md 'Versions'): a
@@ -99,9 +101,10 @@ EVENTS = (
 PROTOCOL_REVISION = 29
 
 #: what this viewer does for the server (hello): it sends the drawing of a page Cicode opens
-#: when the server asks (ctsim/modelWanted), and it shows popup menus and Message / Input /
-#: Form dialogs (ctsim/dialog, answered with ctsim/answer)
-VIEWER_FEATURES = {"models": True, "dialogs": True}
+#: when the server asks (ctsim/modelWanted), it shows popup menus and Message / Input /
+#: Form dialogs (ctsim/dialog, answered with ctsim/answer), and it draws a window's picture
+#: for WinFile / WinPrint / WinCopy (ctsim/imageWanted, answered with ctsim/windowImage)
+VIEWER_FEATURES = {"models": True, "dialogs": True, "images": True}
 #: every event kind a hello can ask for (engine/PROTOCOL.md ctsim/hello 'events')
 #: ('debug': ctsim/debugPaused, page code the debugger stopped holds the simulation)
 EVENT_KINDS = ("log", "task", "notSimulated", "clock", "scenario", "page", "options", "alarms", "debug")
@@ -2641,7 +2644,8 @@ def _hello(
     args: Dict[str, Any] = {"client": CLIENT, "version": version, "protocol": PROTOCOL, "pid": os.getpid()}
     if viewer:
         # only a client that answers them says so: the engine holds a Cicode-opened page's
-        # start for its drawing (3 s) and a waiting task for a dialog's answer (60 s)
+        # start for its drawing (3 s), a waiting task for a dialog's answer (60 s) and one
+        # for a window's picture (30 s simulated)
         args.update(VIEWER_FEATURES)
         if viewer_events is not None:
             args["events"] = list(viewer_events)

@@ -22,7 +22,7 @@ NOMOD = QtCore.Qt.NoModifier
 
 #: the editor keys of the package: (Settings page, key, the switch row it sits under or '')
 KEYS = (
-    ("Editing", "opt/expression_check_ms", "opt/live_expression_check"),
+    ("Editing", "opt/expression_check_ms", ""),
     ("Editing", "opt/props_step_pause_ms", "opt/props_arrow_live"),
     ("Editing", "opt/autosave_idle_s", ""),
     ("Canvas", "view/undo_flash_ms", "ui/undo_reveal"),
@@ -263,7 +263,6 @@ def test_the_expression_check_pause_follows_its_setting(win):
 
     f = ExpressionField(None)
     f.set_checker(Checker())
-    _set("opt/live_expression_check", True)
     try:
         QtWidgets.QLineEdit.setText(f, "Tag1 + 2")
         assert f._check_timer.isActive() and f._check_timer.interval() == 700

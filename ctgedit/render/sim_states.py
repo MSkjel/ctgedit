@@ -114,6 +114,7 @@ class _Look(NamedTuple):
     alarm: Optional[tuple] = None  # (priority, state, colour, flash) of an active alarm
     indication: Optional[str] = None  # the quality flag dithered over the record
     flash: bool = False  # the off flash phase over the record's own flashing colours
+    markers: Optional[tuple] = None  # (samples, ((horizontal, colour, offset), ...)) of a trend
 
 
 _DEFAULT = _Look(False, None, None, None, None, (), None, None, None, None)
@@ -164,6 +165,26 @@ def _trend_look(trend) -> Optional[tuple]:
             num = len(out) + 1
         out.append((num, colour, lo, hi, tuple(_number(v) for v in vals)))
     return tuple(out) if out else None
+
+
+def _marker_look(trend) -> Optional[tuple]:
+    """A trend state's placed markers: (samples, ((horizontal, colour, offset), ...)), None
+    when it has none."""
+    if not isinstance(trend, dict) or not isinstance(trend.get("markers"), (list, tuple)):
+        return None
+    out = []
+    for m in trend["markers"]:
+        if not isinstance(m, dict):
+            continue
+        off = _number(m.get("offset"))
+        if off is None:
+            continue
+        c = m.get("colour")
+        colour = int(c) if isinstance(c, (int, float)) and not isinstance(c, bool) else None
+        out.append((m.get("mode") == "horizontal", colour, off))
+    if not out:
+        return None
+    return (max(1.0, _number(trend.get("samples")) or 1.0), tuple(out))
 
 
 def _alarm_look(alarm) -> Optional[tuple]:
@@ -1247,7 +1268,7 @@ class SimLayer:
             hidden, m = True, None
         colour = own.fill_colour if own is not None and own.fill_colour is not None else anc.colour
         tooltip = own.tooltip if own is not None and own.tooltip is not None else anc.tooltip
-        level = text = vertex = symbol = trend = alarm = indication = None
+        level = text = vertex = symbol = trend = markers = alarm = indication = None
         if own is not None:
             flag = getattr(own, "indication", None)
             flag = str(flag).lower() if flag is not None else None
@@ -1258,6 +1279,7 @@ class SimLayer:
                 ):
                     indication = flag
             trend = _trend_look(getattr(own, "trend", None))
+            markers = _marker_look(getattr(own, "trend", None))
             alarm = _alarm_look(getattr(own, "alarm", None))
             if own.fill_level is not None:
                 level = (_clamp01(own.fill_level), own.fill_level_direction, own.fill_level_colour)
@@ -1281,6 +1303,7 @@ class SimLayer:
             alarm,
             indication,
             flash,
+            markers,
         )
 
     def _visible(self, i: int, role: str, look: Optional[_Look] = None) -> bool:
@@ -1377,6 +1400,8 @@ class SimLayer:
                 self._apply_tooltip(s, look.tooltip)
             if force or look.trend != prev.trend:
                 self._apply_trend(main, obj, look.trend)
+            if force or look.markers != prev.markers:
+                self._apply_markers(main, obj, look.markers)
             main.setVisible(self._visible(i, "main", look))
         # 3. the group's alarm indicator follows the group
         if ai is not None:
@@ -2123,6 +2148,46 @@ class SimLayer:
             pen.setWidth(0)
             line.setPen(pen)
             line.setPath(path)
+            line.setVisible(True)
+
+    @staticmethod
+    def _apply_markers(item, obj: GraphicObject, markers: Optional[tuple]) -> None:
+        """Draw a trend's markers (DspMarkerMove): a vertical line at its offset in samples
+        from the left edge, a horizontal one at offset / 32000 of the height from the bottom."""
+        box, lines = None, []
+        for it in _walk(item):
+            role = it.data(TREND_PART_ROLE)
+            if role == "box":
+                box = it
+            elif role == "marker":
+                lines.append(it)
+        if box is None:
+            return
+        r = box.rect()
+        left, top = r.left(), r.top()
+        right, bottom = r.right() - 1.0, r.bottom() - 1.0  # the box is one pixel wider / taller
+        info = obj.raw.get("_trend") or {}
+        try:
+            sp = max(1, int(info.get("spacing") or 1))
+        except TypeError, ValueError:
+            sp = 1
+        samples, shown = markers if markers is not None else (1.0, ())
+        for k, line in enumerate(lines):
+            m = shown[k] if k < len(shown) else None
+            qc = _qcolour(m[1]) if m is not None and m[1] is not None else None
+            if m is None or (m[1] is not None and qc is None):  # (a transparent marker)
+                line.setVisible(False)
+                continue
+            horizontal, _colour, off = m
+            if horizontal:
+                y = bottom - max(0.0, min(32000.0, off)) / 32000.0 * (bottom - top)
+                line.setLine(left + 0.5, y + 0.5, right + 0.5, y + 0.5)
+            else:
+                x = max(left, min(right, right - (samples - off) * sp))
+                line.setLine(x + 0.5, top + 0.5, x + 0.5, bottom + 0.5)
+            pen = QtGui.QPen(qc if qc is not None else QtGui.QColor(0, 0, 0))
+            pen.setWidth(0)
+            line.setPen(pen)
             line.setVisible(True)
 
     # -- alarm indicator -------------------------------------------------------------

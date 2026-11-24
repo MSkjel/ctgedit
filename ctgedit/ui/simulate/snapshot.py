@@ -1,4 +1,5 @@
-"""Copy Image: a picture of a Simulate tab as the runtime shows it."""
+"""Copy Image and the window pictures Cicode asks for (WinFile, WinPrint, WinCopy): a
+picture of a Simulate tab as the runtime shows it."""
 
 from __future__ import annotations
 
@@ -92,9 +93,9 @@ class _Plan:
         return out
 
 
-def tab_image(win, tab) -> Optional[QtGui.QImage]:
-    """The picture of Simulate tab ``tab`` of window ``win`` (see the module), None when the
-    tab shows no page."""
+def tab_image(win, tab, sx: float = 1.0, sy: float = 1.0) -> Optional[QtGui.QImage]:
+    """The picture of Simulate tab ``tab`` of window ``win`` (see the module), ``sx`` by ``sy``
+    times its size, None when the tab shows no page."""
     if tab is None or tab.scene.page_rect().isNull():
         return None
     plan = _Plan(win, tab).build()
@@ -102,13 +103,13 @@ def tab_image(win, tab) -> Optional[QtGui.QImage]:
     if b.isNull() or b.width() < 1 or b.height() < 1:
         return None
     left, top = math.floor(b.left()), math.floor(b.top())
-    w = int(math.ceil(b.right()) - left)
-    h = int(math.ceil(b.bottom()) - top)
+    w = int(math.ceil((math.ceil(b.right()) - left) * sx))
+    h = int(math.ceil((math.ceil(b.bottom()) - top) * sy))
     w, h = max(1, min(w, 16000)), max(1, min(h, 16000))
     img = QtGui.QImage(w, h, QtGui.QImage.Format_ARGB32_Premultiplied)
     pal = tab.canvas.viewport().palette()
     img.fill(pal.color(QtGui.QPalette.Window))
-    base = QtGui.QTransform.fromTranslate(-left, -top)
+    base = QtGui.QTransform.fromTranslate(-left, -top) * QtGui.QTransform.fromScale(sx, sy)
     p = QtGui.QPainter(img)
     try:
         p.setRenderHints(
@@ -130,6 +131,16 @@ def tab_image(win, tab) -> Optional[QtGui.QImage]:
     finally:
         p.end()
     return img
+
+
+def bmp_bytes(img: QtGui.QImage) -> Optional[bytes]:
+    """``img`` as a Windows bitmap file (24 bits a pixel), None when Qt could not write it."""
+    buf = QtCore.QBuffer()
+    buf.open(QtCore.QIODevice.WriteOnly)
+    ok = img.convertToFormat(QtGui.QImage.Format_RGB888).save(buf, "BMP")
+    data = bytes(buf.data())
+    buf.close()
+    return data if ok and data else None
 
 
 def _paint_frame(p: QtGui.QPainter, rect: QtCore.QRectF, title: str, pal: QtGui.QPalette) -> None:

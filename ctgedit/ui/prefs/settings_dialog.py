@@ -498,7 +498,8 @@ class SettingsDialog(QtWidgets.QDialog):
         # editing
         ("dblclick_edits_text", "Double-click a text to edit it in place"),
         ("stretch_texts", "Stretch a text that is resized unevenly"),
-        ("live_expression_check", "Check expressions while typing"),
+        ("colour_cicode", "Colour Cicode and underline problems"),
+        ("function_hints", "Show a function's arguments while typing"),
         ("confirm_delete", "Confirm before deleting objects"),
         ("unlock_template", "Allow editing template objects on pages"),
         ("props_arrow_live", "Arrow keys in number fields apply at once"),
@@ -516,6 +517,7 @@ class SettingsDialog(QtWidgets.QDialog):
         ("reversible_turns", "Turn again about the same centre"),
         ("ctf_rebuild_stale", "Replace an out-of-date fast display file"),
         ("save_supergenie_warning", "Offer Update Pages after saving a super genie"),
+        ("auto_close_builder", "Close the Graphics Builder after saving a library"),
         ("warn_shipped_template", "Warn before saving into a library supplied with Plant SCADA"),
         # advanced
         ("developer_tools", "Developer and diagnostic tools"),
@@ -546,8 +548,9 @@ class SettingsDialog(QtWidgets.QDialog):
         "dblclick_edits_text": "Off: a double-click opens the text's properties, as in the Graphics Builder",
         "stretch_texts": "As the Graphics Builder does. Off: the text keeps its shape and its "
         "point size follows the new height",
-        "live_expression_check": "Marks the Cicode the compiler would refuse. Off: use the "
-        "field's Check button",
+        "colour_cicode": "Keywords, strings, numbers, functions, tags and genie parameters each "
+        "get a colour. Unknown tags and functions get a wavy underline",
+        "function_hints": "Above the field, with the argument you are typing in bold. Esc hides it",
         "unlock_template": "Lets you select and change the template's objects on a page",
         "props_arrow_live": "In the Properties panel, after a short pause, as one undo step. "
         "Off: Enter applies",
@@ -570,6 +573,8 @@ class SettingsDialog(QtWidgets.QDialog):
         "ctf_rebuild_stale": "Off: the old .ctF is deleted and the runtime draws the page from its .ctg",
         "text_question_marks": "Off: ctgedit refuses the text and names the characters",
         "library_siblings": "The Graphics Builder only searches the page's project and its included projects",
+        "auto_close_builder": "It keeps the old symbols and genies in memory until it closes. When "
+        "it has a page open, ctgedit asks first",
         "developer_tools": "The thumbnail underlay and the dynamics badges",
         "display_check": "A second process draws each opened page again and reports any "
         "difference in the status bar",
@@ -583,7 +588,8 @@ class SettingsDialog(QtWidgets.QDialog):
             (
                 "dblclick_edits_text",
                 "stretch_texts",
-                "live_expression_check",
+                "colour_cicode",
+                "function_hints",
                 "props_on_new",
                 "xp_buttons",
                 "modify_an",
@@ -610,6 +616,7 @@ class SettingsDialog(QtWidgets.QDialog):
                 "ctf_rebuild_stale",
                 "save_template_warning",
                 "save_supergenie_warning",
+                "auto_close_builder",
                 "warn_shipped_template",
                 "unlock_template",
                 "list_system_pages",
@@ -2011,12 +2018,11 @@ class SettingsDialog(QtWidgets.QDialog):
             "Editing",
             "Expressions",
             "opt/expression_check_ms",
-            "Check after a pause of:",
+            "Check expressions after a pause of:",
             kind="int",
             span=(200, 3000),
             suffix=" ms",
             step=50,
-            sub=True,
             tip="How long after the last letter the check runs",
         ),
         SettingRow(
@@ -2476,10 +2482,8 @@ class SettingsDialog(QtWidgets.QDialog):
         flag(s, "stretch_texts")
         self._add_rows(p, "Editing", "Text", section=s)
         s = p.section("Expressions")
-        flag(s, "live_expression_check")
-        # (the pause under the switch it needs)
-        self._add_rows(p, "Editing", "Expressions", section=s, keys=("opt/expression_check_ms",))
-        self._enable_with("opt/expression_check_ms", f["live_expression_check"])
+        flag(s, "colour_cicode")
+        flag(s, "function_hints")
         self._add_rows(p, "Editing", "Expressions", section=s)
         s = p.section("New objects")
         s.row("Colours of new objects:", self._new_colours, key="draw/colour_mode")
@@ -2702,6 +2706,7 @@ class SettingsDialog(QtWidgets.QDialog):
         self._fast_display.toggled.connect(f["ctf_rebuild_stale"].setEnabled)
         flag(s, "save_template_warning", gb("save_template_warning"))
         flag(s, "save_supergenie_warning")
+        flag(s, "auto_close_builder")
         s.row(
             "Genies and closed pages that use a saved genie:", self._genie_pages, key="opt/genie_save_pages"
         )
@@ -4500,6 +4505,10 @@ class SettingsDialog(QtWidgets.QDialog):
 
         _theme.reload_canvas_colours()
         _each(wins, "apply_canvas_look")
+        # (the Cicode colours and hints of the open fields follow their options)
+        from ..objprops.cicode_assist import refresh_all
+
+        refresh_all()
         _each(wins, "_sync_grid_dialog")  # an open Grid Setup shows the new look
         for win in wins:
             view = getattr(win, "view", None)

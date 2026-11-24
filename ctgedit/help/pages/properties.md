@@ -106,15 +106,61 @@ A placed genie's own settings are just its name and alarm indicator.
 
 ## Expressions
 
-Expression fields take a tag, an equipment item or any Cicode expression. Matching names are
-suggested as you type.
+Expression fields take a tag, an equipment item or any Cicode expression. Matching tags and
+Cicode functions are suggested as you type; picking a function adds its opening bracket.
+
+### Colours, underlines and hints
+
+Expression and command fields colour their Cicode: keywords, strings, numbers, functions, tags,
+display formats, comments and genie parameters (`%Tag%`) each have their own colour.
+
+- A **red wavy underline** marks what the compiler refuses, such as `==`, a string that is not
+  closed or a number that is too large. After a Check, the compiler's own errors are underlined
+  at their place.
+- An **amber wavy underline** marks a tag or function the project doesn't have. A name the genie
+  builds from a parameter (`%Tag%_PV`) is not looked up. Hold the pointer over it to see the
+  names the project has that are most like it. Right-click it and choose **Replace with** one
+  of them.
+- A genie parameter may give its default after `=`, quotes and all: `%WebIP="127.0.0.1"%`.
+  Hold the pointer over it to see the default.
+- Inside a function call, the function's arguments show above the field, with the one you are
+  typing in bold. [[Esc]] hides them until you start another call.
+- After the `:` of a display format (`Level:###.# EU`), the hint explains the format characters
+  and shows how the tag's value looks with that format.
+- Hold the pointer over a name to see what it is: a tag's type, range and comment, or a
+  function's arguments and description. While the Simulate window runs a page of the same
+  project, a tag also shows its value in the simulation.
+- [[Ctrl]]+click a function of the project, or put the cursor on it and press [[F12]], to open its
+  `.ci` file at the function. It opens in VS Code when VS Code is installed, else in the program
+  Windows opens `.ci` files with.
+- Type an equipment name and a dot (`Plant.Pump1.`) to choose from the level below it: its
+  equipment and its items.
+
+The page checks and the advice under a field find tags and functions the same way as the
+underlines.
+
+Settings > Editing > Expressions turns the colours and underlines, and the argument hints, on
+and off.
+
+### Edit in a larger box
+
+Right-click an expression or command field and choose **Edit in a Larger Box…**, or press
+[[Shift+F2]] in it, to edit its text in a large box with the same colours, hints and
+suggestions. Line breaks become spaces when you press **OK**. A comment that starts with `!` or
+`//` runs to the end of its line, so use `/* */` for a comment with more text after it.
 
 ### Check
 
-The tick button at the end of an expression or command field compiles it with the project's
-Cicode. Errors show in the field with the message and column. Undefined tags are warnings. The
-simulator does the compiling, so the first check can take a few seconds. Settings > Editing >
-**Check expressions while typing** checks at every pause.
+An expression or command field compiles what you type with the project's Cicode when you
+pause. The mark at the start of an expression field shows the result: a green tick when it
+compiles, a warning sign for warnings, a red cross for errors. Hold the pointer over the mark
+to read them. Errors are also underlined at their column. A command box shows the result
+under it. Undefined tags are warnings. The simulator does the compiling, so the first check
+can take a few seconds. Settings > Editing > Expressions sets how long the pause is.
+
+In a genie or super genie, each parameter (`%Tag%`) and association (`?INT 2?`) is compiled as a
+name. The check leaves out what the compiler says about those names and about types, which are
+known when the genie is placed.
 
 ### The Wizard
 

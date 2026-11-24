@@ -1115,6 +1115,36 @@ def test_runtime_trend_draws_the_engine_pens_not_the_design_time_traces():
         r.close()
 
 
+def test_runtime_trend_draws_its_markers():
+    """A trend state's markers: a vertical one at its offset in samples from the left edge, a
+    horizontal one at offset / 32000 of the height from the bottom, in their colours; gone
+    with the markers."""
+    from ctgedit.model.document import ObjectKind as K
+    from ctgedit.sim.state import ObjectState
+
+    tr = _obj(K.TREND, 9, 50, 50, 100, 60, tc=0x1003)
+    tr.raw["_trend"] = {"spacing": 1, "pens": [(0x0000FF, 0x0000FF)] * 8}
+    r = _Rig(_page([tr]))
+    try:
+        r.scene.set_runtime_look(True)
+        markers = [
+            {"handle": 0, "mode": "vertical", "colour": 0xFF0000, "offset": 50},
+            {"handle": 1, "mode": "horizontal", "colour": 0x00FF00, "offset": 16000},
+        ]
+        r.apply({9: ObjectState(9, trend={"samples": 100, "pens": [], "markers": markers})})
+        img = r.grab()
+        red = [x for x in range(50, 151) if _near(r.px(x, 60, img), (255, 0, 0), 60)]
+        green = [y for y in range(50, 111) if _near(r.px(60, y, img), (0, 255, 0), 60)]
+        assert len(red) == 1 and 97 <= red[0] <= 101  # half way across
+        assert len(green) == 1 and 77 <= green[0] <= 82  # half way up
+        r.apply({9: ObjectState(9, trend={"samples": 100, "pens": []})})
+        img = r.grab()
+        assert _near(r.px(red[0], 60, img), (255, 255, 255), 5)
+        assert _near(r.px(60, green[0], img), (255, 255, 255), 5)
+    finally:
+        r.close()
+
+
 def test_runtime_alarm_indicator_follows_the_alarm_state():
     """The editor always draws a group's alarm indicator; the runtime only while the group's
     equipment has an active alarm, in the state's colour."""

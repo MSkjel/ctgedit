@@ -48,9 +48,11 @@ jobs:
       # the tests that need an AVEVA install or a long corpus run skip
       CTG_SKIP_HEAVY: "1"
     steps:
+      # (the tags: the builds read their versions from them)
       - uses: actions/checkout@v7
         with:
           submodules: recursive
+          fetch-depth: 0
 
       - uses: actions/setup-python@v7
         with:

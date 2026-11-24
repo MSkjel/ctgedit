@@ -317,10 +317,14 @@ class GenieParamsForm(QtWidgets.QWidget):
         descriptions: Optional[Dict[str, str]] = None,
         parent=None,
         pickers=None,
+        uses=None,
     ):
         super().__init__(parent)
         self.form = form
         self._params = OrderedDict(params or {})
+        #: where each parameter goes in the genie (features/genie_uses.ParamUses by
+        #: lower-case name; None = not known): what kind of field it gets
+        self.uses = uses
         self._list_values = list_values
         # ui/panels/sa_pickers.ParamPickers: equipment / menu / pane pickers for the
         # parameters a form gives no list (None = plain text boxes)
@@ -501,28 +505,55 @@ class GenieParamsForm(QtWidgets.QWidget):
                 w.setSizePolicy(QtWidgets.QSizePolicy.Expanding, w.sizePolicy().verticalPolicy())
             self.combos[name] = w
             getter = w.currentText
-        elif self._names_model is not None:
-            # a tag, equipment item or other value: completion of the name at the cursor
-            # from the scope's shared model, the Wizard's Insert Tag
-            from ..objprops.expression import ExpressionContext, ExpressionField
-
-            if self._context is None:
-                self._context = ExpressionContext(self._names_model.project_dir)
-            w = ExpressionField(self._context, wizard=("tag",), field_kind="tag")
-            w.setText(value)
-            w.setMaxLength(limit)
-            w.set_names(self._names_model)
-            getter = w.text
         else:
-            w = QtWidgets.QLineEdit(value)
-            w.setMaxLength(limit)
-            if self._completer is not None:
-                w.setCompleter(self._completer)
+            w = self._value_editor(name, value, limit)
             getter = w.text
         if tip:
             w.setToolTip(tip)
         _show_start(w)
         self.editors[name] = (getter, w)
+        return w
+
+    def param_uses(self, name: str):
+        """The ParamUses of parameter ``name`` (None: not known)."""
+        return self.uses.get(name.lower()) if self.uses else None
+
+    def _value_editor(self, name: str, value: str, limit: int) -> QtWidgets.QWidget:
+        """The text box of a parameter without a list, made for what the genie does with
+        its value (features/genie_uses): a command or an expression gets the Wizard's tags
+        and functions and the tag advice; a part of tag names ('%Tag%_PV') completes the
+        values that make the scope's tags and says which it makes that are missing; a
+        text or a setting is a plain box. A parameter whose uses are not known completes
+        tag names."""
+        from ...features import genie_uses as GU
+
+        use = self.param_uses(name)
+        role = use.role if use is not None else ""
+        plain = role in (GU.ROLE_TEXT, GU.ROLE_OTHER)
+        if self._names_model is None or plain:
+            w = QtWidgets.QLineEdit(value)
+            w.setMaxLength(limit)
+            if self._completer is not None and not plain:
+                w.setCompleter(self._completer)
+            return w
+        from ..objprops.expression import ExpressionContext, ExpressionField, NameCompletionModel
+
+        if self._context is None:
+            self._context = ExpressionContext(self._names_model.project_dir)
+        if role in (GU.ROLE_COMMAND, GU.ROLE_EXPRESSION):
+            kind = "command" if role == GU.ROLE_COMMAND else "expr"
+            w = ExpressionField(self._context, wizard=("tag", "function"), field_kind=kind)
+        else:
+            w = ExpressionField(self._context, wizard=("tag",), field_kind="tag")
+        w.setText(value)
+        w.setMaxLength(limit)
+        if role == GU.ROLE_NAME and use.patterns:
+            w.set_names(NameCompletionModel(self._names_model.project_dir, use.patterns, w))
+        else:
+            w.set_names(self._names_model)
+        if use is not None and use.patterns:
+            ctx_ref = weakref.ref(self._context)
+            w.set_advice(lambda v, u=use: _missing_names_advice(ctx_ref(), u, v))
         return w
 
     def _build_form(self, form) -> "_FormCanvas":
@@ -653,6 +684,80 @@ class GenieParamsForm(QtWidgets.QWidget):
             self._params[keys.get(low, name)] = value
 
 
+#: the most tag names a note lists
+_NAMES_LISTED = 5
+#: the most uses the panel lists, and the longest field it shows whole
+_USES_LISTED = 6
+_USE_CHARS = 140
+
+
+def _missing_names(context, use, value: str) -> Optional[List[str]]:
+    """The tag names ``value`` makes in the genie that the scope does not have; None when
+    that is not known (no value, a value with a placeholder, no tag list)."""
+    v = (value or "").strip()
+    if context is None or not v or "%" in v or "?" in v:
+        return None
+    idx = context.tag_index()
+    out = []
+    for n in use.names(v):
+        known = idx.is_name(n)
+        if known is None:
+            return None
+        if not known:
+            out.append(n)
+    return out
+
+
+def _listed(names: List[str]) -> str:
+    shown = ", ".join(names[:_NAMES_LISTED])
+    more = len(names) - _NAMES_LISTED
+    return shown + (" and %d more" % more if more > 0 else "")
+
+
+def _missing_names_advice(context, use, value: str) -> list:
+    """Advice on a value that makes tag names the project does not have."""
+    from ..objprops import validators as V
+
+    missing = _missing_names(context, use, value)
+    if not missing:
+        return []
+    return [V.Problem(V.WARNING, "The genie uses tags the project does not have: %s." % _listed(missing))]
+
+
+def uses_html(name: str, use, values: Dict[str, str], context=None) -> str:
+    """The uses panel's text for parameter ``name``: each field it goes into with the
+    form's values in it (``values`` by lower-case name), then the tags it makes."""
+    from ...features import genie_uses as GU
+
+    head = "<b>%s</b>" % _html.escape(name)
+    if use is None:
+        return ""
+    if not use.uses:
+        return "The genie does not use %s." % head
+    lines = ["Where the genie uses %s:" % head]
+    for u in use.uses[:_USES_LISTED]:
+        text = " ".join(GU.substitute(u.template, values, keep_missing=True).split())
+        if len(text) > _USE_CHARS:
+            text = text[: _USE_CHARS - 1] + "\u2026"
+        lines.append("%s: <code>%s</code>" % (_html.escape(u.label), _html.escape(text)))
+    more = len(use.uses) - _USES_LISTED
+    if more > 0:
+        lines.append("And %d more." % more)
+    value = values.get(name.lower(), "")
+    made = use.names(value) if "%" not in value else []
+    if made:
+        missing = _missing_names(context, use, value)
+        if missing is None:
+            lines.append("Tags it makes: %s." % _html.escape(_listed(made)))
+        else:
+            have = [n for n in made if n not in missing]
+            if have:
+                lines.append("Tags found: %s." % _html.escape(_listed(have)))
+            if missing:
+                lines.append("Not in the project: %s." % _html.escape(_listed(missing)))
+    return "<br>".join(lines)
+
+
 def _descriptions(library: str, element: str):
     """(AVEVA topic id, field descriptions) of a system genie, or (None, {})."""
     try:
@@ -686,6 +791,7 @@ class _GenieDialogBase(QtWidgets.QDialog):
         problems,
         default_title: str,
         pickers=None,
+        uses=None,
     ) -> None:
         self.form = form
         self.ref = ref
@@ -736,8 +842,12 @@ class _GenieDialogBase(QtWidgets.QDialog):
             descriptions=desc,
             parent=self,
             pickers=pickers,
+            uses=uses,
         )
         lay.addWidget(self.params_form, 1)
+        self.uses_label = None
+        if uses:
+            self._add_uses_panel(lay)
         if self.params_form.other_box is not None:
             # opening 'Other parameters' makes the window taller to show them
             # (within the screen; the form scrolls when they do not fit)
@@ -777,6 +887,54 @@ class _GenieDialogBase(QtWidgets.QDialog):
             # the whole form at its natural size, within the screen (Qt would
             # open it at most two thirds of the screen)
             self.resize(self._open_size())
+
+    def _add_uses_panel(self, lay) -> None:
+        """Under the form: where the genie uses the parameter being edited, with the
+        values typed, and the tags it makes."""
+        lab = QtWidgets.QLabel()
+        lab.setWordWrap(True)
+        lab.setTextFormat(QtCore.Qt.RichText)
+        lab.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
+        lab.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignTop)
+        lab.setMinimumHeight(4 * lab.fontMetrics().lineSpacing())
+        lab.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
+        set_note_role(lab, "text_dim")
+        lay.addWidget(lab)
+        self.uses_label = lab
+        self._uses_param = next(iter(self.params_form.editors), None)
+        for _name, (_g, w) in self.params_form.editors.items():
+            edit = w.lineEdit() if isinstance(w, QtWidgets.QComboBox) else getattr(w, "edit", w)
+            if isinstance(edit, QtWidgets.QLineEdit):
+                edit.textChanged.connect(self._update_uses)
+        QtWidgets.QApplication.instance().focusChanged.connect(self._focus_moved)
+        self._update_uses()
+
+    def _focus_moved(self, _old, new) -> None:
+        if new is None or self.uses_label is None:
+            return
+        for name, (_g, w) in self.params_form.editors.items():
+            if w is new or w.isAncestorOf(new):
+                if name != self._uses_param:
+                    self._uses_param = name
+                    self._update_uses()
+                return
+
+    def _update_uses(self, *_args) -> None:
+        name = self._uses_param
+        if self.uses_label is None or name is None:
+            return
+        values = {k.lower(): v for k, v in self.params_form.values().items()}
+        self.uses_label.setText(
+            uses_html(name, self.params_form.param_uses(name), values, self.params_form._context)
+        )
+
+    def uses_text(self) -> str:
+        """The uses panel's text, plain (tests)."""
+        if self.uses_label is None:
+            return ""
+        doc = QtGui.QTextDocument()
+        doc.setHtml(self.uses_label.text())
+        return doc.toPlainText()
 
     def _open_size(self) -> QtCore.QSize:
         want = self.layout().totalSizeHint()
@@ -863,6 +1021,7 @@ class GenieSubstitutionDialog(_GenieDialogBase):
         problems=(),
         ref: str = "",
         pickers=None,
+        uses=None,
     ):
         super().__init__(parent)
         if not ref and obj is not None:
@@ -885,6 +1044,7 @@ class GenieSubstitutionDialog(_GenieDialogBase):
             problems=problems,
             default_title="Genie Parameters" + (" - %s" % ref if ref else ""),
             pickers=pickers,
+            uses=uses,
         )
 
     def retarget(self, index: int) -> None:
@@ -911,6 +1071,7 @@ class GeniePasteDialog(_GenieDialogBase):
         an: Optional[int] = None,
         problems=(),
         pickers=None,
+        uses=None,
     ):
         super().__init__(parent)
         self._setup(
@@ -924,6 +1085,7 @@ class GeniePasteDialog(_GenieDialogBase):
             problems=problems,
             default_title="Paste Genie - %s" % title,
             pickers=pickers,
+            uses=uses,
         )
 
     def values(self) -> "OrderedDict[str, str]":

@@ -49,7 +49,8 @@ class TagCompletionModel(QtCore.QAbstractTableModel):
     """The completion list of a scope: (name, project) rows of the names that
     match the text being typed (:meth:`update`), at most :attr:`LIMIT`; the
     names that start with the text first. Column 0 completes; column 1 (the
-    project) is shown dimmed."""
+    project, or what a function is) is shown dimmed. An expression or command field
+    adds the Cicode functions (ExpressionContext.function_rows)."""
 
     LIMIT = 200
     #: extra names above this many are matched by their start only (a 'contains'
@@ -63,6 +64,11 @@ class TagCompletionModel(QtCore.QAbstractTableModel):
         self._rows: List[tuple] = []
         self._prefix = None
         self._extra_prep = None
+        #: the lower-case names of the function rows shown
+        self._function_names: set = set()
+        #: the lower-case names of the equipment rows shown (a level, not an item)
+        self._level_names: set = set()
+        self._fn_prep = None
 
     def tag_index(self):
         if self._index is None or not self._current():
@@ -93,14 +99,20 @@ class TagCompletionModel(QtCore.QAbstractTableModel):
         self._extra_prep = (extras, lows, names)
         return lows, names
 
-    def update(self, prefix: str, extras: Sequence[str] = ()) -> int:
+    def update(self, prefix: str, extras: Sequence[str] = (), functions: Sequence[tuple] = ()) -> int:
         """Show the names matching ``prefix`` (and the ``extras`` that contain
-        it); returns how many."""
+        it, and the ``functions`` rows: (lower-case name, name, what it is), sorted);
+        returns how many."""
         low = (prefix or "").strip().lower()
         idx = self.tag_index()
         rows: List[tuple] = []
         seen = set()
-        if low:
+        self._function_names = set()
+        self._level_names = set()
+        below = self._equipment_rows(idx, low) if "." in low else None
+        if below:
+            rows = below[: self.LIMIT]
+        elif low:
             for c in idx.search(low, self.LIMIT):
                 name = idx.name_of(c)
                 seen.add(name.lower())
@@ -121,12 +133,64 @@ class TagCompletionModel(QtCore.QAbstractTableModel):
                             seen.add(lo)
                             tail.append(n)
             rows = [(n, "") for n in head] + rows + [(n, "") for n in tail]
+            if functions:
+                rows = self._with_functions(low, rows, functions, seen)
             rows = rows[: self.LIMIT]
         self.beginResetModel()
         self._rows = rows
         self._prefix = low
         self.endResetModel()
         return len(rows)
+
+    def _with_functions(
+        self, low: str, rows: List[tuple], functions: Sequence[tuple], seen: set
+    ) -> List[tuple]:
+        """``rows`` with the functions matching ``low``: those that start with it among the
+        names that do (in name order), those that contain it after the names that do."""
+        prep = self._fn_prep
+        if prep is None or prep[0] is not functions:
+            prep = self._fn_prep = (functions, [r[0] for r in functions])
+        lows = prep[1]
+        starts, contains = [], []
+        i = bisect.bisect_left(lows, low)
+        while i < len(lows) and lows[i].startswith(low):
+            if lows[i] not in seen:
+                starts.append(functions[i])
+            i += 1
+        for r in functions:
+            if low in r[0] and not r[0].startswith(low) and r[0] not in seen:
+                contains.append(r)
+        self._function_names = {r[0] for r in starts + contains}
+        named = [r for r in rows if r[0].lower().startswith(low)]
+        others = [r for r in rows if not r[0].lower().startswith(low)]
+        head = sorted(named + [(r[1], r[2]) for r in starts], key=lambda r: r[0].lower())
+        return head + others + [(r[1], r[2]) for r in contains]
+
+    def is_function_row(self, name: str) -> bool:
+        """``name`` is a function row of the list shown."""
+        return (name or "").lower() in self._function_names
+
+    def is_level_row(self, name: str) -> bool:
+        """``name`` is an equipment row of the list shown (it has items below it)."""
+        return (name or "").lower() in self._level_names
+
+    def _equipment_rows(self, idx, low: str) -> List[tuple]:
+        """The rows of the level below the equipment before the last '.' of ``low`` that
+        start with what follows it ('pump1.sp' -> Pump1.Speed); [] when that is no
+        equipment."""
+        head = low[: low.rfind(".") + 1]
+        tail = low[len(head) :]
+        try:
+            kids = idx.equipment_children(head)
+        except Exception:  # noqa: BLE001  # swallow-ok: an index without equipment
+            return []
+        rows = []
+        for name, what in kids:
+            if name.lower()[len(head) :].startswith(tail):
+                if what == "equipment":
+                    self._level_names.add(name.lower())
+                rows.append((name, "Equipment" if what == "equipment" else "Equipment item"))
+        return rows
 
     def names(self) -> List[str]:
         return [r[0] for r in self._rows]
@@ -152,6 +216,66 @@ class TagCompletionModel(QtCore.QAbstractTableModel):
         return None
 
 
+#: the scope's names sorted without case: (tag index, lower-case names, names)
+_SORTED: list = []
+
+
+def _sorted_names(idx):
+    """(lower-case names, names) of every name of ``idx``, sorted without case (kept for
+    the index held)."""
+    if not _SORTED or _SORTED[0][0] is not idx:
+        pairs = sorted((n.lower(), n) for n in idx.sorted_names(idx.KINDS))
+        _SORTED[:] = [(idx, [p[0] for p in pairs], [p[1] for p in pairs])]
+    return _SORTED[0][1], _SORTED[0][2]
+
+
+class NameCompletionModel(TagCompletionModel):
+    """The values of a genie parameter that makes names (``patterns``: (before, after)
+    around the value, '%Tag%_PV' -> ('', '_PV')): the values that start with the text
+    typed and make one of the scope's names, those that make the most first. Column 1
+    says how many of the names the value makes are in the scope."""
+
+    #: the most names one key press reads
+    SCAN = 50000
+    #: the most values counted
+    SCORED = 300
+
+    def __init__(self, project_dir: Optional[str], patterns, parent=None):
+        super().__init__(project_dir, parent)
+        self.patterns = [tuple(p) for p in patterns if p[0] or p[1]]
+
+    def update(self, prefix: str, extras: Sequence[str] = (), functions: Sequence[tuple] = ()) -> int:
+        low = (prefix or "").strip().lower()
+        rows: List[tuple] = []
+        if low and self.patterns:
+            idx = self.tag_index()
+            lows, names = _sorted_names(idx)
+            # the pattern with the most letters of its own finds the fewest values
+            before, after = max(self.patterns, key=lambda p: len(p[0]) + len(p[1]))
+            head, tail = (before + low).lower(), after.lower()
+            found: dict = {}
+            i = bisect.bisect_left(lows, head)
+            end = min(len(lows), i + self.SCAN)
+            while i < end and lows[i].startswith(head) and len(found) < self.SCORED:
+                n = lows[i]
+                if n.endswith(tail) and len(n) - len(tail) >= len(head):
+                    v = names[i][len(before) : len(n) - len(after)]
+                    found.setdefault(v.lower(), v)
+                i += 1
+            total = len(self.patterns)
+            scored = []
+            for v in found.values():
+                k = sum(1 for b, a in self.patterns if idx.is_name(b + v + a))
+                scored.append((-k, v.lower(), v, k))
+            scored.sort()
+            rows = [(v, "%d of %d tags" % (k, total)) for _nk, _lo, v, k in scored[: self.LIMIT]]
+        self.beginResetModel()
+        self._rows = rows
+        self._prefix = low
+        self.endResetModel()
+        return len(rows)
+
+
 def completion_model_for(project_dir: Optional[str]) -> TagCompletionModel:
     """The shared completion model of the page folder's scope."""
     key = None
@@ -172,14 +296,27 @@ def completion_model_for(project_dir: Optional[str]) -> TagCompletionModel:
 class ExpressionContext:
     """Tags, functions and trend tags for one sheet's expression fields."""
 
-    def __init__(self, project_dir: Optional[str] = None, extra_tags: Sequence[str] = ()):
+    def __init__(self, project_dir: Optional[str] = None, extra_tags: Sequence[str] = (), *, live=None):
         self.project_dir = project_dir
         self._extra = [t for t in (extra_tags or ()) if t]
+        #: () -> the simulation's tools (ui/simulate/sim_tools.SimTools) whose values a hover
+        #: shows; None: the Simulate window's page of this project, when one runs
+        self._live = live
+        # the function lists are read in the background (a field's hints and lookups
+        # never wait for them: FunctionCatalog.get_now, is_function)
+        try:
+            from ...io.cicode_catalog import preload
+
+            preload(project_dir)
+        except Exception:  # noqa: BLE001  # swallow-ok: a warm-up only
+            pass
         self._index = None
         self._functions = None
         self._trends = None
         self._names = None
         self._model = None
+        #: (when read, [(lower-case name, name, what it is)]) of the functions
+        self._function_rows = None
 
     @classmethod
     def for_document(cls, doc, extra_tags: Sequence[str] = ()) -> "ExpressionContext":
@@ -216,6 +353,23 @@ class ExpressionContext:
                 self._index = TagIndex(())
             self._names = None  # (the names follow the new index)
         return self._index
+
+    def names_ready(self) -> bool:
+        """The scope's tag index is read (a lookup now does not wait for the tables); when
+        it is not, it is read in the background."""
+        if not self.project_dir:
+            return True
+        if self._index is not None and self._index_current():
+            return True
+        from ...io.project import cached_tag_index
+
+        try:
+            if cached_tag_index(self.project_dir) is not None:
+                return True
+        except Exception:  # noqa: BLE001  # swallow-ok: not known: read in the background
+            pass
+        _warm_tags(self.project_dir)
+        return False
 
     def _index_current(self) -> bool:
         """The index held is the scope's current one (its tables' stamps as read)."""
@@ -264,6 +418,51 @@ class ExpressionContext:
             self._functions = FunctionCatalog(self.project_dir)
         return self._functions
 
+    def function(self, name: str):
+        """The Cicode function ``name`` (io.cicode_catalog.CicodeFunction), None when it
+        is not known; never waits for the built-in list."""
+        try:
+            return self.functions().get_now(name)
+        except Exception:  # noqa: BLE001  # swallow-ok: no function list: not known
+            return None
+
+    #: how long the function rows of the completion list are kept (s)
+    FUNCTION_ROWS_S = 5.0
+
+    def function_rows(self) -> list:
+        """(lower-case name, name, what it is) of every function, sorted: the completion
+        list's function rows (read again after FUNCTION_ROWS_S, a .ci file may change)."""
+        import time
+
+        from ...io.cicode_catalog import builtins_loading
+
+        now = time.monotonic()
+        hit = self._function_rows
+        if hit is not None and now - hit[0] < self.FUNCTION_ROWS_S:
+            return hit[1]
+        cat = self.functions()
+        try:
+            if cat._builtins is None and builtins_loading():
+                fns = list(cat.project())  # (the built-ins come with the next read)
+                now -= self.FUNCTION_ROWS_S
+            else:
+                fns = cat.all()
+        except Exception:  # noqa: BLE001  # swallow-ok: no function list: tags only
+            fns = []
+        rows = sorted(
+            (
+                (
+                    f.name.lower(),
+                    f.name,
+                    "Built-in function" if f.source == "built-in" else "%s function" % f.source,
+                )
+                for f in fns
+            ),
+            key=lambda r: r[0],
+        )
+        self._function_rows = (now, rows)
+        return rows
+
     def trend_tags(self):
         if self._trends is None:
             from ...io.project import trend_tags
@@ -292,6 +491,35 @@ class ExpressionContext:
         if any(t.lower() == low or low.startswith(t.lower() + ".") for t in self._extra):
             return True
         return self.is_function(name) is True or False
+
+    # -- the simulation ----------------------------------------------------------------
+    def live_tools(self):
+        """The tools of the simulation that runs a page of this scope (None: none runs)."""
+        if self._live is not None:
+            return self._live()
+        if not self.project_dir:
+            return None
+        from ..simulate.window import simulate_window
+
+        sw = simulate_window(create=False)
+        return sw.live_tools(self.project_dir) if sw is not None else None
+
+    def live_value(self, name: str) -> Optional[str]:
+        """``name``'s value in the simulation ('' while it is read; each call asks again),
+        None when no simulation runs the project."""
+        try:
+            t = self.live_tools()
+        except Exception:  # noqa: BLE001  # swallow-ok: no simulation: no value
+            return None
+        if t is None or not t.available():
+            return None
+        from ..simulate.sim_tools import SimTools
+        from ..simulate.watch_panel import watch_call
+
+        call = watch_call(name)
+        o = t.outcome(call)
+        t.call(call)  # (the next look shows the value it reads now)
+        return SimTools.outcome_text(o) if o is not None else ""
 
     def tag_range(self, name: str):
         """(ENG_ZERO, ENG_FULL) of a tag for Specify range."""
@@ -401,7 +629,12 @@ def wizard_button(
     widget, context: Optional[ExpressionContext], entries: Sequence[str] = ("tag", "function")
 ) -> QtWidgets.QToolButton:
     """A 'Wizard' tool button with the Insert Tag / Insert Function menu for
-    a command or text field."""
+    a command field (which also gets its Cicode colours, hints and completion:
+    cicode_assist)."""
+    if context is not None and "function" in entries:
+        from .cicode_assist import attach
+
+        attach(widget, context, "command")
     b = QtWidgets.QToolButton()
     b.setText("Wizard")
     b.setIcon(_wizard_icon())
@@ -413,14 +646,21 @@ def wizard_button(
 
 
 # -- the expression field -------------------------------------------------------
+#: the key that opens the larger box (cicode_box)
+BOX_KEY = "Shift+F2"
 _TOKEN = re.compile(r"[%s.]*$" % _cicode_names.PART_CHARS)  # the name before the cursor
 
 
 class ExpressionField(QtWidgets.QLineEdit):
-    """An expression field with Wizard, completion, advice and Specify range."""
+    """An expression field with Wizard, completion, advice and Specify range; an
+    expression or command field also colours its Cicode, underlines what is wrong, shows
+    the arguments of the function being typed and says what a name is on hover
+    (cicode_assist), and completes functions as well as names."""
 
     #: the stored value changed (the expression or its range)
     valueChanged = QtCore.Signal(str)
+    #: the field's menu holds the assist's actions itself (cicode_assist)
+    assist_menu = True
 
     @staticmethod
     def min_completion() -> int:
@@ -445,17 +685,20 @@ class ExpressionField(QtWidgets.QLineEdit):
         self._dynamic = None
         self._wizard = None
         self._advice_action = None
-        # the Cicode check (ui/expression_check): the Check action, and every pause in typing
-        # with Settings > Editing > 'Check expressions while typing'
+        self._advice = ""  # (the advice the mark shows: advice_text)
+        #: more advice on the value: value -> [Problem] (set_advice)
+        self._more_advice = None
+        # the Cicode check (ui/expression_check): at every pause in typing; the mark at the
+        # start of the field shows what it found (_update_advice)
         self._checker = None
-        self._check_action = None
         self._check_result: Optional[dict] = None
         self._checked_text: Optional[str] = None
         self._check_timer = QtCore.QTimer(self)
         self._check_timer.setSingleShot(True)
         # (the pause: Settings > Editing > Expressions > Check after a pause of, read when
         # the timer starts: ui/prefs/timing_options)
-        self._check_timer.timeout.connect(lambda: self.check_now(quiet=True))
+        self._check_timer.timeout.connect(self.check_now)
+        self._wizard_entries = tuple(wizard or ())
         if wizard:
             self._wizard = self.addAction(_wizard_icon(), QtWidgets.QLineEdit.TrailingPosition)
             self._wizard.setToolTip("Wizard: insert a tag or a Cicode function at the cursor")
@@ -463,30 +706,28 @@ class ExpressionField(QtWidgets.QLineEdit):
             self._wizard.triggered.connect(self._show_menu)
         self.textChanged.connect(self._inner_changed)
         self.editingFinished.connect(self._finished)
+        self._assist = None
+        if field_kind in ("expr", "command"):
+            from .cicode_assist import CicodeAssist
+
+            self._assist = CicodeAssist(self, context, field_kind)
+
+    @property
+    def assist(self):
+        """The field's Cicode assist (cicode_assist.CicodeAssist; None: a name field)."""
+        return self._assist
 
     # -- the Cicode check ---------------------------------------------------------------
     def set_checker(self, checker) -> None:
         """Give the field a checker (expression_check.ExpressionChecker, or anything with
-        ``check(text, kind, callback)``): the Check action appears."""
+        ``check(text, kind, callback)``): what is typed is compiled at every pause."""
         self._checker = checker
-        if checker is not None and self._check_action is None:
-            from ..notify import level_icon
-
-            self._check_action = self.addAction(level_icon("success"), QtWidgets.QLineEdit.TrailingPosition)
-            self._check_action.setToolTip(
-                "Check: compile this %s with the project's Cicode "
-                "(the simulator), nothing runs" % ("command" if self._kind == "command" else "expression")
-            )
-            self._check_action.triggered.connect(lambda: self.check_now())
-        if self._check_action is not None:
-            self._check_action.setVisible(checker is not None and not self.isReadOnly())
 
     def checker(self):
         return self._checker
 
-    def check_now(self, quiet: bool = False) -> bool:
-        """Compile the text now (``quiet``: say nothing when it compiles). False when there
-        is no checker or nothing to check."""
+    def check_now(self) -> bool:
+        """Compile the text now. False when there is no checker or nothing to check."""
         self._check_timer.stop()
         text = self.value().strip()
         if self._checker is None or not text:
@@ -495,38 +736,21 @@ class ExpressionField(QtWidgets.QLineEdit):
             self._update_advice()
             return False
         kind = "command" if self._kind == "command" else "expression"
-        if self._check_action is not None:
-            self._check_action.setToolTip("Checking…")
-        self._checker.check(text, kind, lambda result, t=text, q=quiet: self._checked(t, result, q))
+        self._checker.check(text, kind, lambda result, t=text: self._checked(t, result))
         return True
 
     def check_result(self) -> Optional[dict]:
         """The last check's result for the text as it is now (None: not checked)."""
         return self._check_result if self._checked_text == self.value().strip() else None
 
-    def _checked(self, text: str, result: dict, quiet: bool) -> None:
+    def _checked(self, text: str, result: dict) -> None:
         if text != self.value().strip():
             return  # (typed on meanwhile: the next check says)
         self._check_result = result
         self._checked_text = text
-        from ..expression_check import summary
-
-        said = summary(result)
-        if self._check_action is not None:
-            self._check_action.setToolTip(
-                ("No problem found." if not said and not result.get("error") else said)
-            )
+        if self._assist is not None:
+            self._assist.set_check_result(self.inner_text(), result)
         self._update_advice()
-        if not quiet and not said and not result.get("error"):
-            QtWidgets.QToolTip.showText(self.mapToGlobal(QtCore.QPoint(0, self.height())), "Compiles.", self)
-
-    def _live_check_wanted(self) -> bool:
-        try:
-            from ..prefs.settings import option
-
-            return bool(option("live_expression_check"))
-        except Exception:  # noqa: BLE001  # swallow-ok: no settings: no live check
-            return False
 
     # -- the stored value -------------------------------------------------------------
     def inner_text(self) -> str:
@@ -606,8 +830,6 @@ class ExpressionField(QtWidgets.QLineEdit):
     def setReadOnly(self, ro: bool) -> None:  # noqa: N802 -- Qt naming
         super().setReadOnly(ro)
         self._sync_wizard()
-        if self._check_action is not None:
-            self._check_action.setVisible(self._checker is not None and not ro)
         if self._range is not None:
             self._range.setReadOnly(ro)
 
@@ -626,17 +848,72 @@ class ExpressionField(QtWidgets.QLineEdit):
         self._sync_wizard()
 
     def contextMenuEvent(self, ev) -> None:  # noqa: N802 -- Qt naming
+        menu = self.context_menu(ev.pos())
+        menu.exec(ev.globalPos())
+        menu.deleteLater()
+
+    def context_menu(self, at: QtCore.QPoint) -> QtWidgets.QMenu:
+        """The field's menu for a click at ``at``: the assist's actions for the name there,
+        the edit actions, Insert and the larger box."""
         menu = self.createStandardContextMenu()
+        if self._assist is not None:
+            self._assist.add_to_menu(menu, self.cursorPositionAt(at))
         if self._wizard is not None and not self.isReadOnly():
             menu.addSeparator()
             self._menu.setTitle("Insert")
             menu.addMenu(self._menu)
-        menu.exec(ev.globalPos())
-        menu.deleteLater()
+        if self._assist is not None:
+            menu.addSeparator()
+            a = menu.addAction("Edit in a Larger Box…", self.edit_in_box)
+            a.setShortcut(QtGui.QKeySequence(BOX_KEY))
+        return menu
+
+    def edit_in_box(self) -> bool:
+        """Edit the text in a larger box (cicode_box) with the same help; True when it was
+        changed."""
+        from .cicode_box import CicodeBoxDialog
+
+        dlg = CicodeBoxDialog(
+            self.inner_text(), self._context, self._kind, read_only=self.isReadOnly(), parent=self
+        )
+        if not dlg.exec() or self.isReadOnly():
+            return False
+        new = dlg.text()
+        if new == self.inner_text():
+            return False
+        self.setFocus()
+        self.selectAll()
+        self.insert(new)  # (one undo step)
+        self.editingFinished.emit()
+        return True
+
+    def set_context(self, context: Optional[ExpressionContext]) -> None:
+        """Look names up in ``context`` (another project's simulation, say)."""
+        self._context = context
+        if self._assist is not None:
+            self._assist.context = context
+            self._assist._names = []
+            self._assist._meant = {}
+            self._assist.look_up_names()
+        if self._wizard is not None:
+            self._menu = build_wizard_menu(self, context, self._wizard_entries, self)
+        if context is not None and isinstance(self._dynamic, TagCompletionModel):
+            self.set_names(context.completion_model())
 
     # -- advice ------------------------------------------------------------------------
+    def set_advice(self, fn) -> None:
+        """More advice on the value: ``fn(value) -> [Problem]`` (a genie parameter's
+        composed names)."""
+        self._more_advice = fn
+        self._update_advice()
+
     def problems(self) -> List[V.Problem]:
         probs = V.advice(self.value(), self._kind, self._context)
+        if self._more_advice is not None:
+            try:
+                probs = probs + list(self._more_advice(self.value()) or ())
+            except Exception:  # noqa: BLE001  # swallow-ok: advice must never break a form
+                pass
         # what the Cicode check found for this text (the compiler's word comes first)
         r = self.check_result()
         if r is not None:
@@ -653,24 +930,30 @@ class ExpressionField(QtWidgets.QLineEdit):
         return probs
 
     def _update_advice(self) -> None:
+        """The mark at the start of the field: the problems (a cross for an error, else a
+        warning sign), or a tick when a check found that the text compiles."""
+        from ..notify import level_icon
+
         probs = self.problems() if self.inner_text().strip() else []
-        if self._advice_action is None and probs:
-            from ..notify import level_icon
-
+        r = self.check_result()
+        compiles = not probs and r is not None and not r.get("error") and not r.get("errors")
+        self._advice = V.summary(probs)
+        if self._advice_action is None and (probs or compiles):
             self._advice_action = self.addAction(level_icon("warning"), QtWidgets.QLineEdit.LeadingPosition)
-        if self._advice_action is not None:
-            self._advice_action.setVisible(bool(probs))
-            self._advice_action.setToolTip(V.summary(probs))
-            from ..notify import level_icon
-
-            self._advice_action.setIcon(
-                level_icon("error" if any(p.level == "ERROR" for p in probs) else "warning")
-            )
+        if self._advice_action is None:
+            return
+        a = self._advice_action
+        a.setVisible(bool(probs) or compiles)
+        if probs:
+            a.setToolTip(self._advice)
+            a.setIcon(level_icon("error" if any(p.level == "ERROR" for p in probs) else "warning"))
+        elif compiles:
+            a.setToolTip("Compiles.")
+            a.setIcon(level_icon("success"))
 
     def advice_text(self) -> str:
         """The advice currently shown ('' = none)."""
-        a = self._advice_action
-        return a.toolTip() if a is not None and a.isVisible() else ""
+        return self._advice
 
     # -- completion of the name under the cursor -----------------------------------------
     def set_names(self, names) -> None:
@@ -679,17 +962,9 @@ class ExpressionField(QtWidgets.QLineEdit):
         being typed."""
         self._dynamic = None
         if isinstance(names, TagCompletionModel):
-            c = QtWidgets.QCompleter(self)
-            c.setModel(names)
-            c.setCompletionMode(QtWidgets.QCompleter.UnfilteredPopupCompletion)
-            c.setCompletionColumn(0)
-            popup = QtWidgets.QTreeView()
-            popup.setHeaderHidden(True)
-            popup.setRootIsDecorated(False)
-            popup.setUniformRowHeights(True)
-            popup.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
-            popup.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
-            c.setPopup(popup)
+            from .cicode_assist import name_completer
+
+            c = name_completer(self, names)
             self._dynamic = names
         elif isinstance(names, QtCore.QAbstractItemModel):
             if not names.rowCount():
@@ -727,12 +1002,29 @@ class ExpressionField(QtWidgets.QLineEdit):
         if c is None:
             return []
         if self._dynamic is not None:
-            self._dynamic.update(prefix, self._extras())
+            self._dynamic.update(prefix, self._extras(), functions=self._functions())
             c.setCompletionPrefix(prefix)
             return self._dynamic.names()
         c.setCompletionPrefix(prefix)
         m = c.completionModel()
         return [m.index(i, 0).data() for i in range(m.rowCount())]
+
+    def _functions(self) -> Sequence[tuple]:
+        """The function rows the list offers (an expression or command field's)."""
+        ctx = self._context
+        if self._assist is None or ctx is None or not hasattr(ctx, "function_rows"):
+            return ()
+        if isinstance(self._dynamic, NameCompletionModel):
+            return ()
+        return ctx.function_rows()
+
+    def _no_names_at(self, pos: int) -> bool:
+        """A name typed from character ``pos`` is none of the project's (completes_names_at)."""
+        if self._assist is None:
+            return False
+        from .cicode_assist import completes_names_at
+
+        return not completes_names_at(self.inner_text(), self._assist.tokens(), pos)
 
     def _token(self):
         text = self.inner_text()
@@ -743,9 +1035,20 @@ class ExpressionField(QtWidgets.QLineEdit):
     def _complete_with(self, name: str) -> None:
         start, cur, _tok = self._token()
         self.setSelection(start, cur - start)
-        self.insert(name)
+        dyn = self._dynamic
+        add = ""
+        if dyn is not None and dyn.is_function_row(name) and self.inner_text()[cur : cur + 1] != "(":
+            add = "("
+        elif dyn is not None and dyn.is_level_row(name):
+            add = "."  # (and the level below it is offered)
+        self.insert(name + add)
+        if add == ".":
+            QtCore.QTimer.singleShot(0, self, self._update_completion)
 
     def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:  # noqa: N802 -- Qt naming
+        if event.key() == QtCore.Qt.Key_F2 and event.modifiers() == QtCore.Qt.ShiftModifier and self._assist:
+            self.edit_in_box()
+            return
         c = self._completer
         if (
             c is not None
@@ -762,31 +1065,29 @@ class ExpressionField(QtWidgets.QLineEdit):
             event.ignore()  # the popup takes them
             return
         super().keyPressEvent(event)
-        if c is None or self.isReadOnly():
-            return
         if not event.text() and event.key() not in (QtCore.Qt.Key_Backspace, QtCore.Qt.Key_Delete):
             return
-        _start, _cur, tok = self._token()
+        self._update_completion()
+
+    def _update_completion(self) -> None:
+        """Offer the names that start like the one before the cursor."""
+        c = self._completer
+        if c is None or self.isReadOnly():
+            return
+        start, _cur, tok = self._token()
         need = self.min_completion()
-        if need <= 0 or len(tok) < need or tok[0].isdigit():
+        if need <= 0 or len(tok) < need or tok[0].isdigit() or self._no_names_at(start):
             c.popup().hide()  # (a number: '> 100' is no tag name)
             return
         if self._dynamic is not None:
-            n = self._dynamic.update(tok, self._extras())
+            n = self._dynamic.update(tok, self._extras(), functions=self._functions())
             c.setCompletionPrefix(tok)
             if not n:
                 c.popup().hide()
                 return
-            popup = c.popup()
-            if isinstance(popup, QtWidgets.QTreeView):
-                popup.resizeColumnToContents(0)
-                popup.resizeColumnToContents(1)
-                width = popup.columnWidth(0) + popup.columnWidth(1) + 24
-            else:
-                width = popup.sizeHintForColumn(0)
-            rect = self.cursorRect()
-            rect.setWidth(min(900, max(300, width + popup.verticalScrollBar().sizeHint().width())))
-            c.complete(rect)
+            from .cicode_assist import show_completion
+
+            show_completion(c, self.cursorRect())
             return
         c.setCompletionPrefix(tok)
         if c.completionCount() == 0:
@@ -803,16 +1104,16 @@ class ExpressionField(QtWidgets.QLineEdit):
         self._menu.popup(self.mapToGlobal(QtCore.QPoint(self.width() - 20, self.height())))
 
     def _inner_changed(self, _t: str) -> None:
+        if self._check_result is not None and self._checked_text != self.value().strip():
+            self._update_advice()  # (the old verdict is not this text's)
         if self._quiet:
             return
         self._update_hint()
         self.valueChanged.emit(self.value())
-        if self._checker is not None and self._live_check_wanted():
+        if self._checker is not None and not self.isReadOnly():
             from ..prefs import timing_options
 
             self._check_timer.start(timing_options.EXPRESSION_CHECK_MS)  # (a pause: the check)
-        elif self._check_result is not None and self._checked_text != self.value().strip():
-            self._update_advice()  # (the old verdict is not this text's)
 
     def _finished(self) -> None:
         # a range typed the old way ('(Tag)^(0,100)') moves into the range fields
@@ -1172,3 +1473,4 @@ _caches.register("expression.names", _NAMES_CACHE, on=("refresh", "tests"))
 # (the completion lists of a tag scope, and the scopes warmed up)
 _caches.register("expression.completion_models", _COMPLETION_MODELS, on=("refresh", "tests"))
 _caches.register("expression.warmed", _WARMED, on=("refresh", "tests"))
+_caches.register("expression.sorted_names", _SORTED, on=("refresh", "tests"))

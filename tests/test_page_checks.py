@@ -253,3 +253,11 @@ def test_a_refresh_with_new_findings_keeps_the_rows_and_the_details_being_read()
         assert [panel.finding(k).message for k in range(3)] == ["m3", "m4", "new"]
     finally:
         panel.deleteLater()
+
+
+def test_names_in_follows_the_field_tokens():
+    from ctgedit.features.page_checks import names_in
+
+    assert names_in("%Tag%_PV + Ghost ! Comment") == (["Ghost"], [])
+    assert names_in("Arg1 + Tag", command=True) == (["Tag"], [])
+    assert names_in("Arg1 + Tag") == (["Arg1", "Tag"], [])

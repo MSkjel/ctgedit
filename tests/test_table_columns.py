@@ -107,6 +107,7 @@ _FILE_EXCEPTIONS = {
     "panels/library_panel.py": "Library tree: header hidden (EXCEPTIONS libTree)",
     "browser/project_tree.py": "project tree: header hidden",
     "panels/doc_tabs.py": "the Ctrl+Tab list of open pages: header hidden",
+    "objprops/cicode_assist.py": "the completion popup: header hidden, sized to its two columns",
 }
 
 

@@ -120,6 +120,7 @@ DIALOG_TOPICS = {
     "ObjectPropertiesDialog": _tab_anchor("properties"),
     "KeySequenceDialog": "properties#keyboard-commands",
     "ListPickerDialog": "properties#the-wizard",
+    "CicodeBoxDialog": "properties#edit-in-a-larger-box",
     "TagPickerDialog": "properties#insert-a-tag",
     "FunctionPickerDialog": "properties#insert-a-function",
     "TrendTagPickerDialog": "properties#insert-a-trend-tag",

@@ -72,6 +72,8 @@ STATE = {
     "ctgedit.format.dbfcols._COL_BUILDING": "column tables being built (their events)",
     "ctgedit.sim.client._STOPPING": "engine processes being stopped",
     "ctgedit.ui.simulate.viewer._SERVICES": "the open viewers' services",
+    "ctgedit.ui.objprops.cicode_assist._ALL": "the live fields' Cicode assists (weak)",
+    "ctgedit.io.cicode_catalog._PRELOADING": "the background reads of the function lists",
     "ctgedit.ui.simulate.window._WINDOWS": "the open Simulate windows",
     "ctgedit.ui.browser.dialog._NOTIFIER": "the page browser's change notifier",
     "ctgedit.ui.style.theme._ENGINES": "the theme's style engines",

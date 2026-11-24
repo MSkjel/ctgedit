@@ -473,6 +473,7 @@ class FakeServer:
         # the viewer's part (sim/client): below
         "pageModel",
         "answer",
+        "windowImage",
         "alarms",
         "equipment",
         "setAlarm",
@@ -1466,6 +1467,26 @@ class FakeServer:
         self.answers = getattr(self, "answers", [])
         self.answers.append(dict(args))
         conn.respond(msg, {"id": args.get("id"), "ok": True})
+
+    def want_image(self, body: dict) -> None:
+        """WinFile / WinPrint / WinCopy: the viewers that draw windows are asked for one
+        (``{id, window, page, function, xScale, yScale, clipboard}``)."""
+        self.images_wanted = getattr(self, "images_wanted", {})
+        self.images_wanted[body.get("id")] = dict(body)
+        self.broadcast("ctsim/imageWanted", dict(body))
+
+    def _r_windowImage(self, conn, msg, args):
+        self.images = getattr(self, "images", [])
+        self.images.append(dict(args))
+        want = getattr(self, "images_wanted", {}).pop(args.get("id"), None)
+        if want is None:
+            conn.respond(msg, None, ok=False, message="no window picture %s is waited for" % args.get("id"))
+            return
+        body = {"id": args.get("id"), "accepted": True}
+        if want.get("clipboard") and args.get("bmp"):
+            # (the engine sends the recoloured picture back; the fake sends it as it came)
+            body["bmp"] = args["bmp"]
+        conn.respond(msg, body)
 
     ALARMS = [
         {

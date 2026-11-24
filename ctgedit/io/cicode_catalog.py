@@ -22,6 +22,8 @@ class CicodeFunction:
     category: str = ""  # help category, or the .ci file for a project function
     source: str = "built-in"  # 'built-in' or the project name
     args: str = ""  # CtDraw's argument text: '(Mode, Value [,ClusterName])'
+    path: str = ""  # a project function's .ci file
+    line: int = 0  # the line of its FUNCTION (1 the first)
 
     def insert_text(self, arguments: bool = True) -> str:
         """What Insert Function puts at the cursor."""
@@ -206,13 +208,17 @@ def builtin_functions() -> Tuple[CicodeFunction, ...]:
 
 
 def builtins_loading() -> bool:
-    """True while another thread (:func:`preload`) is still reading the
-    built-in list: a lookup that must not wait (the advice shown after an
-    edit) can then say 'unknown' instead of blocking the UI."""
-    return _builtin_cached.cache_info().currsize == 0 and _BUILTIN_LOCK.locked()
+    """True while another thread (:func:`preload`) is reading the built-in list, or is
+    about to: a lookup that must not wait (the advice shown after an edit, a hover) can
+    then say 'unknown' instead of blocking the UI."""
+    if _builtin_cached.cache_info().currsize:
+        return False
+    return _BUILTIN_LOCK.locked() or any(t.is_alive() for t in _PRELOADING)
 
 
 _PRELOADED: set = set()
+#: the warm-up threads of :func:`preload` (builtins_loading)
+_PRELOADING: List[threading.Thread] = []
 
 
 def preload(project_dir: Optional[str] = None) -> Optional[threading.Thread]:
@@ -236,6 +242,7 @@ def preload(project_dir: Optional[str] = None) -> Optional[threading.Thread]:
 
     gcguard.before_worker()  # in the editor: only the GUI thread collects
     t = threading.Thread(target=work, name="cicode-catalog", daemon=True)
+    _PRELOADING[:] = [x for x in _PRELOADING if x.is_alive()] + [t]
     t.start()
     return t
 
@@ -269,13 +276,17 @@ def _strip_comments(src: str) -> str:
 def parse_ci(text: str, source: str = "", file: str = "") -> List[CicodeFunction]:
     """The callable functions a .ci file declares (PRIVATE ones skipped)."""
     out = []
-    for m in _DECL.finditer(_strip_comments(text)):
+    body = _strip_comments(text)  # (its lines are the file's)
+    for m in _DECL.finditer(body):
         if (m.group("scope") or "").upper() == "PRIVATE":
             continue
         args = " ".join(m.group("args").split())
         rtype = (m.group("type") or "").upper()
         sig = "%s%s(%s)" % (rtype + " " if rtype else "", m.group("name"), args)
-        out.append(CicodeFunction(m.group("name"), sig, "", file, source, _declared_argnames(args)))
+        line = body.count("\n", 0, m.start("name")) + 1
+        out.append(
+            CicodeFunction(m.group("name"), sig, "", file, source, _declared_argnames(args), line=line)
+        )
     return out
 
 
@@ -296,7 +307,7 @@ def _ci_functions(path: str, source: str) -> List[CicodeFunction]:
             text = f.read().decode(CODEC, "replace").replace("\r\n", "\n")
     except OSError:
         return []
-    funcs = parse_ci(text, source, os.path.basename(path))
+    funcs = [replace(f, path=path) for f in parse_ci(text, source, os.path.basename(path))]
     _CI_CACHE[path] = (sig, funcs)
     return funcs
 
@@ -354,6 +365,8 @@ class FunctionCatalog:
         self._project = None
         self._project_stamps = None
         self._names = None
+        #: lower-case name -> function (project functions first), kept with _names
+        self._by_name: Optional[Dict[str, CicodeFunction]] = None
 
     def builtins(self) -> Tuple[CicodeFunction, ...]:
         if self._builtins is None:
@@ -370,6 +383,7 @@ class FunctionCatalog:
             self._project = project_functions(self.project_dir)
             self._project_stamps = stamps
             self._names = None
+            self._by_name = None
         return self._project
 
     def all(self) -> List[CicodeFunction]:
@@ -382,8 +396,22 @@ class FunctionCatalog:
         return out
 
     def get(self, name: str) -> Optional[CicodeFunction]:
-        low = (name or "").lower()
-        return next((f for f in self.all() if f.name.lower() == low), None)
+        """The function ``name`` (a project's own before a built-in), None when unknown."""
+        project = self.project()  # (a changed .ci file drops the table held)
+        if self._by_name is None:
+            table: Dict[str, CicodeFunction] = {}
+            for f in list(project) + list(self.builtins()):
+                table.setdefault(f.name.lower(), f)
+            self._by_name = table
+        return self._by_name.get((name or "").lower())
+
+    def get_now(self, name: str) -> Optional[CicodeFunction]:
+        """:meth:`get` without waiting: while the built-in list is still being read in the
+        background only the project's functions are looked at."""
+        if self._by_name is None and self._builtins is None and builtins_loading():
+            low = (name or "").lower()
+            return next((f for f in self.project() if f.name.lower() == low), None)
+        return self.get(name)
 
     def is_function(self, name: str) -> Optional[bool]:
         """True / False; None when no function list is available at all (or

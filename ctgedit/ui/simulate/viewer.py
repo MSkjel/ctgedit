@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import os
 import threading
 import weakref
@@ -26,13 +27,17 @@ def page_key(page: Any) -> str:
 
 
 class ViewerServices:
-    """The modelWanted / dialog events of one session, kept for the window's tick."""
+    """The modelWanted / dialog / imageWanted events of one session, kept for the window's
+    tick."""
 
     def __init__(self, session: C.Session):
         self._session = weakref.ref(session)
         self._lock = threading.Lock()
         self._wanted: List[Dict[str, Any]] = []
         self._dialogs: List[Tuple[str, Dict[str, Any]]] = []
+        self._images: List[Dict[str, Any]] = []
+        # the recoloured pictures WinCopy put on the clipboard (bitmap file bytes)
+        self._clips: List[bytes] = []
         # window -> the page whose model went to it (by a tab or an answered modelWanted)
         self._sent: Dict[int, str] = {}
         self.users = 0
@@ -44,11 +49,13 @@ class ViewerServices:
     # -- the reader thread ------------------------------------------------------------------
     def on_event(self, name: str, body: Any) -> None:
         ev = name[6:] if name.startswith("ctsim/") else name
-        if ev not in ("modelWanted", "dialog", "dialogClosed"):
+        if ev not in ("modelWanted", "dialog", "dialogClosed", "imageWanted"):
             return
         body = dict(body) if isinstance(body, dict) else {}
         with self._lock:
-            if ev == "modelWanted":
+            if ev == "imageWanted":
+                self._images.append(body)
+            elif ev == "modelWanted":
                 try:
                     w = int(body.get("window"))
                 except TypeError, ValueError:
@@ -80,6 +87,53 @@ class ViewerServices:
         with self._lock:
             out, self._dialogs = self._dialogs, []
             return out
+
+    def take_images(self) -> List[Dict[str, Any]]:
+        """The imageWanted bodies ({id, window, page, function, xScale, yScale, clipboard}),
+        once."""
+        with self._lock:
+            out, self._images = self._images, []
+            return out
+
+    def take_clipboard(self) -> List[bytes]:
+        """The pictures for the clipboard (bitmap files) the simulator sent back, once."""
+        with self._lock:
+            out, self._clips = self._clips, []
+            return out
+
+    def send_image(self, image_id: Any, bmp: Optional[bytes], clipboard: bool = False) -> bool:
+        """``ctsim/windowImage {id, bmp}`` (a bitmap file, base64), or ``{id, none: true}``
+        when ``bmp`` is None (async). With ``clipboard``, the recoloured picture of the answer
+        goes to :meth:`take_clipboard`. False when the session is gone."""
+        s = self.session
+        if s is None or not s.alive:
+            return False
+        args: Dict[str, Any] = {"id": image_id}
+        if bmp is None:
+            args["none"] = True
+        else:
+            args["bmp"] = base64.b64encode(bmp).decode("ascii")
+
+        def done(body, err):
+            if err is not None:
+                _note_failed("the picture of window request %s" % image_id, err)
+                return
+            data = body.get("bmp") if clipboard and isinstance(body, dict) else None
+            if isinstance(data, str) and data:
+                try:
+                    raw = base64.b64decode(data)
+                except ValueError as e:
+                    log.warning("ctsim: the clipboard picture was not base64: %s", e)
+                    return
+                with self._lock:
+                    self._clips.append(raw)
+
+        try:
+            s.request_async("windowImage", args, callback=done, timeout=C.LOAD_TIMEOUT)
+        except C.CtsimError as e:
+            log.info("ctsim: the picture for request %s did not go: %s", image_id, e)
+            return False
+        return True
 
     def model_wanted_or_sent(self, window: Optional[int], page: str) -> bool:
         """The engine asked for (or got) the drawing of ``page`` in ``window``: a tab sends

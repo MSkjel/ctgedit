@@ -186,6 +186,8 @@ SIM_CHILD_ROLE = 2
 # of the 8 hidden pen lines the simulator draws the engine's samples into (sim_states).
 TREND_PART_ROLE = 4
 TREND_PENS = 8
+#: the markers a trend takes (DspMarkerNew)
+TREND_MARKERS = 10
 # Item data role on an alarm indicator's parts (_alarm_indicator_item): 'strip' = the four
 # priority-coloured strips, 'flag' = the flag genie (or its 20 x 20 placeholder): the simulator
 # recolours / swaps them for the priority of the active alarm (sim_states).
@@ -2787,8 +2789,9 @@ class PageScene(QtWidgets.QGraphicsScene):
                 pen.setWidth(0)
                 line.setPen(pen)
                 line.setData(TREND_PART_ROLE, "design")
-        # the runtime's pen lines in a clip box of their own (empty and hidden: the simulator
-        # draws the engine's samples into them; made here so it never adds child items per scan)
+        # the runtime's pen lines and markers in a clip box of their own (empty and hidden: the
+        # simulator draws the engine's samples and markers into them; made here so it never
+        # adds child items per scan)
         pens_box = QtWidgets.QGraphicsRectItem(l, t, r + 1 - l, b + 1 - t)
         pens_box.setPen(QtGui.QPen(QtCore.Qt.NoPen))
         pens_box.setBrush(QtGui.QBrush(QtCore.Qt.NoBrush))
@@ -2799,6 +2802,10 @@ class PageScene(QtWidgets.QGraphicsScene):
             pl.setPen(QtGui.QPen(QtCore.Qt.NoPen))
             pl.setVisible(False)
             pl.setData(TREND_PART_ROLE, "pen")
+        for _k in range(TREND_MARKERS):
+            mk = QtWidgets.QGraphicsLineItem(pens_box)
+            mk.setVisible(False)
+            mk.setData(TREND_PART_ROLE, "marker")
         group.addToGroup(pens_box)
         focus = QtWidgets.QGraphicsRectItem(l + 0.5, t + 0.5, r - l, b - t)
         pen = QtGui.QPen(QtGui.QColor(0, 0, 0))

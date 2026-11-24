@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import dataclasses
 import os
-import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from .. import cicode_names as _cn
+from .. import cicode_lex as L
 from . import find_replace as FR
 from ..model.document import ObjectKind
 
@@ -47,109 +46,6 @@ EXPRESSION_KEYS = frozenset(
         "DISABLED",
         "AI_EXPR",
         "EXPR",
-    )
-)
-
-_KEYWORDS = frozenset(
-    k.lower()
-    for k in (
-        "AND",
-        "OR",
-        "NOT",
-        "XOR",
-        "MOD",
-        "BITAND",
-        "BITOR",
-        "BITXOR",
-        "TRUE",
-        "FALSE",
-        "IF",
-        "THEN",
-        "ELSE",
-        "END",
-        "WHILE",
-        "DO",
-        "FOR",
-        "TO",
-        "SELECT",
-        "CASE",
-        "IS",
-        "RETURN",
-        "INT",
-        "REAL",
-        "STRING",
-        "OBJECT",
-        "LONG",
-        "QUALITY",
-        "TIMESTAMP",
-        "GLOBAL",
-        "MODULE",
-        "PUBLIC",
-        "PRIVATE",
-        "FUNCTION",
-        "BAD_HANDLE",
-    )
-)
-_STRING = re.compile(r'"(?:[^"\\]|\\.)*"')
-_CALL = re.compile(r"(?<![%s.])(%s%s*)\s*\(" % (_cn.PART_CHARS, _cn.START, _cn.PART))
-_IDENT = re.compile(r"(?<![%s.])%s[%s.]*" % (_cn.PART_CHARS, _cn.START, _cn.PART_CHARS))
-_NUMBER = re.compile(r"^[0-9]")
-#: the fields of an alarm tag (Alarm.On, Alarm.Ack ...): alarm tags are not in the tag
-#: index, so a name with one of these extensions is left to the compiler
-ALARM_FIELDS = frozenset(
-    f.lower()
-    for f in (
-        "On",
-        "Off",
-        "Ack",
-        "Disabled",
-        "Desc",
-        "Name",
-        "Tag",
-        "Category",
-        "Priority",
-        "Area",
-        "Help",
-        "Comment",
-        "Time",
-        "Date",
-        "State",
-        "Value",
-        "Millisec",
-        "Paging",
-        "PagingGroup",
-        "Type",
-        "SumState",
-        "SumDesc",
-        "Deadband",
-        "Rate",
-        "High",
-        "Low",
-        "HighHigh",
-        "LowLow",
-        "Delay",
-        "Deviation",
-        "Format",
-        "Var",
-        "VarOn",
-        "VarOff",
-        "LogState",
-        "Cluster",
-        "Equipment",
-        "Item",
-        "Quality",
-        "Custom1",
-        "Custom2",
-        "Custom3",
-        "Custom4",
-        "Custom5",
-        "Custom6",
-        "Custom7",
-        "Custom8",
-        "OnTime",
-        "OffTime",
-        "AckTime",
-        "DisabledTime",
     )
 )
 
@@ -260,25 +156,19 @@ def object_label(doc, index: int) -> str:
         return "Object %d" % index
 
 
-def names_in(text: str) -> Tuple[List[str], List[str]]:
-    """(the names ``text`` reads as tags, the functions it calls): strings and numbers
-    left out, keywords too."""
-    body = _STRING.sub('""', text or "")
-    calls = {m.group(1).lower() for m in _CALL.finditer(body)}
+def names_in(text: str, command: bool = False) -> Tuple[List[str], List[str]]:
+    """(the names ``text`` reads as tags, the functions it calls in lower case): once
+    each, the parts of names a genie makes left out (cicode_lex.references)."""
     names: List[str] = []
-    seen = set()
-    for m in _IDENT.finditer(body):
-        n = m.group(0)
-        low = n.lower()
-        if _NUMBER.match(n) or low in _KEYWORDS or low in calls or low in seen:
-            continue
-        # a call's name followed by its bracket is a function, not a tag
-        end = m.end()
-        rest = body[end : end + 4].lstrip()
-        if rest.startswith("("):
-            continue
-        seen.add(low)
-        names.append(n)
+    calls: set = set()
+    seen: set = set()
+    for r in L.references(text or "", command=command):
+        low = r.text.lower()
+        if r.kind == L.FUNCTION:
+            calls.add(low)
+        elif low not in seen:
+            seen.add(low)
+            names.append(r.text)
     return names, sorted(calls)
 
 
@@ -331,14 +221,14 @@ def check_document(doc, tags=None, functions=None, measure: Optional[Callable] =
     if tags is not None and not getattr(tags, "empty", lambda: False)():
         reported = set()
         for f in fields:
-            names, calls = names_in(f.text)
+            names, calls = names_in(f.text, command=f.kind == "command")
             for n in names:
                 low = n.lower()
                 if (f.index, low) in reported:
                     continue
                 if functions is not None and functions.is_function(n):
                     continue
-                if "." in n and n.rsplit(".", 1)[1].lower() in ALARM_FIELDS:
+                if L.alarm_field(n):
                     continue  # an alarm tag's field, or a tag's
                 known = tags.is_name(n)
                 if known is False:

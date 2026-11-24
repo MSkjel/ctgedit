@@ -604,11 +604,16 @@ def test_advice_never_blocks():
 
     msgs = [p.message for p in V.advice('AlarmAck(0, 0) + Foo(Pump_1) + Nope + ("x"', "expr", Ctx())]
     assert any("'Foo' is not a known Cicode function." in m for m in msgs)
-    assert any("'Nope' is not a known tag." in m for m in msgs)
+    assert any("'Nope' is not a tag in the project." in m for m in msgs)
     assert any("'(' is not closed" in m for m in msgs)
     assert not any("AlarmAck" in m or "Pump_1" in m for m in msgs)
     assert all(p.level == V.WARNING for p in V.advice("Foo(", "expr", Ctx()))
-    assert V.advice("%Tag% AND Foo()", "expr", Ctx()) == []  # a genie template
+    assert V.advice("%Tag%_PV AND Pump_1", "expr", Ctx()) == []  # a name a genie makes
+    assert [p.message for p in V.advice("%Tag% AND Foo()", "expr", Ctx())] == [
+        "'Foo' is not a known Cicode function."
+    ]
+    assert V.advice("Arg1 + Nope", "command", Ctx())[0].message == "'Nope' is not a tag in the project."
+    assert V.advice("1 == 2", "expr", None)[0].message == "Cicode has no operator ==."
     assert V.advice('"a ^" quote" + ")"', "expr", None) == []  # strings skipped
     assert "too long" in V.blocking("x" * 300, 253, "Movement expression")
     assert V.blocking("NOT Tag", 253) is None

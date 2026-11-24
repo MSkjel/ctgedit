@@ -30,7 +30,8 @@ process so the window stays responsive. Then:
 File > Save As… saves it into another library or under another name (at most 31 characters).
 
 > **Warning:** the Graphics Builder keeps loaded elements in memory and writes its own copy back
-> the next time it saves them. Restart it after changing a library in ctgedit.
+> the next time it saves them. Close it after changing a library in ctgedit (Tools > Close
+> Graphics Builder).
 
 > **Warning:** libraries that ship with Plant SCADA (Include, the style projects, SA_Library …)
 > are replaced on upgrade and shared by every project. ctgedit warns before saving into one

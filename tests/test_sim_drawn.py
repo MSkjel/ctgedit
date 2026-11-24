@@ -340,10 +340,193 @@ def test_button_and_boxes():
         }
     )
     items = sc.sim_layer().drawn_layer().items()
-    assert set(items) == {5, 6, 7, 8, 9}
+    assert set(items) == {5, 6, 7, 9}  # (a file display without a file shows nothing)
     stop = items[6].childrenBoundingRect()
     assert stop.width() >= 90 and stop.height() >= 30
     assert _text_item(items[5]).text() == "Start"
+
+
+def test_a_file_display_draws_each_line_on_its_an():
+    sc = _scene()
+    lines = [{"an": 20, "x": 10, "y": 40, "text": "alpha"}, {"an": 22, "x": 10, "y": 80, "text": "three"}]
+    entry = {"an": 20, "kind": "file", "x": 10, "y": 40, "text": "log.txt", "args": {"lines": lines}}
+    sc.sim_layer().apply_drawn({20: entry})
+    from PySide6 import QtWidgets
+    from ctgedit.render.sim_drawn import _walk
+
+    item = sc.sim_layer().drawn_layer().items()[20]
+    texts = sorted(
+        (it for it in _walk(item) if isinstance(it, QtWidgets.QGraphicsSimpleTextItem)),
+        key=lambda t: t.pos().y(),
+    )
+    assert [t.text() for t in texts] == ["alpha", "three"]
+    # each line sits on its own AN's baseline
+    assert [t.pos().x() for t in texts] == [10, 10]
+    assert texts[1].pos().y() - texts[0].pos().y() == 40 and texts[0].pos().y() < 40
+
+
+_RTF = (
+    r"{\rtf1\ansi\ansicpg1252\deff0{\fonttbl{\f0\fswiss Arial;}{\f1\fmodern Courier New;}}"
+    r"{\colortbl ;\red0\green0\blue0;\red255\green0\blue0;}"
+    r"{\stylesheet{\s0 Normal;}}{\info{\title Secret}}{\*\generator Msftedit;}" + "\r\n"
+    r"\pard\qc\cf2\b\fs36 Title\b0\par" + "\r\n"
+    r"\pard\cf1\fs20 one\tab two \i it\i0  \ul under\ulnone\par"
+    r"\qr\f1 caf\'e9 \{x\} a\\b\par"
+    r"\pard\par last}"
+)
+
+
+def test_rtf_reads_the_report_subset_as_one_paragraph_per_par():
+    from ctgedit.render.rtf_html import rtf_paragraphs, rtf_to_html
+
+    assert rtf_paragraphs(_RTF) == ["Title", "one\ttwo it under", "caf\u00e9 {x} a\\b", "", "last"]
+    html = rtf_to_html(_RTF)
+    assert html.count("<p ") == 5
+    for hidden in ("Normal", "Secret", "Msftedit", "Arial;", "red255"):
+        assert hidden not in html
+    paras = html.split("<p ")[1:]
+    assert "text-align:center" in paras[0] and "color:#ff0000" in paras[0]
+    assert "font-weight:bold" in paras[0] and "font-size:24.00px" in paras[0]  # 18 pt
+    assert "font-family:'Arial'" in paras[0]
+    assert 'font-style:italic;color:#000000">it<' in paras[1]
+    assert 'text-decoration:underline;color:#000000">under<' in paras[1]
+    assert "color:#000000" in paras[1] and "font-size:13.33px" in paras[1]
+    assert "text-align:right" in paras[2] and "font-family:'Courier New'" in paras[2]
+    assert "{x} a\\b" in paras[2]
+    assert "text-align:left" in paras[3] and "> </span>" in paras[3]  # an empty paragraph
+
+
+def _rich(an=7, x=20, y=20, w=200, h=60, **args):
+    return {
+        "an": an,
+        "kind": "richText",
+        "x": x,
+        "y": y,
+        "text": "rep.rtf",
+        "args": dict({"width": w, "height": h, "row": 0, "col": 0, "rtf": _RTF}, **args),
+        "serial": 1,
+    }
+
+
+def _rich_text(item):
+    from PySide6 import QtWidgets
+    from ctgedit.render.sim_drawn import _walk
+
+    return next(it for it in _walk(item) if isinstance(it, QtWidgets.QGraphicsTextItem))
+
+
+def _red(img, rect):
+    return any(r > 200 and g < 90 and b < 90 for r, g, b in _colours(img, rect))
+
+
+def test_a_rich_text_box_shows_its_rtf_clipped_to_the_box():
+    from PySide6 import QtWidgets
+
+    sc = _scene()
+    sc.sim_layer().apply_drawn({7: _rich()})
+    box = sc.sim_layer().drawn_layer().items()[7]
+    assert box.flags() & QtWidgets.QGraphicsItem.ItemClipsChildrenToShape
+    assert box.rect().getRect() == (20, 20, 200, 60)
+    t = _rich_text(box)
+    assert t.document().blockCount() == 5
+    assert t.document().findBlockByNumber(2).text() == "caf\u00e9 {x} a\\b"
+    assert (t.pos().x(), t.pos().y()) == (20, 20)
+    img = _render(sc)
+    assert _red(img, (20, 20, 220, 80))  # the red title
+    assert not _red(img, (0, 81, W, H))  # nothing below the box
+
+
+def test_a_rich_text_box_scrolls_to_its_row_and_column():
+    sc = _scene()
+    sc.sim_layer().apply_drawn({7: _rich(row=2, col=2)})
+    t = _rich_text(sc.sim_layer().drawn_layer().items()[7])
+    doc = t.document()
+    top = doc.documentLayout().blockBoundingRect(doc.findBlockByNumber(2)).top()
+    assert top > 0
+    assert (t.pos().x(), t.pos().y()) == (20 - 16, 20 - top)
+    assert not _red(_render(sc), (0, 0, W, H))  # the title is scrolled out of the box
+
+
+def test_a_rich_text_box_without_rtf_is_an_empty_box():
+    sc = _scene()
+    sc.sim_layer().apply_drawn({7: _rich(rtf="")})
+    box = sc.sim_layer().drawn_layer().items()[7]
+    assert box.rect().getRect() == (20, 20, 200, 60)
+    from PySide6 import QtWidgets
+    from ctgedit.render.sim_drawn import _walk
+
+    assert not [it for it in _walk(box) if isinstance(it, QtWidgets.QGraphicsTextItem)]
+
+
+def test_a_plot_draws_its_primitives_relative_to_its_an():
+    from PySide6 import QtCore, QtWidgets
+    from ctgedit.render.sim_drawn import _walk
+
+    pen = {"style": 0, "colour": 0x000000, "width": 1}
+    prims = [
+        {"op": "rect", "x1": 0, "y1": 0, "x2": 100, "y2": 50, "pen": dict(pen, style=5), "fill": 0xFFFF00},
+        {"op": "line", "x1": 0, "y1": 25, "x2": 100, "y2": 25, "pen": dict(pen, colour=0x0000FF)},
+        {"op": "rect", "x1": 100, "y1": 50, "x2": 0, "y2": 0, "pen": pen, "fill": -1},
+        {"op": "polyline", "points": [0, 50, 50, 0, 100, 10], "pen": dict(pen, colour=0x008000, width=3)},
+        {"op": "ellipse", "x1": 110, "y1": 0, "x2": 130, "y2": 20, "pen": pen, "fill": 0xFF0000},
+        {"op": "point", "x": 5, "y": 5, "pen": pen},
+        {"op": "marker", "x": 50, "y": 0, "marker": 6, "colour": 0xFF0000, "size": 8},
+        {
+            "op": "marker",
+            "x": 0,
+            "y": 50,
+            "marker": 20,
+            "colour": 0xFF0000,
+            "size": 8,
+            "symbol": "nolib.none",
+        },
+        {
+            "op": "text",
+            "x": 0,
+            "y": 70,
+            "text": "Flow",
+            "font": 1,
+            "orient": 1,
+            "fontInfo": {"face": "Arial", "height": 12, "fg": [0x000080, 0x000080], "bg": [-1, -1]},
+        },
+    ]
+    entry = {
+        "an": 30,
+        "kind": "plot",
+        "x": 50,
+        "y": 60,
+        "args": {"mode": 1, "output": "Display", "prims": prims},
+    }
+    sc = _scene()
+    sc.sim_layer().apply_drawn({30: entry})
+    item = sc.sim_layer().drawn_layer().items()[30]
+    parts = item.childItems()
+    assert len(parts) == len(prims)
+    # the shapes in page coordinates: the AN at (50, 60)
+    assert parts[0].rect().getRect() == (50, 60, 100, 50)
+    assert parts[0].brush().color().name() == "#ffff00" and parts[0].pen().style() == QtCore.Qt.NoPen
+    assert (parts[1].line().y1(), parts[1].pen().color().name()) == (85, "#0000ff")
+    assert parts[2].rect().getRect() == (50, 60, 100, 50)  # corners in any order
+    assert parts[2].brush().style() == QtCore.Qt.NoBrush
+    path = parts[3].path()
+    assert [(path.elementAt(k).x, path.elementAt(k).y) for k in range(path.elementCount())] == [
+        (50, 110),
+        (100, 60),
+        (150, 70),
+    ]
+    assert parts[3].pen().width() == 3
+    assert isinstance(parts[4], QtWidgets.QGraphicsEllipseItem)
+    # a filled square marker centred on its point; an unknown symbol marker as a dashed square
+    assert parts[6].path().boundingRect().getRect() == (96, 56, 8, 8)
+    assert parts[6].brush().color().name() == "#ff0000"
+    assert parts[7].pen().style() == QtCore.Qt.DashLine
+    # the text turned upwards with its baseline's start on (x, y)
+    texts = [it for it in _walk(parts[8]) if isinstance(it, QtWidgets.QGraphicsSimpleTextItem)]
+    assert [t.text() for t in texts] == ["Flow"]
+    assert (parts[8].pos().x(), parts[8].pos().y(), parts[8].rotation()) == (50, 130, -90)
+    assert texts[0].pos().y() < 0 and texts[0].brush().color().name() == "#000080"
+    img = _render(sc)
+    assert (255, 255, 0) in _colours(img, (55, 65, 60, 70))  # the frame's fill
 
 
 def test_array_entries_go_to_the_alarm_list_hook(monkeypatch):

@@ -809,6 +809,7 @@ class WindowShell:
                         an=self.doc.next_placement_an(),
                         problems=problems,
                         pickers=self._genie_pickers(),
+                        uses=self.doc.genie_uses_for(library, element, decl),
                     )
                     if dlg.exec() != QtWidgets.QDialog.Accepted:
                         return None

@@ -2045,6 +2045,25 @@ class SimulateWindow(QtWidgets.QMainWindow):
         )
         return True
 
+    def live_tools(self, project_dir: str):
+        """The tools of a running simulation of a page in ``project_dir`` (the page the
+        panels follow first), None when none runs: an editor field's hover shows its
+        values."""
+        if not project_dir or not self.isVisible():
+            return None
+        from .sim_tools import tools_of
+
+        key = os.path.normcase(os.path.abspath(project_dir))
+        for p in [self.panel_view()] + self.tab_pages() + list(self._views):
+            if p is None or getattr(p, "left", False) or not getattr(p, "page_path", ""):
+                continue
+            if os.path.normcase(os.path.dirname(os.path.abspath(p.page_path))) != key:
+                continue
+            t = tools_of(p.sim)
+            if t is not None and t.available():
+                return t
+        return None
+
     def find(self, page_path: str, views: bool = False) -> Optional[SimulatedPage]:
         """The tab showing ``page_path``; ``views`` = else a window shown inside a tab or
         over the window (an SA page opens in its workspace's pane, not a tab of its own)."""
@@ -2785,7 +2804,7 @@ class SimulateWindow(QtWidgets.QMainWindow):
         self.inputs.set_source(sim)
         self.alarms.set_source(sim)
         self.equipment.set_source(sim)
-        self.watch.set_source(sim)
+        self.watch.set_source(sim, v.page_path if v is not None else None)
 
     @staticmethod
     def _tab_key(p: "SimulatedPage"):
@@ -3872,7 +3891,51 @@ class SimulateWindow(QtWidgets.QMainWindow):
                 self._send_wanted_model(svc, want, p)
             for kind, body in svc.take_dialogs():
                 self.dialogs.handle(svc, kind, body)
+            for want in svc.take_images():
+                self._send_window_image(svc, want)
+            for data in svc.take_clipboard():
+                self._copy_window_image(data)
         self.dialogs.forget_closed()
+
+    def _send_window_image(self, svc, want: dict) -> None:
+        """ctsim/imageWanted (WinFile, WinPrint, WinCopy): the picture of the engine window,
+        drawn as the tab or window showing it draws its page, at the scale asked
+        (snapshot.tab_image); ``none`` when no tab shows that window."""
+        from .snapshot import bmp_bytes, tab_image
+
+        data = None
+        try:
+            window = int(want.get("window"))
+            sx = float(want.get("xScale") or 1.0)
+            sy = float(want.get("yScale") or 1.0)
+        except TypeError, ValueError:
+            window, sx, sy = None, 0.0, 0.0
+        view = None
+        if window is not None:
+            for p in self.pages():
+                fn = getattr(p.sim, "viewer", None)
+                if fn is not None and fn() is svc and p.engine_window() == window:
+                    view = p
+                    break
+        if view is not None and sx > 0 and sy > 0:
+            try:
+                img = tab_image(self, view, sx, sy)
+                data = bmp_bytes(img) if img is not None else None
+            except Exception:  # noqa: BLE001 -- the simulator gets 'none' and goes on
+                logsetup.note_exception("sim.window.send_window_image")
+                data = None
+        svc.send_image(want.get("id"), data, clipboard=bool(want.get("clipboard")))
+
+    def _copy_window_image(self, data: bytes) -> None:
+        """WinCopy's picture, recoloured by the simulator, to the clipboard."""
+        img = QtGui.QImage.fromData(data, "BMP")
+        if img.isNull():
+            return
+        QtGui.QGuiApplication.clipboard().setImage(img)
+        self.status_message(
+            "Cicode copied a picture of the window (%d x %d)." % (img.width(), img.height()),
+            at_least_ms=4000,
+        )
 
     def _send_wanted_model(self, svc, want: dict, owner: "SimulatedPage") -> None:
         """ctsim/modelWanted: the drawing of the page Cicode opened in a window (the editor's

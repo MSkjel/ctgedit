@@ -679,7 +679,7 @@ def test_expression_fields_have_the_cicode_check(tmp_path, fx_page):
     QTest.keyClicks(ed, "No_Such_Tag_Here")
     QTest.keyClick(ed, QtCore.Qt.Key_Return)
     _app().processEvents()
-    assert any("not a known tag" in p.message for p in ed.problems())
+    assert any("not a tag in the project" in p.message for p in ed.problems())
     assert ed._advice_action is not None and ed._advice_action.isVisible()
 
 

@@ -28,6 +28,71 @@ def _ctdraw_pids() -> list:
 STUDIO_IMAGE = "CitectIDE.exe"
 
 
+# -- ending the Graphics Builder ---------------------------------------------------------
+# CtDraw keeps every library element it loaded in memory and never reads the file again
+# (its lookup matches the project, library and element names only): a new Graphics Builder
+# is the one that shows a library ctgedit wrote. Studio goes on without it.
+
+
+def builder_windows(pid: int) -> list:
+    """The main windows (class ctDraw) of Graphics Builder process ``pid``."""
+    try:
+        import win32gui
+
+        from .winui import windows_of
+
+        return [h for h in windows_of(pid, cls=None) if win32gui.GetClassName(h) == "ctDraw"]
+    except Exception:  # noqa: BLE001  # swallow-ok: no window to ask
+        return []
+
+
+def ask_builders_to_close() -> list:
+    """Close every running Graphics Builder. With nothing open there (open_windows) it has
+    nothing to save and is ended at once; else it is asked as its Close button asks (it
+    asks about the pages it has not saved). Returns the PIDs that still run."""
+    import win32con
+    import win32gui
+
+    pids = _ctdraw_pids()
+    if not open_windows():
+        end_builders(pids)
+        return builders_running(pids)
+    left = []
+    for pid in pids:
+        wins = builder_windows(pid)
+        if not wins:
+            end_builders([pid])
+            continue
+        for h in wins:
+            with contextlib.suppress(Exception):
+                win32gui.PostMessage(h, win32con.WM_CLOSE, 0, 0)
+        left.append(pid)
+    return left
+
+
+def end_builders(pids) -> int:
+    """End the Graphics Builder processes ``pids`` now (what they have not saved is lost).
+    Returns how many ended."""
+    import subprocess
+
+    ended = 0
+    for pid in pids:
+        r = subprocess.run(
+            ["taskkill", "/F", "/PID", str(int(pid))],
+            capture_output=True,
+            text=True,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        ended += (r.stdout or "").count("SUCCESS")
+    return ended
+
+
+def builders_running(pids=None) -> list:
+    """The running Graphics Builder PIDs (of ``pids`` when given)."""
+    now = _ctdraw_pids()
+    return [p for p in now if pids is None or p in set(pids)]
+
+
 def studio_running() -> bool:
     try:
         from .winui import pids_of
@@ -73,8 +138,7 @@ class GraphicsBuilder:
         self._pumped = False
         # Dispatch ATTACHES to an already-running Graphics Builder (the user's
         # window / Studio's embedded builder). Only an instance WE started may
-        # be hidden, Quit or killed: that closes the user's editor (and force-closing
-        # it crashes Studio).
+        # be hidden, Quit or killed: the user's holds their unsaved pages.
         self.spawned_pids: set = set()
         self.attached = False
 
@@ -161,8 +225,8 @@ class GraphicsBuilder:
     def reap(pids=None) -> int:
         """Kill the CtDraw32.exe processes in ``pids`` (the ones a helper
         spawned); with ``pids=None`` every CtDraw32 EXCEPT the one Plant SCADA
-        Studio owns (for the DEV tools: killing Studio's builder breaks Studio,
-        and the COM server needs Studio running). Returns count killed."""
+        Studio owns (for the DEV tools: that one is the user's, with their
+        unsaved pages). Returns count killed."""
         killed = 0
         try:
             import subprocess
@@ -274,6 +338,17 @@ def _builder_window() -> bool:
 def open_pages() -> list:
     """(project, page) of every page open in a running Graphics Builder."""
     out = []
+    for title in open_windows():
+        proj, sep, page = title.partition(" - ")
+        if sep:
+            out.append((proj.strip(), page.strip()))
+    return out
+
+
+def open_windows() -> list:
+    """The titles of the pages and library elements open in a running Graphics Builder
+    ('Project - Page', or the element's)."""
+    out = []
     if not _builder_window():
         return out  # no Graphics Builder frame: nothing is open there
     try:
@@ -297,10 +372,7 @@ def open_pages() -> list:
     def child(h, _):
         try:
             if win32gui.GetClassName(h) == "ctDraw.canvas":
-                title = win32gui.GetWindowText(h)
-                proj, sep, page = title.partition(" - ")
-                if sep:
-                    out.append((proj.strip(), page.strip()))
+                out.append(win32gui.GetWindowText(h).strip())
         except Exception:  # noqa: BLE001
             pass
         return True

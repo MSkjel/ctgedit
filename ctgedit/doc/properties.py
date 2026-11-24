@@ -1670,6 +1670,29 @@ class PropertyEdits:
                 run[rkey] = decl
         return decl
 
+    def genie_param_uses(self, index: int):
+        """Where each parameter of the placed genie goes in its element
+        (features/genie_uses.ParamUses by lower-case name); None when its element is
+        not found."""
+        from ..features import genie_uses as GU
+
+        try:
+            from ..format.symbols import reference_from_object
+
+            ref = reference_from_object(self.parsed.page.objects[index])
+            resolver = self._resolver()
+            resolved = resolver.resolve(ref) if (resolver and ref) else None
+            if resolved is None:
+                return None
+            return GU.element_uses(
+                resolved.library_path, ref.element, list(self.genie_declared_params(index) or ())
+            )
+        except Exception:  # noqa: BLE001
+            from ..infra import logsetup
+
+            logsetup.note_exception("properties.genie_param_uses")
+            return None
+
     def _instance_bindings(self, index: int) -> "Optional[OrderedDict[str, str]]":
         """A CLASSIC genie instance's own bindings = its root's level-N value
         bag (strict decode, what CtDraw re-composes the instance from), minus

@@ -597,6 +597,8 @@ class ViewState:
         "act_find",
         "act_replace",
         "act_pack_libs",
+        # Tools > Close Graphics Builder: another program, also with nothing open
+        "act_close_builder",
         "act_rotate",
         "act_mirror",
         "act_rulers",

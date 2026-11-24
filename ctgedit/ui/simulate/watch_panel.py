@@ -1,8 +1,11 @@
-"""The Watch tab: live tag and function values."""
+"""The Watch tab: live tag and function values. Its two boxes are Cicode fields
+(objprops/expression.ExpressionField): names and functions completed, colours, hints, and
+a name's value on hover."""
 
 from __future__ import annotations
 from ..style.theme import sp as _sp
 
+import os
 import re
 from typing import List, Optional
 
@@ -37,11 +40,16 @@ class WatchPanel(QtWidgets.QWidget):
         super().__init__(parent)
         self.setAccessibleName("Watch")
         self._src = None
+        self._project_dir: Optional[str] = None
         lay = QtWidgets.QVBoxLayout(self)
         lay.setContentsMargins(_sp(1), _sp(1), _sp(1), _sp(1))
         lay.setSpacing(_sp(1))
         row = QtWidgets.QHBoxLayout()
-        self.add_edit = QtWidgets.QLineEdit()
+        from ..objprops.expression import ExpressionField
+
+        self.context = self._make_context(None)
+        self.add_edit = ExpressionField(self.context, field_kind="expr")
+        self.add_edit.set_names(self.context.completion_model())
         self.add_edit.setPlaceholderText("A tag, or one function call")
         self.add_edit.setAccessibleName("Watch")
         self.add_edit.setToolTip(
@@ -74,7 +82,8 @@ class WatchPanel(QtWidgets.QWidget):
         self.note.setWordWrap(True)
         lay.addWidget(self.note)
         lay.addWidget(QtWidgets.QLabel("Call a function in the page's window:"))
-        self.call_edit = QtWidgets.QLineEdit()
+        self.call_edit = ExpressionField(self.context, field_kind="command")
+        self.call_edit.set_names(self.context.completion_model())
         self.call_edit.setAccessibleName("Call")
         self.call_edit.setPlaceholderText("Function(arguments), then Enter")
         self.call_edit.setToolTip(
@@ -178,8 +187,21 @@ class WatchPanel(QtWidgets.QWidget):
         return super().eventFilter(obj, ev)
 
     # -- the source -------------------------------------------------------------------------
-    def set_source(self, src) -> None:
+    def _make_context(self, project_dir: Optional[str]):
+        from ..objprops.expression import ExpressionContext
+
+        return ExpressionContext(project_dir, live=self._tools)
+
+    def set_source(self, src, page_path: Optional[str] = None) -> None:
+        """Watch simulation ``src``, which runs the page ``page_path`` (its project's names
+        are the ones the boxes offer)."""
         self._src = src
+        pdir = os.path.dirname(os.path.abspath(page_path)) if page_path else None
+        if pdir != self._project_dir:
+            self._project_dir = pdir
+            self.context = self._make_context(pdir)
+            for f in (self.add_edit, self.call_edit):
+                f.set_context(self.context)
         self._show_note()
         self.refresh()
 

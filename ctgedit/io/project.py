@@ -993,6 +993,40 @@ class TagIndex:
                 return True
         return False
 
+    def equipment_children(self, prefix: str, limit: int = 500) -> List[Tuple[str, str]]:
+        """(name, 'equipment' or 'item') of the level below the equipment ``prefix`` (it ends
+        in '.'): 'Area.Pump1.' gives 'Area.Pump1.Motor' (equipment) and 'Area.Pump1.Speed'
+        (an item), sorted, as the tables spell them; [] when no equipment starts so."""
+        low = (prefix or "").lower()
+        if not low.endswith(".") or len(low) < 2:
+            return []
+        n = len(low)
+        found: Dict[str, Tuple[str, str]] = {}
+        for _k, s in self._item_sources():
+            order = _item_rows(s.table)
+            eq, it = s.equip, s.item
+
+            def keyf(r, eq=eq, it=it):
+                return _item_key(eq[r], it[r])
+
+            i = bisect.bisect_left(order, low, key=keyf)
+            while i < len(order) and len(found) < limit:
+                r = order[i]
+                key = keyf(r)
+                if not key.startswith(low):
+                    break
+                rest = key[n:]
+                seg = rest.split(".", 1)[0]
+                full = (eq[r] + "." + it[r])[: n + len(seg)]
+                if "." in rest:
+                    found.setdefault(full.lower(), (full, "equipment"))
+                    # (past every name below it: '/' sorts just after '.')
+                    i = bisect.bisect_left(order, low + seg + "/", lo=i + 1, key=keyf)
+                else:
+                    found.setdefault(full.lower(), (full, "item"))
+                    i += 1
+        return [found[k] for k in sorted(found)]
+
     def is_name(self, name: str) -> bool | None:
         """True when ``name`` (or its tag before a '.field' extension, or an
         equipment it names) is known; None when the index is empty."""

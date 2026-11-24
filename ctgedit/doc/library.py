@@ -1564,6 +1564,22 @@ class LibraryEdits:
         # the declarations without composing the genie (a full load of a large genie is slow)
         return GP.declared_params_of(path, element)
 
+    def genie_uses_for(self, library: str, element: str, params=(), ext: str = "ctm"):
+        """Where each parameter of genie ``library.element`` goes (features/genie_uses);
+        None when the library is not found."""
+        from ..features import genie_uses as GU
+
+        path = self.library_path(library, element, ext)
+        if path is None:
+            return None
+        try:
+            return GU.element_uses(path, element, list(params or ()))
+        except Exception:  # noqa: BLE001
+            from ..infra import logsetup
+
+            logsetup.note_exception("library.genie_uses_for")
+            return None
+
     def place_library_element(
         self,
         library: str,
