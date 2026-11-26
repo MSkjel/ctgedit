@@ -190,10 +190,7 @@ def test_typing_in_a_control_reaches_the_engine_and_the_code_writes_back(servers
         assert wait_for(lambda: sim.page_active())
         assert sim.set_object_property(6, "Text", "Pump")
         assert wait_for(
-            lambda: (
-                getattr(srv, "object_sets", None)
-                == [{"window": sim.window, "an": 6, "property": "Text", "value": "Pump"}]
-            )
+            lambda: srv.object_sets == [{"window": sim.window, "an": 6, "property": "Text", "value": "Pump"}]
         )
         # a refused one (no control there) says why, once
         assert sim.set_object_property(99, "Text", "x")
@@ -223,11 +220,11 @@ def test_the_trend_history_option_is_sent(servers, hub, page_file):
         sim.start(page_file, _rect_page())
         assert wait_for(lambda: sim.page_active())
         # (an attached server: the connect sends nothing, the user's change does)
-        assert getattr(srv, "seed_sets", None) is None
+        assert srv.seed_sets == []
         sim.set_seed_trend_history(True)
-        assert wait_for(lambda: getattr(srv, "seed_sets", None) == [True])
+        assert wait_for(lambda: srv.seed_sets == [True])
         sim.set_seed_trend_history(False)
-        assert wait_for(lambda: getattr(srv, "seed_sets", None) == [True, False])
+        assert wait_for(lambda: srv.seed_sets == [True, False])
     finally:
         sim.stop()
         srv.stop()
@@ -409,13 +406,9 @@ def test_the_page_code_error_stop_and_the_fast_startup_are_sent(servers, hub, pa
         sim.start(page_file, _rect_page())
         assert wait_for(lambda: sim.page_active())
         sim.set_foreground_error_break(True)
-        assert wait_for(
-            lambda: {"foregroundErrorBreak": True} in (getattr(srv, "option_requests", None) or ())
-        )
+        assert wait_for(lambda: {"foregroundErrorBreak": True} in srv.option_requests)
         sim.set_foreground_error_break(False)
-        assert wait_for(
-            lambda: {"foregroundErrorBreak": False} in (getattr(srv, "option_requests", None) or ())
-        )
+        assert wait_for(lambda: {"foregroundErrorBreak": False} in srv.option_requests)
     finally:
         sim.stop()
         srv.stop()

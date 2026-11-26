@@ -173,6 +173,19 @@ class FakeServer:
         self.tags = make_tags(tags)
         self.by_name = {t["name"].lower(): t for t in self.tags}
         self.conns = []
+        # request records, made up front: a test waiting on one never meets a missing attribute
+        self.navigated: list = []
+        self.option_requests: list = []
+        self.seed_sets: list = []
+        self.reloads: list = []
+        self.opened: list = []
+        self.models: list = []
+        self.answers: list = []
+        self.images: list = []
+        self.alarm_queries: list = []
+        self.alarm_sets: list = []
+        self.object_sets: list = []
+        self.equipment_sets: list = []
         self.lock = threading.RLock()
         self.stopping = False
         self.running = False
@@ -663,7 +676,7 @@ class FakeServer:
                 w = 0
                 self.windows[0] = page
                 method = "pageDisplay"
-            self.navigated = getattr(self, "navigated", []) + [dict(args)]
+            self.navigated.append(dict(args))
             # what the engine says of the startup code it waited for
             startup = (
                 {"state": "settled", "waitedMs": 0, "simulatedMs": 1000}
@@ -984,7 +997,7 @@ class FakeServer:
 
     def _r_options(self, conn, msg, args):
         # (every option request, as sent: the debugger options among them)
-        self.option_requests = getattr(self, "option_requests", []) + [dict(args)]
+        self.option_requests.append(dict(args))
         changed = False
         if "simulateUndefined" in args:
             on = bool(args["simulateUndefined"])
@@ -994,7 +1007,7 @@ class FakeServer:
             on = bool(args["seedTrendHistory"])
             changed = changed or on != getattr(self, "seed_trend_history", False)
             self.seed_trend_history = on
-            self.seed_sets = getattr(self, "seed_sets", []) + [on]
+            self.seed_sets.append(on)
         outside = getattr(self, "outside", None) or {
             "dll": "off",
             "sql": "off",
@@ -1068,7 +1081,7 @@ class FakeServer:
         names for the file's base name (engine/PROTOCOL.md)."""
         f = str(args.get("file") or "")
         with self.lock:
-            self.reloads = getattr(self, "reloads", []) + [f]
+            self.reloads.append(f)
         errs = (getattr(self, "reload_errors", None) or {}).get(os.path.basename(f).lower())
         body = {
             "accepted": True,
@@ -1105,7 +1118,7 @@ class FakeServer:
             w = min(set(range(len(self.windows) + 1)) - set(self.windows))
         w = int(w)
         with self.lock:
-            self.opened = getattr(self, "opened", []) + [dict(args)]
+            self.opened.append(dict(args))
         self.windows[w] = args.get("name", "")
         # before the answer: pageChanged events of the window's earlier display ([(serial,
         # objects)]: an engine whose events go out on another thread than its answers)
@@ -1452,7 +1465,6 @@ class FakeServer:
         self.broadcast("ctsim/modelWanted", {"window": int(window), "page": page, "path": path})
 
     def _r_pageModel(self, conn, msg, args):
-        self.models = getattr(self, "models", [])
         self.models.append((int(args.get("window", 0)), args.get("model")))
         conn.respond(msg, {"window": int(args.get("window", 0)), "ok": True})
 
@@ -1464,7 +1476,6 @@ class FakeServer:
         self.broadcast("ctsim/dialogClosed", {"id": dialog_id})
 
     def _r_answer(self, conn, msg, args):
-        self.answers = getattr(self, "answers", [])
         self.answers.append(dict(args))
         conn.respond(msg, {"id": args.get("id"), "ok": True})
 
@@ -1476,7 +1487,6 @@ class FakeServer:
         self.broadcast("ctsim/imageWanted", dict(body))
 
     def _r_windowImage(self, conn, msg, args):
-        self.images = getattr(self, "images", [])
         self.images.append(dict(args))
         want = getattr(self, "images_wanted", {}).pop(args.get("id"), None)
         if want is None:
@@ -1589,7 +1599,6 @@ class FakeServer:
             rows = [a for a in rows if a["equipment"] in ("Pump1", "Tank1")]
         start = int(args.get("start") or 0)
         count = int(args.get("count") if args.get("count") is not None else 5000)
-        self.alarm_queries = getattr(self, "alarm_queries", [])
         self.alarm_queries.append(dict(args))
         conn.respond(
             msg,
@@ -1618,7 +1627,6 @@ class FakeServer:
             return
         self._alarm_rows()
         self.alarm_states[name] = state
-        self.alarm_sets = getattr(self, "alarm_sets", [])
         self.alarm_sets.append(dict(args))
         self.alarm_serial = getattr(self, "alarm_serial", 0) + 1
         a = next(x for x in self._alarm_rows() if x["tag"].lower() == name)
@@ -1636,7 +1644,7 @@ class FakeServer:
                 msg, {"window": w, "an": an}, ok=False, message="AN %d is no ActiveX control of the page" % an
             )
             return
-        self.object_sets = getattr(self, "object_sets", []) + [dict(args)]
+        self.object_sets.append(dict(args))
         ctl = getattr(self, "controls", {}).setdefault(w, {})
         entry = ctl.setdefault(an, {"an": an, "name": "AN%d" % an, "properties": {}, "serial": 0})
         changed = entry["properties"].get(prop) != value
@@ -1693,7 +1701,6 @@ class FakeServer:
                 )
                 return
             e[k.upper()] = str(v)
-        self.equipment_sets = getattr(self, "equipment_sets", [])
         self.equipment_sets.append(dict(args))
         conn.respond(msg, {"name": e["name"], "fields": {k: e[k] for k in ("MODE", "STATE", "DRMODE")}})
 

@@ -699,12 +699,8 @@ def checker_for(project_dir: Optional[str]):
 
 
 class GenieCicodeCheck:
-    """Does the genie's Cicode work with this value? The checker of a parameter's field:
-    each command and expression of the genie the parameter goes into, with the form's
-    values put in (the value checked for this parameter), compiled as the page compiler
-    would, running nothing (ctsim/checkExpression). The parameters not filled in yet are
-    left to the template rule (sim/checks.without_template). Each problem names the
-    field it is in."""
+    """A parameter field's checker: compiles each command and expression of the genie the
+    parameter goes into, with the form's values filled in. Problems are prefixed by field."""
 
     KINDS = ("command", "expression")
 
@@ -750,8 +746,8 @@ class GenieCicodeCheck:
 
 
 def _merged(results) -> dict:
-    """One result of the results of several fields [(label, result)]: their problems, each
-    headed by its field (the column is the field's, not the value's: left out)."""
+    """One check result from several fields' [(label, result)], each problem prefixed by its
+    field (columns dropped: they are the field's, not the value's)."""
     errors, warnings = [], []
     for label, r in results:
         if r.get("error"):

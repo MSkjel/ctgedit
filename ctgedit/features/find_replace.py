@@ -125,10 +125,8 @@ COMPOSITE_PARAM_REASON = "Change a composite genie's options with Edit Composite
 
 @dataclass(frozen=True)
 class NameFilter:
-    """Which names a search keeps: ``include`` and ``exclude`` are regular expressions,
-    without case, found anywhere in a name ('' = no condition). A name list passes when one
-    of its names matches ``include`` and none matches ``exclude``; an empty list passes
-    only when there is no ``include``."""
+    """Names a search keeps: ``include`` / ``exclude`` are regular expressions, without case,
+    found anywhere in a name ('' = no condition)."""
 
     include: str = ""
     exclude: str = ""
@@ -186,14 +184,11 @@ class FindOptions:
     regex: bool = False
     #: the pages searched, by name ('Mixing_L3')
     pages: NameFilter = NO_FILTER
-    #: the fields, by key or by the name the Field column shows ('CMD', 'Command (CMD)',
-    #: 'Tag', 'Genie parameter Tag')
+    #: the fields, by key or Field column name ('CMD', 'Command', 'Tag')
     fields: NameFilter = NO_FILTER
-    #: the genies and symbols an object is placed by or inside, as library.element
-    #: ('pumps.pump_1'); an object in none has no name here
+    #: the genie or symbol an object belongs to, as library.element ('pumps.pump_1')
     genies: NameFilter = NO_FILTER
-    #: the objects by name or AN ('Pump1', 'AN12'), their own or a group's they are in;
-    #: the page's own properties have none
+    #: the objects by name or AN ('Pump1', 'AN12'), or the group or genie they are in
     objects: NameFilter = NO_FILTER
 
     def filter_problem(self) -> str:
@@ -814,8 +809,7 @@ def _doc_page_name(doc) -> str:
 
 
 def _linked(objs, sem, a: int) -> bool:
-    """Record ``a`` places a library element (a genie or a symbol; the page template's own
-    root is not one)."""
+    """Record ``a`` places a genie or symbol (the page template's root does not count)."""
     return (
         0 <= a < len(objs)
         and bool(objs[a].class_flag and objs[a].subtype_size & 0x1)

@@ -2,7 +2,6 @@
 
 import os
 import shutil
-import time
 import weakref
 
 import pytest
@@ -295,4 +294,3 @@ def test_the_chip_is_short_and_its_tip_has_each_kind():
     assert cs.chip_tip() == "1 new, 1 changed, 1 removed, page changed"
     assert ChangeSet(changes=[Change("changed", 2, None, "b")]).chip_text() == "1 changed"
     assert ChangeSet().chip_text() == "No changes"
-    time.sleep(0)

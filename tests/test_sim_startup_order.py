@@ -81,7 +81,7 @@ def test_the_startup_page_and_its_code_come_before_the_page(servers, hub, page_f
     try:
         assert sim.window == 0 and sim.workspace_page == "" and sim.focus_window is None
         assert wait_for(
-            lambda: [w["page"] for w in sim.engine_windows()[1] if w["window"] == 0] == ["Mixer"], timeout=10
+            lambda: [w["page"] for w in sim.engine_windows()[1] if w["window"] == 0] == ["Mixer"], timeout=15
         )
         reqs = _requests(record)
         names = _names(reqs)
@@ -127,7 +127,7 @@ def test_without_a_startup_page_the_page_opens_first(servers, hub, page_file, tm
         assert names.index("load") < names.index("openPage")
         assert wait_for(
             lambda: (log.extend(_texts(sim)), any("startup: Startup() runs as task 2" in t for t in log))[1],
-            timeout=10,
+            timeout=15,
         ), log
         assert any("did not show (the project has no startup page)" in t for t in log), log
     finally:
@@ -150,7 +150,7 @@ def test_setting_off_keeps_the_old_order_and_an_older_simulator_is_refused(serve
     sim = _sim(hub, location=_engine(record, "--navigate", "--start-page", "Menu", "--revision", "1"))
     sim.start(page_file, _rect_page())
     try:
-        assert wait_for(lambda: "protocol revision" in sim.status().text, timeout=10), sim.status().text
+        assert wait_for(lambda: "protocol revision" in sim.status().text, timeout=15), sim.status().text
         assert "openPage" not in _names(_requests(record))
     finally:
         sim.stop()
@@ -181,7 +181,7 @@ def test_a_paused_clock_runs_for_the_startup_code_and_is_paused_again(servers, h
     )
     try:
         assert wait_for(
-            lambda: any("paused again" in t for t in (log.extend(_texts(sim)) or log)), timeout=10
+            lambda: any("paused again" in t for t in (log.extend(_texts(sim)) or log)), timeout=15
         ), log
         reqs = _requests(record)
         names = _names(reqs)

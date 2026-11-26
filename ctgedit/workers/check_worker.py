@@ -1,6 +1,4 @@
-"""Tools > Check Project: Check Page's checks on every page of some projects, in a helper
-process (the pages as saved; each project's Cicode compiled by its own engine session); and
-Replace References, the page references it found given new names after Rename Pages."""
+"""Check Project and Replace References in a helper process."""
 
 from __future__ import annotations
 
@@ -45,9 +43,8 @@ def _row(path: str, doc, f) -> dict:
 
 
 def check(req: dict, progress=None, skip_now=None) -> dict:
-    """The findings of every page of ``req['projects']``: Check Page's own checks, then
-    each expression and command field compiled by the engine (``req['engine']``: the
-    simulator to start; '' = the bundled one)."""
+    """The findings of every page of ``req['projects']``: Check Page's checks, then the engine's
+    check of each expression and command (``req['engine']``: the simulator, '' = bundled)."""
     from ..editing import EditableDocument
     from ..features import page_checks as PC
     from ..sim import client as C
@@ -108,10 +105,8 @@ def check(req: dict, progress=None, skip_now=None) -> dict:
 
 
 def reference_options(name: str, an: int, field: str, old: str, column: int):
-    """find_replace.FindOptions of one page reference the check found: the quoted ``old``
-    page name at ``column`` (the engine's: its opening quote, 1-based) of field ``field`` of
-    the object with AN ``an`` on page ``name``, and no other text (a regular expression:
-    the characters before it kept as group 1)."""
+    """FindOptions matching only the quoted ``old`` at ``column`` (the engine's, 1-based) of
+    field ``field`` of object AN ``an`` on page ``name``."""
     import re
 
     from ..features import find_replace as FR
@@ -127,9 +122,8 @@ def reference_options(name: str, an: int, field: str, old: str, column: int):
 
 
 def replace_in(doc, edits):
-    """The references ``edits`` [{name, an, field, old, new, column}] of ``doc`` given their
-    new names (one find_replace.ReplaceReport for all); in a field, the last first (a new
-    name of another length moves what follows it)."""
+    """Give ``doc``'s references ``edits`` their new names, the last in a field first; one
+    ReplaceReport."""
     from ..features import find_replace as FR
 
     total = FR.ReplaceReport()
@@ -143,8 +137,7 @@ def replace_in(doc, edits):
 
 
 def replace_references(req: dict, progress=None, skip_now=None) -> dict:
-    """Rename Pages' Replace References on closed pages: ``req['edits']`` [{page, name, an,
-    field, old, new, column}]; each changed page backed up (``req['backup']``) and saved."""
+    """Replace References on closed pages: ``req['edits']``, each page backed up, then saved."""
     from . import batchjob
     from .find_worker import open_page
 

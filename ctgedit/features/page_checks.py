@@ -61,9 +61,9 @@ class Finding:
     code: str = ""
     #: the object's label (kind, AN and name) when it was found
     label: str = ""
-    #: the name an engine warning is about (the tag or page the project does not have)
+    #: the tag or page an engine warning names
     subject: str = ""
-    #: where in the field's text the engine found it (1-based; 0 = not known)
+    #: its 1-based column in the field (0: not known)
     column: int = 0
     #: the object's record when it was found (stamp_records): the row finds the object
     #: again after an edit moved it in the list (resolve)
@@ -187,8 +187,7 @@ def expression_fields(doc) -> List[ExpressionField]:
 
 # --------------------------------------------------------------------------- the checks
 def check_document(doc, measure: Optional[Callable] = None) -> Report:
-    """The checks of ``doc`` that need no compiler (the tags and pages its Cicode names
-    are the engine's: :func:`engine_findings`). ``measure(lines, face, points, attribs)`` =
+    """The checks of ``doc`` that need no compiler. ``measure(lines, face, points, attribs)``:
     the button caption metrics (default textmetrics.caption_metrics)."""
     path = getattr(doc, "path", "") or ""
     rep = Report(os.path.splitext(os.path.basename(path))[0])
@@ -393,9 +392,8 @@ def check_document(doc, measure: Optional[Callable] = None) -> Report:
 
 
 def engine_findings(doc, f: ExpressionField, result: dict) -> List[Finding]:
-    """The findings of one engine check result for field ``f``: its errors, and its
-    warnings (a tag the project does not define, a page it does not have; code = the
-    warning's kind)."""
+    """Findings of one engine check of field ``f``: its errors, and its warnings (code = their
+    kind: 'tag', 'page')."""
     out: List[Finding] = []
     if result.get("error"):
         return out

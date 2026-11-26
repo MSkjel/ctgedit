@@ -29,6 +29,15 @@ VAR_FIELDS = [
 
 
 # ------------------------------------------------------------------ a small install
+def rewrite_dbf(path, fields, rows):
+    """Write the table again with a file time a second past its old one: what a cache keyed
+    by the file's time and size sees as a change, however fast the two writes come."""
+    old = os.stat(path)
+    write_dbf(path, fields, rows)
+    new = os.stat(path)
+    os.utime(path, ns=(new.st_atime_ns, max(new.st_mtime_ns, old.st_mtime_ns + 1_000_000_000)))
+
+
 def write_dbf(path, fields, rows):
     """A dBASE III table of char ``fields`` [(name, length)]: the header is
     written here, the rows through format.dbf (Dbf.encode / append)."""
@@ -236,8 +245,7 @@ def test_the_remembered_root_applies_before_a_panel_is_shown(install):
 def test_scope_follows_an_include_dbf_change(install):
     lib = _lib(install)
     assert "Side" in TS.scope(lib, root="Top").names()
-    time.sleep(0.05)
-    write_dbf(os.path.join(install, "Top", "include.dbf"), [("NAME", 64)], [{"NAME": "Mid"}])
+    rewrite_dbf(os.path.join(install, "Top", "include.dbf"), [("NAME", 64)], [{"NAME": "Mid"}])
     assert "Side" not in TS.scope(lib, root="Top").names()
 
 
@@ -306,8 +314,7 @@ def test_tag_index_is_cached_until_a_table_changes(install):
     TS.choose_root(lib, "Top")
     idx = PR.tag_index(lib)
     assert PR.tag_index(lib) is idx and PR.cached_tag_index(lib) is idx
-    time.sleep(0.05)
-    write_dbf(os.path.join(install, "Top", "variable.dbf"), VAR_FIELDS, [tag("NEW_TAG")])
+    rewrite_dbf(os.path.join(install, "Top", "variable.dbf"), VAR_FIELDS, [tag("NEW_TAG")])
     again = PR.tag_index(lib)
     assert again is not idx and again.get("NEW_TAG").project == "Top"
 
@@ -333,8 +340,7 @@ def test_tag_format_map_is_identity_stable_and_shared_by_reader_and_editor(insta
     doc = object.__new__(EditableDocument)
     doc.path = page
     assert doc.tag_format("DUP_TAG") == "#.#" and doc.tag_format("TOP_TAG") is None
-    time.sleep(0.05)
-    write_dbf(
+    rewrite_dbf(
         os.path.join(install, "Lib", "variable.dbf"), VAR_FIELDS, [tag("LIB_TAG"), tag("DUP_TAG", fmt="#.##")]
     )
     fm2 = PR.tag_format_map(lib)

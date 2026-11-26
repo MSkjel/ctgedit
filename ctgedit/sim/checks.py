@@ -1,24 +1,19 @@
-"""The engine's check of a page field's Cicode (ctsim/checkExpression): one field, over a
-session the caller holds. The editor's fields (ui/expression_check) and the project check
-(workers/check_worker) both check through :func:`check_field`."""
+"""The engine's check of a field's Cicode (ctsim/checkExpression)."""
 
 from __future__ import annotations
 
 from .. import cicode_lex as L
 
-#: how long one check may take (a simulator that starts first takes seconds)
+#: seconds one check may take (a simulator starting up takes a few)
 CHECK_TIMEOUT_S = 60.0
 
-#: the compiler's type errors (E2024 Incompatible types): a genie parameter's type is
-#: known when the genie is placed, the compiler reads the name it is given as a number
+#: E2024 Incompatible types: a genie parameter's type is only known once it is placed
 TYPE_ERRORS = frozenset({2024})
 
 
 def check_field(session, text: str, kind: str) -> dict:
-    """``text`` ('expression' or 'command') compiled by ``session``'s engine:
-    ``{"ok", "errors", "warnings"}``. A genie's parameters and a super genie's associations
-    are compiled as names, and what the compiler says about the names they make is left out
-    (:func:`without_template`). Raises what the session raises."""
+    """``text`` compiled by ``session``'s engine: {ok, errors, warnings}. Genie parameters and
+    super genie associations compile as placeholder names, and what is said of those is dropped."""
     filled, spans = L.fill_template(text)
     body = session.request("checkExpression", {"text": filled, "kind": kind}, timeout=CHECK_TIMEOUT_S) or {}
     result = {
@@ -32,8 +27,7 @@ def check_field(session, text: str, kind: str) -> dict:
 
 
 def without_template(result: dict, spans, names) -> dict:
-    """``result`` without the errors at ``spans`` (the names fill_template made), the
-    errors and warnings that name one of ``names``, and the type errors."""
+    """``result`` without the problems about the placeholder names at ``spans`` (``names``)."""
     if result.get("error"):
         return result
     low = [n.lower() for n in names]

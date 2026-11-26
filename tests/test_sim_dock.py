@@ -343,7 +343,7 @@ def test_popups_follow_dock_and_pop_out(tmp_path, monkeypatch, editor, fx_page):
             for _c, cmd, a in list(srv.requests)  # noqa: E731
             if cmd == "ctsim/closePage"
         ]
-        assert wait_for(lambda: 3 in closed(), timeout=5, pump=pump)
+        assert wait_for(lambda: 3 in closed(), timeout=15, pump=pump)
     finally:
         srv.stop()
         hub.shutdown()

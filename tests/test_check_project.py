@@ -89,7 +89,7 @@ def test_replace_references_gives_a_closed_page_the_new_name(fx_install):
     assert out["replaced"] == 1 and out["updated"] == ["FxGenies"], out
     doc = EditableDocument.open(path)
     (hit,) = doc.find_text("FxNewName", scopes={FR.SCOPE_EXPR})
-    # (the literal the engine found only: a message's text that is the same name stays)
+    # only the literal the engine found: Message's text keeps the name
     assert hit.value == 'PageDisplay("FxNewName"); Message("FxOld", "FxOld", 0)'
 
 

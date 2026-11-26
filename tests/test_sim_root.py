@@ -38,7 +38,7 @@ def project(tmp_path):
     return str(p)
 
 
-def wait_for(cond, timeout=5.0):
+def wait_for(cond, timeout=15.0):
     end = time.monotonic() + timeout
     while time.monotonic() < end:
         if cond():

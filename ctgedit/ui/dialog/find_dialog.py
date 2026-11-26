@@ -55,8 +55,7 @@ def _group(title: str):
 
 
 def _radio_row(buttons) -> QtWidgets.QWidget:
-    """A row of ``buttons`` side by side, one choice among them: a button group of their own
-    (the row's ``group``), as the window's rows of radio buttons share a parent."""
+    """``buttons`` in a row, with a button group of their own."""
     row = QtWidgets.QWidget()
     lay = QtWidgets.QHBoxLayout(row)
     lay.setContentsMargins(0, 0, 0, 0)
@@ -247,8 +246,7 @@ class FindReplaceDialog(QtWidgets.QDialog):
         self._lbl_repl = form.labelForField(self._ed_repl)
         lay.addLayout(form)
 
-        # Look in: one row of choices; the project's row under it shows with 'All pages of
-        # a project'
+        # Look in; the Project row shows with 'All pages of a project'
         self._rb_page = QtWidgets.QRadioButton("This page")
         self._rb_all = QtWidgets.QRadioButton("All open pages")
         self._rb_project = QtWidgets.QRadioButton("All pages of a project")
@@ -306,8 +304,7 @@ class FindReplaceDialog(QtWidgets.QDialog):
         self._lbl_project.setVisible(bool(on))
 
     def _build_options(self, lay):
-        # Search in, Match, Find Next's direction, Include and Filters: under Options, closed
-        # by default, its line naming what is not the default
+        # Options: folded by default; folded, the toggle names what is not the default
         self._opt_toggle = QtWidgets.QToolButton()
         self._opt_toggle.setObjectName("FindOptionsToggle")
         self._opt_toggle.setCheckable(True)
@@ -319,8 +316,7 @@ class FindReplaceDialog(QtWidgets.QDialog):
         self._opt_toggle.toggled.connect(self._show_options)
         lay.addWidget(self._opt_toggle)
         lay.addWidget(self._opt_box)
-        # the choices grouped by what they are about, one to a line: Search in and Find
-        # Next on the left, Match and Include on the right, the Filters under both
+        # Search in and Find Next left, Match and Include right, Filters below
         outer = QtWidgets.QVBoxLayout(self._opt_box)
         outer.setContentsMargins(_sp(3), _sp(2), _sp(3), _sp(3))
         cols = QtWidgets.QHBoxLayout()
@@ -394,7 +390,7 @@ class FindReplaceDialog(QtWidgets.QDialog):
         self._list.setRootIsDecorated(False)
         self._list.setUniformRowHeights(True)
         self._list.setAlternatingRowColors(True)
-        # (eight rows at least: the options above never squeeze the results away)
+        # ten rows at least: the options never squeeze the results
         self._list.setMinimumHeight(self._list.fontMetrics().height() * 10)
         from ..tables import enable_row_copy, make_resizable
 
@@ -821,8 +817,7 @@ class FindReplaceDialog(QtWidgets.QDialog):
             self._status.setText("%s. Correct it to search." % bad)
 
     def _filter_problem(self) -> str:
-        """'<row> is not a regular expression (why)' for the first Filters box that does not
-        compile ('' = none)."""
+        """Why the first bad filter row is not a regular expression ('' = none)."""
         return self._filter_list.problem()
 
     def _clear_stale(self) -> None:
@@ -1525,8 +1520,7 @@ class FindReplaceDialog(QtWidgets.QDialog):
             self._fit_height()
 
     def _fit_height(self) -> None:
-        """Options shown: the window grows (within its screen) so the results keep their
-        rows, rather than the options squeezing them."""
+        """Grow the window, within its screen, so the options don't squeeze the results."""
         self.layout().activate()
         want = self.layout().minimumSize().height()
         screen = self.screen()

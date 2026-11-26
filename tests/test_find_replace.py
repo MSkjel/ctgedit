@@ -796,10 +796,8 @@ def test_filters_reach_the_closed_pages_helper(fx_install):
 
 
 def test_the_dialog_filters(fx_install):
-    """Options > Filters: rows added as wanted, each [what] [match / do not match] [text .*];
-    plain text is found as it is, '.*' makes it a regular expression; one that does not
-    compile is framed and stops the search; the folded Options line names the filters; they
-    come back with the window."""
+    """Filter rows with their own '.*'; a bad pattern frames its box and stops the search; the
+    folded Options line names the filters; they come back with the window."""
     _app()
     from ctgedit.ui.dialog.find_dialog import FindReplaceDialog
 

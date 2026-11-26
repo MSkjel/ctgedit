@@ -367,8 +367,13 @@ def test_no_busy_note_while_the_step_waits_in_a_box(win, monkeypatch):
     QtCore.QTimer.singleShot(100, close_box)
     with win._busy("Opening the genie's parameters\u2026"):
         QtWidgets.QMessageBox.information(win, "Template Inputs", "Template X.Y has no inputs.")
-        time.sleep(1.8)
-        sum(range(10))
+        # keep calling until the note shows: the watch thread looks again after the box
+        deadline = time.monotonic() + 15.0
+        while time.monotonic() < deadline:
+            sum(range(10))
+            if getattr(win.__dict__.get("_ctg_busy_note"), "shown_count", 0):
+                break
+            time.sleep(0.05)
     assert win._busy_note_shown
 
 

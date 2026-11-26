@@ -238,10 +238,8 @@ def apply_renames(doc, pairs) -> int:
 
 
 class NamingPanel(QtWidgets.QWidget):
-    """How Rename Objects and Rename Pages name what they rename: a Pattern (with a start
-    and a step) or a Find and Replace in the names (its Find box with the '.*' toggle every
-    search box has; \\1 in Replace with: a group of the match). Remembered in the settings
-    under ``settings_key`` (the '.*' toggle by itself, as every box's is)."""
+    """Pattern / Find and Replace naming, shared by Rename Objects and Rename Pages, remembered
+    under ``settings_key``."""
 
     #: typed text (the preview waits for a pause)
     typed = QtCore.Signal()

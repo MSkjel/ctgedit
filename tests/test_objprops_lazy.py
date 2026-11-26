@@ -18,6 +18,8 @@ GENIES = "FxGenies"
 #: the pages whose objects the inert check runs over
 INERT_PAGES = ("FxShapes", "FxGenies", "FxAnim", "FxTplLinked", "FxLegacy")
 
+pytestmark = pytest.mark.usefixtures("collect_between_tests")
+
 
 @pytest.fixture
 def page_of(fx_page, monkeypatch):

@@ -142,7 +142,7 @@ def test_a_started_server_runs_the_startup_code_once(servers, hub, page_file):
         # a second tab of the same simulation asks nothing again
         other = _sim(hub, location=loc)
         other.start(page_file, _rect_page())
-        assert wait_for(lambda: other.page_active(), timeout=10)
+        assert wait_for(lambda: other.page_active(), timeout=15)
         assert not any("Startup" in t for t in _texts(other))
         assert not other.session.take_startup()
     finally:
@@ -244,7 +244,7 @@ def test_a_cicode_opened_window_gets_its_drawing_once(servers, hub, page_file, f
                     ]
                 },
             )
-            assert wait_for(lambda: (win.tick(), True)[1], timeout=0.3, pump=pump)
+            assert wait_for(lambda: (win.tick(), True)[1], timeout=15, pump=pump)
         assert len(win.pages()) == 2
     finally:
         win.close()

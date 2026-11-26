@@ -138,7 +138,7 @@ def test_pinned_children_are_drawn_inside_their_parent(servers, hub, project):
         # more window lists (the engine sends one per command): still one view per window
         for _k in range(3):
             srv.broadcast("ctsim/windowsChanged", srv.windows_body())
-            assert wait_for(lambda: (win.tick(), True)[1], timeout=0.2, pump=pump)
+            assert wait_for(lambda: (win.tick(), True)[1], timeout=15, pump=pump)
         assert len(win.embedded()) == 2 and win.tabs.count() == 1
         # a click in a pane goes to the pane's window
         from ctgedit.ui.simulate.sources import InputEvent
@@ -150,7 +150,7 @@ def test_pinned_children_are_drawn_inside_their_parent(servers, hub, project):
         assert win.panel_view() is a
         # the parent frees a pane: its view goes, nothing is sent for it
         srv.free_window(2)
-        assert wait_for(lambda: (win.tick(), len(win.embedded()) == 1)[1], timeout=10, pump=pump)
+        assert wait_for(lambda: (win.tick(), len(win.embedded()) == 1)[1], timeout=15, pump=pump)
         assert win.embedded()[0] is a and 2 not in _closed(srv)
     finally:
         _close(win, srv, app)
@@ -195,7 +195,7 @@ def test_a_popup_floats_over_the_window_and_closes_its_engine_window(servers, hu
         got = child.frame.geometry().topLeft()
         assert abs(got.x() - at.x()) <= 2 and abs(got.y() - at.y()) <= 2, (got, at)
         srv.free_window(4)
-        assert wait_for(lambda: (win.tick(), len(win.popups()) == 1)[1], timeout=10, pump=pump)
+        assert wait_for(lambda: (win.tick(), len(win.popups()) == 1)[1], timeout=15, pump=pump)
         # another tab hides it, its own tab shows it again
         win.tabs.addTab(type(sp.canvas)(sp.scene), "other")
         win.tabs.setCurrentIndex(1)
@@ -293,7 +293,7 @@ def test_tab_per_window_setting_keeps_the_old_tabs(servers, hub, project):
         assert not win.views()
         for _k in range(3):
             srv.broadcast("ctsim/windowsChanged", srv.windows_body())
-            assert wait_for(lambda: (win.tick(), True)[1], timeout=0.2, pump=pump)
+            assert wait_for(lambda: (win.tick(), True)[1], timeout=15, pump=pump)
         assert win.tabs.count() == 3
     finally:
         options.put("tab_per_window", False)
@@ -312,7 +312,7 @@ def test_a_window_of_its_own_gets_a_popup_once_every_tab_knows_its_window(server
         assert win.popups()[0].attach_window == 4
         for _k in range(3):
             srv.broadcast("ctsim/windowsChanged", srv.windows_body())
-            assert wait_for(lambda: (win.tick(), True)[1], timeout=0.2, pump=pump)
+            assert wait_for(lambda: (win.tick(), True)[1], timeout=15, pump=pump)
         assert len(win.popups()) == 1 and not win.embedded() and win.tabs.count() == 1
     finally:
         _close(win, srv, app)
@@ -337,7 +337,7 @@ def test_another_viewers_window_is_never_shown(servers, hub, project):
         assert wait_for(lambda: (win.tick(), sim.page_active())[1], pump=pump)
         for _k in range(3):
             srv.broadcast("ctsim/windowsChanged", srv.windows_body())
-            assert wait_for(lambda: (win.tick(), True)[1], timeout=0.2, pump=pump)
+            assert wait_for(lambda: (win.tick(), True)[1], timeout=15, pump=pump)
         assert not win.views()
         srv.open_window(6, "!Pop", pages["!Pop"], mode=0, x=0, y=0)
         assert wait_for(lambda: (win.tick(), len(win.popups()) == 1)[1], timeout=15, pump=pump)

@@ -367,8 +367,7 @@ class PageFiles:
         return close
 
     def _rename_pages_dialog(self, path: str = "") -> None:
-        """Tools > Rename Pages: the project of ``path`` (else of the page shown), that page
-        ticked; one window, not modal (its Find References opens the Find window)."""
+        """Tools > Rename Pages, for the project of ``path`` (or the page shown), that page ticked."""
         from ..dialog.rename_pages import RenamePagesDialog
 
         if not path and self.doc is not None and str(getattr(self.doc, "path", "")).lower().endswith(".ctg"):
@@ -414,8 +413,7 @@ class PageFiles:
                 self.statusBar().showMessage("%s could not be opened: %s" % (os.path.basename(p), e), 8000)
 
     def _check_project_dialog(self, project_dir: str = "", includes: bool = False, renames=None) -> None:
-        """Tools > Check Project (and Rename Pages' Check References, with ``renames``): one
-        window, not modal; it checks at once when it comes with renames."""
+        """Tools > Check Project; with ``renames`` (Rename Pages) it checks at once."""
         from ..dialog.check_project import CheckProjectDialog
 
         if (

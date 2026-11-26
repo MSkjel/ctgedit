@@ -376,7 +376,7 @@ def main(argv: list[str] | None = None) -> int:
 
         return find_main(argv[2:])
     if argv[1:2] == ["--check"]:
-        # Check Project: the page checks of a project's pages (check_worker)
+        # Check Project (check_worker)
         from .workers.check_worker import main as check_main
 
         return check_main(argv[2:])

@@ -125,16 +125,13 @@ def _known(context, how: str, name: str) -> Optional[bool]:
         return None
 
 
-#: the compiler's error for a function it does not know (E2064 Function 'X' not found)
+#: E2064 Function 'X' not found
 UNKNOWN_FUNCTION = 2064
 
 
 def check_problems(text: str, tokens: Sequence[L.Token], result: Optional[dict]) -> List[Problem]:
-    """The compiler's errors and warnings of a check result (ui/expression_check), at their
-    column: the token there (a page or tag name in quotes: the string), or the character; a
-    warning without a column is not underlined (the field's mark says it). A tag the project
-    does not define written as a name, and a function the compiler does not know, are
-    ``unknown`` (L.NAME, L.FUNCTION): "Did you mean" offers the names like it."""
+    """The errors and warnings of a check result, underlined at their column (a warning without
+    one is not underlined). An undefined tag name or unknown function is ``unknown``."""
     out: List[Problem] = []
     if not result:
         return out
@@ -289,8 +286,7 @@ _TIPS = {
 def hover_html(
     text: str, tokens: Sequence[L.Token], pos: int, context, problems: Sequence[Problem], suggest=None
 ) -> str:
-    """The hover help at character ``pos`` (rich text; '' none): the problems there (with the
-    names meant, ``suggest(kind, name)``), then what the token is."""
+    """The hover help at ``pos`` (rich text, '' none): the problems there, then what the token is."""
     lines = []
     for p in problems:
         if p.start <= pos < p.end:
@@ -328,8 +324,7 @@ def hover_html(
             lines.append(
                 html.escape(_TIPS[t.kind] % word.strip() if "%s" in _TIPS[t.kind] else _TIPS[t.kind])
             )
-    # (marked rich text: a tip without a tag would be shown as plain text, its escaped
-    # characters, such as the quotes around a name, as they are written)
+    # <qt>: Qt shows a tip without tags as plain text, entities and all
     return "<qt>%s</qt>" % "<br>".join(dict.fromkeys(lines)) if lines else ""
 
 

@@ -1,5 +1,4 @@
-"""Tools > Rename Pages: rename a project's pages (and its included projects'), one or many
-at once."""
+"""Tools > Rename Pages."""
 
 from __future__ import annotations
 
@@ -14,7 +13,7 @@ from .rename_dialog import NamingPanel
 
 #: the fields a page pattern can use
 PAGE_FIELDS = ("n", "name", "title")
-#: what a rename of a page in a cycle (A to B, B to A) goes through first
+#: the temporary name a rename cycle (A to B, B to A) goes through
 _SPARE = "_RenameTemp%d"
 
 #: a page of the list: (its project folder, its name, its title)
@@ -24,8 +23,7 @@ Pair = Tuple[str, str, str]
 
 
 def project_pages(project_dirs: Sequence[str]) -> List[Page]:
-    """(folder, name, title) of every page file of the projects, by project then name (a
-    page with no pages.DBF row has no title)."""
+    """(folder, name, title) of every page file of the projects, by project then name."""
     from ...io.project import Project
 
     out: List[Page] = []
@@ -49,8 +47,8 @@ def project_pages(project_dirs: Sequence[str]) -> List[Page]:
 
 
 def page_pattern_name(pattern: str, name: str, title: str, n: int) -> str:
-    """The name ``pattern`` gives page ``name`` as number ``n``. ValueError for a pattern
-    that cannot be filled in."""
+    """The name ``pattern`` gives page ``name`` as number ``n``; ValueError when it can't be
+    filled in."""
     try:
         parts = list(string.Formatter().parse(pattern))
     except ValueError as e:
@@ -79,9 +77,8 @@ def _project(d: str) -> str:
 
 
 def plan_problems(pairs: Sequence[Pair], pages: Sequence[Page]) -> Dict[Tuple[str, str], str]:
-    """{(folder, old name): why its new name cannot be used} for ``pairs`` among ``pages``
-    (the projects compiled together share one set of page names): the page name rule, two
-    pages given one name, or a page not renamed here that has it."""
+    """{(folder, old): why the new name can't be used}: the page name rule, two pages given one
+    name, or a page of the projects compiled together that keeps it."""
     from ..browser.naming import ERROR, validate_page_name
 
     out: Dict[Tuple[str, str], str] = {}
@@ -118,10 +115,8 @@ def plan_problems(pairs: Sequence[Pair], pages: Sequence[Page]) -> Dict[Tuple[st
 def apply_page_renames(
     pairs: Sequence[Pair], links: bool = True, link_dirs: Sequence[str] = ()
 ) -> Tuple[List[Pair], List[str], List[tuple]]:
-    """Rename the pages of ``pairs`` (io.project.rename_page; in each project a cycle goes
-    through a spare name first; ``link_dirs``: the projects whose links to them follow).
-    Returns (the renames done, the failures as 'page: why', the links changed as (page,
-    column))."""
+    """Rename ``pairs`` with io.project.rename_page, a cycle through a temporary name. Returns
+    (renames done, failures, links changed)."""
     from ...io.project import rename_page
 
     done: List[Pair] = []
@@ -175,9 +170,8 @@ def apply_page_renames(
 
 
 class RenamePagesDialog(QtWidgets.QDialog):
-    """Rename Pages: the project's pages (and its included projects', as Find and Replace
-    Genie pick them), a pattern or a find and replace on their names, a preview, then the
-    rename (files, project database rows, and the pages that link to them)."""
+    """Rename a project's pages (and its included projects') by a pattern or a find and
+    replace, with a preview."""
 
     TYPING_MS = 150
     #: where the choices are remembered (NamingPanel)
@@ -195,20 +189,18 @@ class RenamePagesDialog(QtWidgets.QDialog):
     ):
         super().__init__(parent)
         self.setWindowTitle("Rename Pages")
-        #: before(kind, path, element): False cancels; else the step for after the rename
-        #: (the window's tabs of the page close: lifecycle.BeforeHook)
+        #: before(kind, path, element): False cancels, else a step to run after (lifecycle.BeforeHook)
         self._before = before
-        #: reopen(paths): the renamed pages that had a tab open again under their new names
+        #: reopen(paths): opens the renamed pages that had a tab
         self._reopen = reopen
-        #: check_references(project folder, includes, {old: new}): Check Project lists the
-        #: references to the renamed pages and can give them the new names
+        #: check_references(project folder, includes, {old: new}): opens Check Project
         self._check_references = check_references
         self._pairs: List[Pair] = []
         self._pages: List[Page] = []
-        #: (folder, name before this window, name now) of every page it renamed
+        #: (folder, original name, current name) of each page renamed here
         self.renamed: List[Pair] = []
         self._undo: List[Pair] = []
-        #: the renames of the last Rename, {old name, lower case: new name}
+        #: the last rename, {old lower case: new}
         self._last_names: Dict[str, str] = {}
         from ..pick_fields import ProjectScopeField
         from ..style.theme import SearchField, note_label
@@ -221,7 +213,7 @@ class RenamePagesDialog(QtWidgets.QDialog):
             horizontal=True,
         )
         if project_dir and not self._scope.here:
-            # (a folder the install does not list: its own entry)
+            # a folder the install does not list
             self._own_dir = project_dir
             self._scope.combo.addItem(_project(project_dir))
             self._scope.combo.setCurrentText(_project(project_dir))
@@ -247,7 +239,7 @@ class RenamePagesDialog(QtWidgets.QDialog):
         from .. import tables
 
         tables.make_resizable(self._table, "RenamePagesDialog/preview", stretch=3)
-        # (a row a line high: many pages show at once)
+        # one text line per row
         self._table.verticalHeader().setDefaultSectionSize(self.fontMetrics().height() + _sp(2))
         self._table.setShowGrid(False)
         self._table.setAlternatingRowColors(True)
@@ -331,8 +323,7 @@ class RenamePagesDialog(QtWidgets.QDialog):
 
     # -- the pages -----------------------------------------------------------------------------
     def project_dirs(self) -> List[str]:
-        """The folders whose pages are listed: the project, and with 'And the projects it
-        includes' those it includes."""
+        """The project's folder, and with 'And the projects it includes' theirs."""
         if self._own_dir and self._scope.project() == _project(self._own_dir):
             return [self._own_dir]
         return self._scope.project_dirs()
@@ -362,7 +353,7 @@ class RenamePagesDialog(QtWidgets.QDialog):
                     t.setItem(r, c, it)
         finally:
             t.blockSignals(False)
-        # (one project: its name on every row says nothing)
+        # Project only with more than one project
         t.setColumnHidden(1, len(dirs) < 2)
         self._show_rows()
         self._preview()
@@ -418,8 +409,7 @@ class RenamePagesDialog(QtWidgets.QDialog):
 
     # -- the names -----------------------------------------------------------------------------
     def new_names(self) -> List[Pair]:
-        """[(folder, old, new)] of the ticked pages, as the choices name them. ValueError for
-        a pattern or expression that cannot be used."""
+        """[(folder, old, new)] of the ticked pages; ValueError for a bad pattern or expression."""
         out = []
         n, step = self._start.value(), self._step.value()
         for r in self._ticked_rows():

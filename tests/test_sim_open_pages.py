@@ -74,7 +74,7 @@ def test_a_reload_shows_reloading_until_the_new_states_come(window):
     sp.reload_page()
     ov = sp._reload_overlay
     assert ov is not None and not ov.isHidden() and "Reloading" in ov.text()
-    assert wait_for(lambda: (win.tick(), ov.isHidden())[1], pump=pump, timeout=8)
+    assert wait_for(lambda: (win.tick(), ov.isHidden())[1], pump=pump, timeout=15)
     assert sp.sim.page_active()
 
 

@@ -1,5 +1,4 @@
-"""Find and Replace > Options > Filters: rows of 'Pages / Fields / Genies and symbols / Objects,
-match or do not match, this text', each its own row, as many as wanted."""
+"""Find and Replace > Options > Filters."""
 
 from __future__ import annotations
 
@@ -11,7 +10,7 @@ from PySide6 import QtCore, QtWidgets
 from ...features import find_replace as FR
 from ..style.theme import sp as _sp
 
-#: what a filter row can look at: (FindOptions field, label, what its text is found in)
+#: (FindOptions field, label, tool tip) of each filter kind
 FILTER_KINDS = [
     ("pages", "Pages", "The page's name, such as Mixing_L3"),
     (
@@ -28,8 +27,7 @@ FILTER_KINDS = [
     ("objects", "Objects", "The object's name or AN (AN12), or the name of a group or genie it is in"),
 ]
 _LABEL = {k: label for k, label, _t in FILTER_KINDS}
-#: what a row's text is: found anywhere in a name, without case (the '.*' toggle: a regular
-#: expression, ^ and $ anchor it)
+#: the RegexToggle key of the rows' text boxes
 _REGEX_KEY = "Find filter"
 
 
@@ -128,8 +126,8 @@ class FilterRow(QtWidgets.QWidget):
 
 
 class FilterList(QtWidgets.QWidget):
-    """The Filters rows and their Add Filter button. A search keeps what every 'match' row of
-    a kind lets through (one of them is enough) and no 'do not match' row takes out."""
+    """The filter rows and Add Filter. A name passes when it matches one 'match' row of its
+    kind (if any) and no 'do not match' row."""
 
     changed = QtCore.Signal()
 
@@ -196,8 +194,7 @@ class FilterList(QtWidgets.QWidget):
         }
 
     def problem(self) -> str:
-        """'<kind> filter is not a regular expression (why)' for the first row that does
-        not compile ('' = none)."""
+        """'<kind> filter is not a regular expression (why)' for the first bad row, else ''."""
         for row in self.rows:
             err = row.problem()
             if err:

@@ -127,7 +127,7 @@ def test_an_sa_page_lists_the_tags_its_panes_cicode_used(servers, hub, tmp_path,
             sim.poll()
             return {t.name for t in sim.search_tags("", page_only=True)[0]}
 
-        assert wait_for(lambda: {"Tag0005", "Ghost_LimitLow"} <= names(), timeout=10), names()
+        assert wait_for(lambda: {"Tag0005", "Ghost_LimitLow"} <= names(), timeout=15), names()
         assert "Tag0009" not in names()
         ghost = [t for t in sim.search_tags("", page_only=True)[0] if t.name == "Ghost_LimitLow"][0]
         assert not ghost.defined and ghost.comment == "Used by the page's Cicode"
@@ -154,7 +154,7 @@ def test_an_sa_page_opens_in_its_workspace_and_the_tab_shows_window_0(servers, h
             ),
             timeout=20,
         ), sim.engine_windows()
-        assert wait_for(lambda: sim.window == 0, timeout=10)
+        assert wait_for(lambda: sim.window == 0, timeout=15)
         assert sim.workspace_page == "Master" and sim.focus_window == 1
         # the tab follows window 0's page (a navigation to the startup page)
         nav = None

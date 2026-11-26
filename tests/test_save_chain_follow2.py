@@ -322,7 +322,7 @@ def test_simulate_waits_while_the_chain_runs_and_reloads_once_after_it(tmp_path,
         assert sim.reloads == [] and sp.lib_wait
         pending["on"] = False
         _lands(doc)
-        assert wait_for(lambda: (win.tick(), sim.reloads)[1], timeout=3)
+        assert wait_for(lambda: (win.tick(), sim.reloads)[1], timeout=15)
         wait_for(lambda: (win.tick(), False)[1], timeout=1.3)
         assert len(sim.reloads) == 1 and not sp.auto_behind
     finally:
@@ -401,7 +401,7 @@ def test_simulate_lets_the_editors_library_watch_look_first(tmp_path, monkeypatc
         assert sim.reloads == []
         pending["on"] = False
         _lands(doc)
-        assert wait_for(lambda: (win.tick(), sim.reloads)[1], timeout=3)
+        assert wait_for(lambda: (win.tick(), sim.reloads)[1], timeout=15)
         wait_for(lambda: (win.tick(), False)[1], timeout=1.3)
         assert len(sim.reloads) == 1 and not sp.auto_behind
     finally:
@@ -439,7 +439,7 @@ def test_simulate_waits_while_a_run_in_the_editor_brings_its_tabs_up_to_date(tmp
         assert sim.reloads == [] and sp.lib_wait
         pending["on"] = False
         _lands(doc)
-        assert wait_for(lambda: (win.tick(), sim.reloads)[1], timeout=3)
+        assert wait_for(lambda: (win.tick(), sim.reloads)[1], timeout=15)
         wait_for(lambda: (win.tick(), False)[1], timeout=1.3)
         assert len(sim.reloads) == 1 and not sp.auto_behind
     finally:

@@ -798,9 +798,8 @@ PAGE_KEY_LABELS = {
 
 
 def _find_options(options: dict) -> dict:
-    """find_replace.FindOptions keyword arguments (``scopes`` as a frozenset; a filter --
-    pages, fields, genies, objects -- as a NameFilter, a pattern to match or an
-    (include, exclude) pair)."""
+    """FindOptions keyword arguments: ``scopes`` as a frozenset, a filter given as a pattern
+    or an (include, exclude) pair as a NameFilter."""
     out = dict(options)
     if "scopes" in out:
         out["scopes"] = frozenset(out["scopes"])

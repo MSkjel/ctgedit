@@ -328,7 +328,7 @@ def test_a_second_click_on_a_selected_row_renames_it_unless_settings_say_no(win,
     QTest.mouseClick(tree.viewport(), LEFT, NOMOD, _text_pos(dock, r))
     # (the rename starts SLOW_CLICK_MS after the click: waited for, not slept, so a busy
     # machine that fires the timer late does not fail it)
-    deadline = time.monotonic() + 5
+    deadline = time.monotonic() + 15
     while tree.state() != EDITING and time.monotonic() < deadline:
         QTest.qWait(50)
     assert tree.state() == EDITING  # (the default: it renames)

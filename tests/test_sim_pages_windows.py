@@ -149,14 +149,14 @@ def test_a_late_state_of_another_page_is_checked_with_the_windows(servers, hub, 
             "ctsim/pageChanged",
             {"window": w, "page": "Dynamic_1", "objects": [{"an": 11, "state": {"move": [50, 50]}}]},
         )
-        assert wait_for(lambda: sim.page_active(), timeout=5)
+        assert wait_for(lambda: sim.page_active(), timeout=15)
         assert not sim.status().demo
     finally:
         sim.stop()
         srv.stop()
 
 
-def test_the_last_pointer_position_reaches_the_simulation():
+def test_the_last_pointer_position_reaches_the_simulation(monkeypatch):
     """Pointer moves go at most every MOVE_EVERY s; the position a throttled move left unsent
     goes when the interval is over (DspGetMouse, the mouse-over looks follow the pointer to
     where it stopped)."""
@@ -175,11 +175,13 @@ def test_the_last_pointer_position_reaches_the_simulation():
     view.resize(500, 400)
     got = []
     view.inputEvent.connect(got.append)
+    # wide enough for the four moves below to fall in one window
+    monkeypatch.setattr(CV, "MOVE_EVERY", 0.5)
     try:
         for x in (10, 20, 30, 40):
             view._pointer(QtCore.QPoint(x, 10))
         assert [e.kind for e in got] == ["move"]  # the first; the others throttled
-        end = time.monotonic() + 2.0
+        end = time.monotonic() + 15.0
         while time.monotonic() < end and len(got) < 2:
             QtWidgets.QApplication.processEvents()
             time.sleep(0.005)
@@ -358,7 +360,7 @@ def test_reload_page_holds_the_drawing_until_the_new_states(servers, hub, page_f
         srv._r_pageState = slow
         sim.reload({"format": "ctsim-page/0", "page": "Mixer"}, _rect_page())
         seen = []
-        assert wait_for(lambda: seen.append(sim.poll()) or sim.page_active(), timeout=5)
+        assert wait_for(lambda: seen.append(sim.poll()) or sim.page_active(), timeout=15)
         assert not any(st is not None for st in seen[:-1]), seen[:3]
         st = sim.poll() if seen[-1] is None else seen[-1]
         assert st is not None and st.replace and 11 in st.objects

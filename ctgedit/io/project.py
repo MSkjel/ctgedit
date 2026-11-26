@@ -382,9 +382,8 @@ class Project:
         return [i + 1 for i in rows]
 
     def rename_page_record(self, old: str, new: str) -> list[int]:
-        """Give every live pages.DBF row of page ``old`` the name ``new`` (a TITLE that is
-        the old name, as a new page's registration writes it, follows). Returns their
-        1-based record numbers."""
+        """Rename page ``old``'s pages.DBF rows to ``new`` (a TITLE equal to the old name too).
+        Returns their 1-based record numbers."""
         from ..format.dbf import Dbf
 
         p = self._pages_path()
@@ -406,8 +405,7 @@ class Project:
         return out
 
     def rename_page_links(self, old: str, new: str) -> list[tuple]:
-        """Every live pages.DBF row whose Previous, Next or Parent page is ``old`` names
-        ``new`` there now. Returns (page, column) of each one changed."""
+        """Point Previous / Next / Parent from ``old`` to ``new``; returns (page, column) of each."""
         from ..format.dbf import Dbf
 
         p = self._pages_path()
@@ -528,21 +526,16 @@ def delete_page(project_dir: str, page_name: str, *, files: bool = True) -> dict
     return rep
 
 
-#: the pages.DBF columns that name another page (Page Properties: Previous page, Next page,
-#: Parent page)
+#: the pages.DBF columns that name another page (Previous, Next, Parent)
 PAGE_LINK_COLUMNS = ("PREV_PAGE", "NEXT_PAGE", "PARENT")
 
 
 def rename_page(
     project_dir: str, old: str, new: str, *, links: bool = True, link_dirs: Sequence[str] = ()
 ) -> dict:
-    """Rename page ``old`` of the project to ``new``: its files (.ctg, .ctF), its pages.DBF
-    row (a title that is the old name becomes the new one), its rows in the per-page
-    tables and, with ``links``, the Previous, Next and Parent page of every page that names
-    it, in the project and in ``link_dirs`` (the other projects compiled with it). The compiled .rdb goes, as with a delete; the compiler makes the new one.
-    FileNotFoundError: no such page; FileExistsError: a page has the new name; the lock
-    errors when the project is busy. A failure changes nothing (the files are renamed back,
-    the database writes are one journaled unit)."""
+    """Rename page ``old`` to ``new``: its .ctg and .ctF, its pages.DBF row, its page table
+    rows, and with ``links`` the Previous / Next / Parent of the pages in the project and in
+    ``link_dirs`` that name it. A failure changes nothing."""
     import contextlib
 
     from . import pgregister, pendingrows
@@ -607,7 +600,7 @@ def rename_page(
                     os.rename(dst, src)
             raise
         rep["files"] = [dst for _src, dst in done]
-        # (rows an earlier save could not write are still owed, now under the new name)
+        # a pending-rows marker moves with the page
         if pendingrows.marked(old_ctg) is not None:
             pendingrows.clear(old_ctg)
             pendingrows.mark(new_ctg)

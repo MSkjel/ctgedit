@@ -110,6 +110,23 @@ def _free_process_caches():
     gc.collect()
 
 
+@pytest.fixture
+def collect_between_tests():
+    """No automatic collection inside a test, a full one after it, as the editor runs
+    (infra/gcguard): a collection in the middle of a sheet build can free Qt objects it uses."""
+    from PySide6 import QtCore
+
+    was = gc.isenabled()
+    gc.disable()
+    try:
+        yield
+    finally:
+        QtCore.QCoreApplication.sendPostedEvents(None, QtCore.QEvent.DeferredDelete)
+        gc.collect()
+        if was:
+            gc.enable()
+
+
 @pytest.fixture(autouse=True)
 def _restore_theme():
     """A test that applied a theme (an application stylesheet, the stylesheet hook, a scale)
@@ -429,6 +446,7 @@ __all__ = [
     "_free_process_caches",
     "_reap_leaked_windows",
     "_restore_theme",
+    "collect_between_tests",
     "_no_live_runtime",
     "_fake_control_pages",
     "_controls_from_fake_pages",

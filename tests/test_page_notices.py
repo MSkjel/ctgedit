@@ -351,9 +351,8 @@ def test_a_slow_step_shows_the_busy_note_and_a_quick_one_does_not(win):
         pytest.skip("sys.monitoring needs Python 3.12")
     with win._busy("Opening the genie's parameters\u2026"):
         time.sleep(0.6)
-        # (a call: the note shows there, once the watch's thread has armed it; on a loaded
-        # machine that thread may wake late, so the step goes on making calls a while)
-        deadline = time.monotonic() + 5.0
+        # keep calling until the note shows: it shows at a call once the watch thread has armed
+        deadline = time.monotonic() + 15.0
         while time.monotonic() < deadline:
             sum(range(10))
             if getattr(win.__dict__.get("_ctg_busy_note"), "shown_count", 0):

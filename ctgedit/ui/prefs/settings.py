@@ -202,8 +202,7 @@ SETTINGS_KEYS = {
     "goto/columns": None,
     # Find and Replace: its Options (Include, Search in, Match, Direction) shown
     "find/options_shown": False,
-    # Rename Objects / Rename Pages: the pattern or find and replace used last (JSON,
-    # rename_dialog.NamingPanel)
+    # Rename Objects / Rename Pages: the last naming choices (JSON, NamingPanel)
     "rename/objects": None,
     "rename/pages": None,
     # File > Import: the recent and favourite pictures, the picture options' last choices

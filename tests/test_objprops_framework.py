@@ -8,6 +8,7 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("QT_QPA_FONTDIR", r"C:\Windows\Fonts")
+pytestmark = pytest.mark.usefixtures("collect_between_tests")
 
 from PySide6 import QtWidgets  # noqa: E402
 
@@ -602,8 +603,7 @@ def test_advice_never_blocks():
         def is_name(self, name):
             return name.lower() in ("pump_1",)
 
-    # (which names are tags and which functions exist is the engine's word: the field's
-    # check, not this advice)
+    # unknown tags and functions are the engine check's, not this advice's
     msgs = [p.message for p in V.advice('AlarmAck(0, 0) + Foo(Pump_1) + Nope + ("x"', "expr", Ctx())]
     assert any("'(' is not closed" in m for m in msgs)
     assert not any("Foo" in m or "Nope" in m or "AlarmAck" in m or "Pump_1" in m for m in msgs)

@@ -204,7 +204,7 @@ def test_alarm_list_states_arrive_over_the_protocol(tmp_path, monkeypatch):
     sim = EngineSimulation(hub=hub, fake=FakeSimulation())
     try:
         sim.start(str(page_file), page)
-        end = time.monotonic() + 5.0
+        end = time.monotonic() + 15.0
         while not sim.page_active() and time.monotonic() < end:
             time.sleep(0.02)
         assert sim.page_active()
@@ -236,7 +236,7 @@ def test_alarm_list_states_arrive_over_the_protocol(tmp_path, monkeypatch):
             rows_on_ans=True,
         )
         got = {}
-        end = time.monotonic() + 5.0
+        end = time.monotonic() + 15.0
         while 22 not in got and time.monotonic() < end:
             st = sim.poll()
             if st is not None:

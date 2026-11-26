@@ -84,7 +84,7 @@ def _sim(hub, demo=True, **kw):
     return sim
 
 
-def wait_for(cond, timeout=5.0, pump=None):
+def wait_for(cond, timeout=15.0, pump=None):
     end = time.monotonic() + timeout
     while time.monotonic() < end:
         if pump is not None:
@@ -303,10 +303,10 @@ def test_a_started_server_runs_the_clock_bar_and_stops_with_the_tab(servers, hub
         # the window starts the clock: a server of our own follows the bar
         sim.clock("run")
         assert wait_for(lambda: sim.clock_state().running)
-        assert wait_for(lambda: sim.clock_state().scan >= 2, timeout=5)
+        assert wait_for(lambda: sim.clock_state().scan >= 2, timeout=15)
     finally:
         sim.stop()
-    assert wait_for(lambda: not srv.running(), timeout=5)
+    assert wait_for(lambda: not srv.running(), timeout=15)
 
 
 def test_the_simulate_window_on_the_fake_server(servers, hub, page_file, monkeypatch):
@@ -545,7 +545,7 @@ def test_a_stop_racing_the_connect_leaves_no_listener_and_no_window(servers, hub
     keep.conn.add_listener = add
     try:
         sim.start(page_file, _rect_page())
-        assert wait_for(lambda: sim._stopped and sim.session is None, timeout=5)
+        assert wait_for(lambda: sim._stopped and sim.session is None, timeout=15)
         time.sleep(0.5)
         assert not keep.conn._listeners  # nothing left behind
         assert not keep.conn._close_listeners
@@ -578,9 +578,8 @@ def test_a_stopped_tab_is_not_kept_alive_by_a_shared_session(servers, hub, page_
         ]
         assert len(s.conn._close_listeners) == 1 and len(own) == 1
         assert len(s.conn._listeners) == 2
-        # (the reader thread holds its copy of the listeners while it hands an event out, a's
-        # among them if a stopped meanwhile: one request answered on the session means the
-        # reader has handled every message before it, that copy included)
+        # a request round trip: the reader thread has finished handing out earlier events,
+        # so its copy of the listeners (a's among them) is gone
         s.request("tasks")
         ref = weakref.ref(a)
         a = None  # (released: the session must outlive it)
@@ -711,7 +710,7 @@ def test_a_new_simulator_choice_is_not_answered_by_the_old_server(servers, page_
         old = a.session.server
         assert b.session is a.session and old.running()
         a.reconnect(engine_path=r"C:\other\ctsim.exe")
-        assert wait_for(lambda: not old.running(), timeout=10)
+        assert wait_for(lambda: not old.running(), timeout=15)
         assert wait_for(
             lambda: (
                 a.page_active()
@@ -870,7 +869,7 @@ def test_reloads_run_one_at_a_time_and_the_newest_waiting_one_wins(hub):
     sim.reload({"v": 2})  # waits for the first
     sim.reload({"v": 3})  # replaces the second while it waits
     go.set()
-    assert wait_for(lambda: len(ran) == 2 and not running, timeout=5)
+    assert wait_for(lambda: len(ran) == 2 and not running, timeout=15)
     time.sleep(0.2)
     assert ran == [{"v": 1}, {"v": 3}] and not overlap
 

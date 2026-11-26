@@ -1,5 +1,4 @@
-"""Tools > Check Project: Check Page on every page of a project (and of the projects it
-includes), and after Rename Pages the page references it finds given their new names."""
+"""Tools > Check Project, and Rename Pages' Replace References."""
 
 from __future__ import annotations
 
@@ -13,10 +12,8 @@ _LEVEL_ORDER = {"error": 0, "warning": 1, "info": 2}
 
 
 class CheckProjectDialog(QtWidgets.QDialog):
-    """The findings of every page of a project, from a helper process (workers/check_worker):
-    Check Page's checks and the engine's check of each expression and command. A row goes to
-    its object. Given ``renames`` (Rename Pages: {old name, lower case: new name}), the
-    references to the old pages it finds can be given the new names (Replace References)."""
+    """Check Page on every page of a project, run in a helper process. With ``renames``
+    (Rename Pages' {old: new}) it can replace the references to the renamed pages."""
 
     def __init__(
         self,
@@ -32,19 +29,19 @@ class CheckProjectDialog(QtWidgets.QDialog):
     ):
         super().__init__(parent)
         self.setWindowTitle("Check Project")
-        #: Rename Pages' names: {old, lower case: new}
+        #: Rename Pages' renames, {old lower case: new}
         self.renames = {k.lower(): v for k, v in (renames or {}).items()}
-        #: the open documents (their pages are replaced in their tabs)
+        #: () -> the open documents
         self._documents = documents or (lambda: [])
-        #: open_page(path) -> its document (None: not opened); goto(doc, index)
+        #: open_page(path) -> document or None; goto(doc, index)
         self._open_page, self._goto = open_page, goto
-        #: replaced(docs): open pages the replace changed (the window redraws them)
+        #: replaced(docs): the open pages a replace changed
         self._replaced = replaced
         self._rows: List[dict] = []
         self._job = None
-        #: what Replace References did in the open pages: (replaced, read only, problems)
+        #: Replace References in the open pages: (replaced, read only, problems)
         self._open_result = (0, 0, [])
-        #: what the last replace said, put before the next check's line
+        #: the last replace's summary, shown before the next check's
         self._after_check = ""
         from ..pick_fields import ProjectScopeField
         from ..style.theme import SearchField, note_label
@@ -133,8 +130,7 @@ class CheckProjectDialog(QtWidgets.QDialog):
         return list(self._rows)
 
     def references(self) -> List[dict]:
-        """The rows that are references to a renamed page (a page the project does not have,
-        whose name Rename Pages gave away)."""
+        """The rows naming a renamed page the project no longer has."""
         return [
             r for r in self._rows if r.get("code") == "page" and r.get("subject", "").lower() in self.renames
         ]
@@ -275,9 +271,8 @@ class CheckProjectDialog(QtWidgets.QDialog):
         return None
 
     def replace_references(self) -> bool:
-        """Give each listed reference to a renamed page the page's new name: the open pages in
-        their tabs (one undo step each), the closed ones in a helper process, each backed up
-        and saved. False: nothing to do, or one runs already."""
+        """Give each listed reference the new name: open pages in their tabs, closed pages in a
+        helper process (backed up, then saved). False when there is nothing to do."""
         from ...workers import check_worker as CW
 
         refs = self.references()

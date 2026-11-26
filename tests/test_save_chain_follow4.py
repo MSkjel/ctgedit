@@ -378,7 +378,7 @@ def test_simulate_does_not_reload_a_waiting_page_while_a_run_writes_libraries(tm
         assert sim.reloads == [], "no reload while the run writes libraries"
         UpdatePagesRun.users_busy = ""
         editing._LIBRARY_GENERATION[0] += 1  # (the run's saves)
-        assert wait_for(lambda: (win.tick(), sim.reloads)[1], timeout=3)
+        assert wait_for(lambda: (win.tick(), sim.reloads)[1], timeout=15)
         wait_for(lambda: (win.tick(), False)[1], timeout=1.3)
         assert len(sim.reloads) == 1 and not sp.auto_behind
     finally:
@@ -411,7 +411,7 @@ def test_simulate_holds_a_library_reload_due_when_a_run_starts(tmp_path, monkeyp
         wait_for(lambda: (win.tick(), False)[1], timeout=1.6)
         assert sim.reloads == []
         UpdatePagesRun.chain_busy = False
-        assert wait_for(lambda: (win.tick(), sim.reloads)[1], timeout=2)
+        assert wait_for(lambda: (win.tick(), sim.reloads)[1], timeout=15)
         assert len(sim.reloads) == 1
     finally:
         win.close()

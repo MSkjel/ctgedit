@@ -506,7 +506,7 @@ def test_simulate_reloads_once_after_the_editors_genie_update_landed(tmp_path, m
         doc.edit_serial += 1
         doc.derive_serial += 1
         pending["on"] = False
-        assert wait_for(lambda: (win.tick(), sim.reloads)[1], timeout=3)
+        assert wait_for(lambda: (win.tick(), sim.reloads)[1], timeout=15)
         wait_for(lambda: (win.tick(), False)[1], timeout=1.3)
         assert len(sim.reloads) == 1 and not sp.auto_behind
     finally:

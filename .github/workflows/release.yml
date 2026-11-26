@@ -29,8 +29,7 @@ jobs:
               --json databaseId,event,status,conclusion \
               --jq '.[] | select(.event == "push" or .event == "workflow_dispatch") | "\(.databaseId) \(.status) \(.conclusion)"'
           }
-          # (a run of a push made with the tag can take a while to be listed: looked for
-          # again for up to 10 minutes before giving up)
+          # A CI run pushed with the tag may not be listed yet: look again for up to 10 minutes.
           for try in $(seq 1 20); do
             if runs | grep -q " completed success$"; then
               echo "CI passed on $GITHUB_SHA."
@@ -81,7 +80,7 @@ jobs:
             exit 1
           fi
           if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
-            # (the tag was moved to a newer commit: its release takes the new installer)
+            # The tag was moved: replace the installer.
             gh release upload "$GITHUB_REF_NAME" "dist/ctgedit-$v-setup.exe" --clobber
           else
             gh release create "$GITHUB_REF_NAME" "dist/ctgedit-$v-setup.exe" \

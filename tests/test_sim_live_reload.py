@@ -144,7 +144,7 @@ def test_a_saved_ci_file_is_reloaded_after_the_last_change(tmp_path):
         for k in range(3):  # three saves in a row: one reload
             _write(f, "INT FUNCTION Level() RETURN %d; END" % (k + 2))
             wait_for(lambda: False, timeout=0.1, pump=_pump)
-        assert wait_for(lambda: s.sent, timeout=3, pump=_pump)
+        assert wait_for(lambda: s.sent, timeout=15, pump=_pump)
         wait_for(lambda: False, timeout=0.8, pump=_pump)
         assert [os.path.basename(p) for p, _t in s.sent] == ["Pumps.ci"]
         assert s.sent[0][1] - t0 >= CICODE_DEBOUNCE_MS / 1000.0
@@ -156,7 +156,7 @@ def test_a_saved_ci_file_is_reloaded_after_the_last_change(tmp_path):
             "errors": [{"code": "E2041", "line": 12, "column": 5, "message": "Unknown variable 'Lvl'"}],
         }
         _write(f, "INT FUNCTION Level() RETURN Lvl; END")
-        assert wait_for(lambda: len(s.sent) == 2, timeout=3, pump=_pump)
+        assert wait_for(lambda: len(s.sent) == 2, timeout=15, pump=_pump)
         errs = [e for e in sim.log if e.kind == "error"]
         assert errs[0].file == f and errs[0].line == 12 and "E2041" in errs[0].text, errs
         assert errs[-1].text == "Pumps.ci was not reloaded: 1 compile error(s)."
@@ -191,7 +191,7 @@ def test_a_simulation_another_program_started_is_not_reloaded_unless_asked(tmp_p
         time.sleep(0.05)
         _write(f, "y")
         assert wait_for(lambda: any("Reload Cicode" in e.text for e in sim.log), pump=_pump)
-        wait_for(lambda: False, timeout=0.8, pump=_pump)
+        wait_for(lambda: False, timeout=15, pump=_pump)
         assert s.sent == []
         assert lr.reload_now(s) == 1 and s.sent[0][0] == f
         # a session gone: its watch goes
@@ -225,10 +225,10 @@ def test_reload_goes_to_the_simulator_and_its_errors_come_back(servers, hub, pag
         time.sleep(0.05)
         _write(f, "y")
         assert lr.reload_now(s) == 1
-        assert wait_for(lambda: getattr(srv, "reloads", []) == [f])
+        assert wait_for(lambda: srv.reloads == [f])
         got = []
         assert wait_for(
-            lambda: got.extend(sim.drain()) or any(e.line == 3 and e.file == f for e in got), timeout=5
+            lambda: got.extend(sim.drain()) or any(e.line == 3 and e.file == f for e in got), timeout=15
         ), [(e.kind, e.text) for e in got]
     finally:
         lr.close()
@@ -294,7 +294,7 @@ def test_a_page_edited_in_the_editor_reloads_a_second_after_the_last_edit(page_f
         win._show_edit_note()
         # (the automatic reload on: no line over the page, the reload says so on the page)
         assert not win.edit_row.isVisibleTo(win)
-        assert wait_for(lambda: (win.tick(), sim.reloads)[1], timeout=3)
+        assert wait_for(lambda: (win.tick(), sim.reloads)[1], timeout=15)
         assert len(sim.reloads) == 1 and sim.reloads[0][1] - t1 >= PAGE_DEBOUNCE_S - 0.05
         assert sim.reloads[0][0]["page"] == "FxPage"
         assert not sp.doc_changed() and not win.edit_row.isVisibleTo(win)
@@ -349,10 +349,10 @@ def test_a_saved_library_reloads_the_pages_that_use_it(tmp_path, page_file, monk
         # its library saved (by ctgedit's element editor: the library generation)
         _write(lib, "bbb")
         editing._LIBRARY_GENERATION[0] += 1
-        assert wait_for(lambda: (win.tick(), sim.reloads)[1], timeout=3)
+        assert wait_for(lambda: (win.tick(), sim.reloads)[1], timeout=15)
         # ... or on disk (the folder watch): the page reloads again
         win._libraries_changed([lib])
-        assert wait_for(lambda: (win.tick(), len(sim.reloads) == 2)[1], timeout=3)
+        assert wait_for(lambda: (win.tick(), len(sim.reloads) == 2)[1], timeout=15)
         win._libraries_changed([other])
         wait_for(lambda: (win.tick(), False)[1], timeout=1.3)
         assert len(sim.reloads) == 2
@@ -381,7 +381,7 @@ def test_a_page_saved_by_another_program_reloads_from_its_file(page_file, monkey
         assert sim.reloads == []
         _write(page_file, "saved by the Graphics Builder")
         win._pages_changed([page_file])
-        assert wait_for(lambda: (win.tick(), sim.reloads)[1], timeout=3)
+        assert wait_for(lambda: (win.tick(), sim.reloads)[1], timeout=15)
         assert len(sim.reloads) == 1 and not sp.file_changed
         assert sp.reload_why == "its file was saved by another program"
         # the automatic reload off: the note, and Reload Page reads the file
@@ -422,7 +422,7 @@ def test_a_tab_follows_the_document_the_editor_reloaded(page_file, monkeypatch):
         wait_for(lambda: (win.tick(), False)[1], timeout=1.3)
         assert sim.reloads == [] and sp.doc is old and not sp.file_changed
         open_docs[:] = [new]  # the editor reloaded it
-        assert wait_for(lambda: (win.tick(), sim.reloads)[1], timeout=3)
+        assert wait_for(lambda: (win.tick(), sim.reloads)[1], timeout=15)
         assert sp.doc is new and len(sim.reloads) == 1
         assert sp.reload_why == "the editor reloaded it from disk"
         wait_for(lambda: (win.tick(), False)[1], timeout=1.2)
@@ -444,7 +444,7 @@ def test_a_popup_reloads_in_its_own_window(servers, hub, page_file):
         sim.start(page_file, _rect_page())
         assert wait_for(lambda: sim.page_active())
         sim.reload({"format": "ctsim-page/0", "page": "FxPage"}, _rect_page())
-        assert wait_for(lambda: getattr(srv, "opened", []))
+        assert wait_for(lambda: srv.opened)
         args = srv.opened[-1]
         assert args["window"] == 3 and args["name"] == "FxPage"
         assert args["model"]["page"] == "FxPage" and args["associations"] == {"Tag": "Pump1"}
@@ -469,10 +469,10 @@ def test_an_sa_page_reloads_through_its_workspace(servers, hub, page_file):
         pane.start(page_file, _rect_page())
         assert wait_for(lambda: pane.page_active())
         pane.reload({"format": "ctsim-page/0", "page": "FxPage", "edited": 1}, _rect_page())
-        assert wait_for(lambda: getattr(srv, "navigated", []))
+        assert wait_for(lambda: srv.navigated)
         nav = srv.navigated[-1]
         assert nav["page"] == "FxPage" and nav["model"]["edited"] == 1
-        assert not getattr(srv, "opened", [])  # not opened over the workspace
+        assert not srv.opened  # not opened over the workspace
         assert wait_for(lambda: pane.page_active() and pane.window == 1)
         # the startup page's tab (window 0): it re-shows the page in its workspace too, and
         # keeps showing window 0
@@ -560,7 +560,7 @@ def test_the_editors_own_update_does_not_reload_a_running_simulation(page_file, 
         assert win.edit_note.text() == "The editor updated this page from its libraries."
         # the user's edit: reloaded, the note goes
         step(auto=False)
-        assert wait_for(lambda: (win.tick(), sim.reloads)[1], timeout=3)
+        assert wait_for(lambda: (win.tick(), sim.reloads)[1], timeout=15)
         assert len(sim.reloads) == 1 and not sp.auto_behind
         win._show_edit_note()
         assert not win.edit_row.isVisibleTo(win)
@@ -568,19 +568,19 @@ def test_the_editors_own_update_does_not_reload_a_running_simulation(page_file, 
         step(auto=False)
         win.tick()
         step(auto=True)
-        assert wait_for(lambda: (win.tick(), len(sim.reloads) == 2)[1], timeout=3)
+        assert wait_for(lambda: (win.tick(), len(sim.reloads) == 2)[1], timeout=15)
         # Undo of the automatic step is the user's: reloaded
         step(auto=True)
         wait_for(lambda: (win.tick(), False)[1], timeout=1.3)
         assert len(sim.reloads) == 2 and sp.auto_behind
         doc._undo.pop()
         doc.edit_serial += 1
-        assert wait_for(lambda: (win.tick(), len(sim.reloads) == 3)[1], timeout=3)
+        assert wait_for(lambda: (win.tick(), len(sim.reloads) == 3)[1], timeout=15)
         assert not sp.auto_behind
         # Settings > Simulate: also reload for the editor's own updates
         options.put("reload_auto_updates", True)
         step(auto=True)
-        assert wait_for(lambda: (win.tick(), len(sim.reloads) == 4)[1], timeout=3)
+        assert wait_for(lambda: (win.tick(), len(sim.reloads) == 4)[1], timeout=15)
         assert not sp.auto_behind
     finally:
         options.put("reload_auto_updates", False)

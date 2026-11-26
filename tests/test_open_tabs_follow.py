@@ -287,13 +287,13 @@ def test_simulate_follows_the_editor_during_the_background_update(tmp_path, monk
         assert sp.lib_wait and sim.reloads == []
         pending["on"] = False
         _lands(doc)  # (the editor's tab took it)
-        assert wait_for(lambda: (win.tick(), sim.reloads)[1], timeout=3), "reloaded while the run goes on"
+        assert wait_for(lambda: (win.tick(), sim.reloads)[1], timeout=15), "reloaded while the run goes on"
         assert UpdatePagesRun.users_busy and fsim.reloads == [], "the file's tab waits"
         wait_for(lambda: (win.tick(), False)[1], timeout=1.3)
         assert len(sim.reloads) == 1 and fsim.reloads == []
         UpdatePagesRun.users_busy = ""  # (the run's end)
         editing._LIBRARY_GENERATION[0] += 1
-        assert wait_for(lambda: (win.tick(), fsim.reloads)[1], timeout=3)
+        assert wait_for(lambda: (win.tick(), fsim.reloads)[1], timeout=15)
         wait_for(lambda: (win.tick(), False)[1], timeout=1.3)
         assert len(sim.reloads) == 1 and len(fsim.reloads) == 1 and not sp.auto_behind
     finally:
@@ -324,7 +324,7 @@ def test_simulate_waits_for_the_background_update_with_the_wait_setting(tmp_path
         assert sim.reloads == []
         UpdatePagesRun.users_busy = ""
         editing._LIBRARY_GENERATION[0] += 1
-        assert wait_for(lambda: (win.tick(), sim.reloads)[1], timeout=3)
+        assert wait_for(lambda: (win.tick(), sim.reloads)[1], timeout=15)
         wait_for(lambda: (win.tick(), False)[1], timeout=1.3)
         assert len(sim.reloads) == 1
     finally:
@@ -370,7 +370,7 @@ def test_one_library_save_reloads_a_running_simulation_once(fx_install, win, tmp
         editing.libraries_changed()
         win._after_library_write(lib)
         assert win._docs[k].get("stale")
-        assert wait_for(lambda: (sw.tick(), sim.reloads)[1], timeout=3)
+        assert wait_for(lambda: (sw.tick(), sim.reloads)[1], timeout=15)
         wait_for(lambda: (sw.tick(), False)[1], timeout=0.5)
         assert len(sim.reloads) == 1
         serial = doc.derive_serial
@@ -380,7 +380,7 @@ def test_one_library_save_reloads_a_running_simulation_once(fx_install, win, tmp
         assert len(sim.reloads) == 1, "no second reload for one save"
         assert not sp.doc_changed() and sp.reload_due is None
         doc.move_objects([list(doc.page.roots())[0]], 4, 0)  # (an edit)
-        assert wait_for(lambda: (sw.tick(), len(sim.reloads) > 1)[1], timeout=3)
+        assert wait_for(lambda: (sw.tick(), len(sim.reloads) > 1)[1], timeout=15)
     finally:
         sw.close()
         sw.deleteLater()

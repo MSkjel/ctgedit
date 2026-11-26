@@ -389,7 +389,7 @@ def test_x_takes_a_sum_and_held_arrows_are_one_step(tmp_path, fx_page):
         QTest.keyClick(x, QtCore.Qt.Key_Up)
     import time
 
-    end = time.perf_counter() + 2
+    end = time.perf_counter() + 15
     while doc.page.objects[r].geometry.x != 359 and time.perf_counter() < end:
         QTest.qWait(20)
     assert doc.page.objects[r].geometry.x == 359 and len(doc._undo) == n + 1

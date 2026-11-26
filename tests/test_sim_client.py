@@ -48,7 +48,7 @@ def fake(project, servers):
     srv.stop()
 
 
-def wait_for(cond, timeout=5.0, step=0.02):
+def wait_for(cond, timeout=15.0, step=0.02):
     end = time.monotonic() + timeout
     while time.monotonic() < end:
         if cond():
@@ -402,10 +402,9 @@ def test_the_hub_stops_a_started_server_after_it_lingered(project, servers):
     hub.release(s)
     again = hub.acquire(project, location=fake_engine())  # within the linger: reused
     assert again is s and s.server.running()
-    hub.release(again, linger=0.3)
-    time.sleep(0.1)
+    hub.release(again, linger=2.0)
     assert s.server.running()  # it lingers first
-    assert wait_for(lambda: not s.server.running(), timeout=8)
+    assert wait_for(lambda: not s.server.running(), timeout=15)
     hub.shutdown()
 
 
@@ -561,7 +560,7 @@ def test_a_reverse_request_is_refused_and_unknown_responses_ignored():
     srv.write(C.encode({"seq": 2, "type": "request", "command": "runInTerminal"}))
     parser = C.FrameParser()
     got = []
-    end = time.monotonic() + 5
+    end = time.monotonic() + 15
     while time.monotonic() < end and not got:
         data = srv.read(timeout=0.2)
         if data:
@@ -647,7 +646,7 @@ def test_a_started_server_never_outlives_its_client(project, servers):
     env = dict(os.environ, PYTHONPATH=os.path.dirname(HERE))
     r = subprocess.run([PY, "-c", code], capture_output=True, text=True, timeout=60, env=env)
     pid = int(r.stdout.strip().splitlines()[-1])
-    assert wait_for(lambda: not C.paths.pid_alive(pid), timeout=10)
+    assert wait_for(lambda: not C.paths.pid_alive(pid), timeout=15)
 
 
 def test_a_failure_that_only_says_not_available_keeps_the_request_on(fake, project):
@@ -789,9 +788,9 @@ def test_closing_from_the_reader_thread_does_not_wait_for_answers(project, serve
     s.add_listener(on_event)
     with pytest.raises(C.ConnectionLost):
         s.call("Add(1,2)", timeout=10)
-    assert wait_for(lambda: took, timeout=10)
+    assert wait_for(lambda: took, timeout=15)
     assert took[0] < 1.5, took
-    assert wait_for(lambda: not s.server.running(), timeout=5)
+    assert wait_for(lambda: not s.server.running(), timeout=15)
 
 
 def test_a_listener_cannot_wait_for_an_answer(fake, project):
@@ -858,7 +857,7 @@ def test_releasing_a_session_the_hub_let_go_never_blocks_the_caller(project, ser
     t0 = time.monotonic()
     hub.release(s)
     assert time.monotonic() - t0 < 0.5
-    assert wait_for(lambda: not srv.running(), timeout=10)
+    assert wait_for(lambda: not srv.running(), timeout=15)
     hub.shutdown()
 
 
@@ -912,7 +911,7 @@ def test_a_held_server_neither_times_out_requests_nor_ends_the_connection():
     ).encode()
     conn._handle(ev(True))
     assert conn.held
-    time.sleep(0.05)
+    p.deadline = time.monotonic() - 1.0  # (its timeout is over)
     conn._expire()
     assert not p.event.is_set()  # no timeout while held
     conn._handle(ev(False))

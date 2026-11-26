@@ -1732,8 +1732,7 @@ class RegexToggle(QtCore.QObject):
 
 
 def show_regex_problem(edit: QtWidgets.QLineEdit, error: str, tip: str = "") -> None:
-    """A box whose regular expression does not compile (``error``; '' = it does): a red frame,
-    and why in its tool tip (after ``tip``, the box's own) and its accessible description."""
+    """Frame ``edit`` red and say ``error`` in its tool tip ('' = no problem)."""
     bad = bool(error)
     if bool(edit.property("regexInvalid")) != bad:
         edit.setProperty("regexInvalid", bad)

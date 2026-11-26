@@ -308,10 +308,9 @@ class Snapshot:
     def __init__(self, root: str):
         self.root = root
         self.dirs: set = set()
-        #: {relative path: (bytes, (atime_ns, mtime_ns), mode)}, by the path's normcase
+        #: {normcase relative path: (bytes, (atime_ns, mtime_ns), mode)}
         self.files: dict = {}
-        #: {normcase relative path: the relative path as it was spelt} (a test that renames a
-        #: file, or changes the case of its name, gets the old spelling back)
+        #: {normcase relative path: its spelling}: a renamed file gets its spelling back
         self.names: dict = {}
         for dp, _dn, fn in os.walk(root):
             rel = os.path.relpath(dp, root)

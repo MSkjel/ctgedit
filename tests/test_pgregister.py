@@ -755,9 +755,8 @@ def test_a_page_without_a_pages_row_gets_no_register_rows(SA, tmp_path):
 
 
 def test_a_member_keeps_txtmode_zero_with_nothing_of_its_own_after_txt_off(SA):
-    """A genie member one level deep, template and value bag TXT_OFF first: TXTMODE '0' stays
-    in the row when only property sheet state ('!*') lies between them (Example Genies AN 532),
-    and is left out when a key of the record's own does (Example !ServerMonitor's VISIBLE)."""
+    """Example Genies AN 532 keeps TXTMODE '0' (only '!*' keys between TXT_OFF and TXTMODE);
+    !ServerMonitor's members drop it (VISIBLE between)."""
     from ctgedit.format.page import parse_ctg
 
     o = next(
