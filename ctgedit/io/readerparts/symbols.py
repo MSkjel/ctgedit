@@ -684,7 +684,8 @@ def _art_twins_compute(path: str, element: str, resolver, stack: list):
     return out, height
 
 
-_TOKEN_RE = re.compile(r"%([^%\s=]+)(?:=([^%]*))?%")
+#: a %name% / %name=default% token, leading '='s skipped (genie_place._token_name)
+_TOKEN_RE = re.compile(r"%=*([^%\s=]+)(?:=([^%]*))?%")
 
 
 def _substitute_tokens(text, props: dict, objs, j: int):

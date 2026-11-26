@@ -111,3 +111,27 @@ def test_a_copy_from_an_element_window_pasted_on_a_page_loses_the_element_level(
     assert len(new) == 1
     lv = _levels(doc.parsed.page.objects[new[0]])
     assert len(lv) == 1 and lv[0][2] == []
+
+
+def test_substitution_matches_ctdraws_placement():
+    """Texts drawn into a genie and the genie placed with values, saved by the live CtDraw
+    (FUN_004d6960): the result stops at 254 characters, and a token's name is read past
+    leading '='s, as its declaration is."""
+    vals = GP.Bag([("P", "C" * 252), ("Q", "VAL"), ("S", "SVAL"), ("T", "TVAL")])
+    decls = GP.Bag([("R", "dflt"), ("P", ""), ("Q", ""), ("S", ""), ("T", "")])
+    saved = {
+        "AB%P%xyz": "AB" + "C" * 252,
+        "%=Q%": "VAL",
+        "%=R=dflt%": "dflt",
+        "%==S%": "SVAL",
+        "%T%": "TVAL",
+    }
+    for template, want in saved.items():
+        assert GP.substitute(template, vals, decls, "TXT_OFF") == want, template
+    # the declarations CtDraw made from those templates
+    declared = {"=Q": ("Q", None), "=R=dflt": ("R", "dflt"), "==S": ("S", None), "T": ("T", None)}
+    for tok, want in declared.items():
+        assert GP.token_name(tok) == want, tok
+    assert GP.token_name("a==b") == ("a", "=b") and GP.token_name("a=") == ("a", None)
+    assert GP.token_name("=") == ("", None)
+    assert GP.substitute("%=%x", vals, decls) == "x"

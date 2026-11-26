@@ -333,21 +333,21 @@ def _token(s: str, i: int):
 def substitute(template: str, values: Bag, decls: Bag, key: str = "", specials: Optional[dict] = None) -> str:
     """for one template value: every %name% / %name=default%
     becomes the level value (values bag, without case), else the declaration
-    default (decls bag) unless it is '\\n' (none) -> ''. Result capped at 254
-    chars (0xfe). A key ending in '.NonGenie' (len >= 10) is copied verbatim."""
+    default (decls bag) unless it is '\\n' (none) -> ''; the name as _token_name reads it
+    ('%=abc%' is abc). At most 254 chars (0xfe): a value that would pass it is left out and
+    ends the result, and nothing follows once it is reached. A key ending in '.NonGenie'
+    (len >= 10) is copied verbatim."""
     if len(key) >= 10 and key.endswith(".NonGenie"):
         return template
     out = []
     n = 0
     i = 0
-    while i < len(template):
+    while i < len(template) and n < 0xFE:
         c = template[i]
         if c != "%":
             out.append(c)
             n += 1
             i += 1
-            if n >= 0xFE:
-                break
             continue
         tok, j = _token(template, i)
         if not tok:
@@ -362,9 +362,9 @@ def substitute(template: str, values: Bag, decls: Bag, key: str = "", specials: 
                 break
             i = j
             continue
-        name = tok.split("=", 1)[0]
-        v = values.get(name) or ""
-        if not v:
+        name = _token_name(tok)[0]
+        v = (values.get(name) or "") if name else ""
+        if not v and name:
             d = decls.get(name)
             v = "" if (d is None or d == "\n") else d
         if not v and specials and name.lower() in specials:
@@ -679,12 +679,11 @@ def _non_genie_key(key: str) -> bool:
 
 
 def _token_name(tok: str):
-    """(name, default or None) of a token as CtDraw reads it: strtok at '=' (so
-    '%=abc%' names abc without a default), a default only when something follows the '='."""
-    nm, eq, dflt = tok.partition("=")
-    if not nm:
-        return dflt.split("=", 1)[0], None
-    return nm, (dflt if (eq and dflt) else None)
+    """(name, default or None) of a token as CtDraw reads it: strtok at '=', which skips
+    leading '='s ('%=abc%' and '%==abc%' name abc), then the rest after the next '=' as the
+    default when anything follows it ('%=a=b%' is a with default b, '%a==b%' a with '=b')."""
+    nm, _eq, dflt = tok.lstrip("=").partition("=")
+    return nm, (dflt or None)
 
 
 #: the composition's token reader, public: Replace Genie's mapping reads tokens as the

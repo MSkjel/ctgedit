@@ -538,8 +538,8 @@ def set_genie_binding(po: PageObject, key: str, new_value: str) -> bool:
     return set_object_property(po, key, new_value)
 
 
-# genie %parameter% / %parameter=default% template markers
-_PARAM_MARKER_RE = re.compile(r"%([A-Za-z0-9_]+)(=[^%]*)?%")
+# genie %parameter% / %parameter=default% template markers (leading '='s skipped, as CtDraw's strtok)
+_PARAM_MARKER_RE = re.compile(r"%=*([A-Za-z0-9_]+)(=[^%]*)?%")
 
 
 def resubstitute_member(po: PageObject, params: dict, old_params: dict | None = None) -> bool:
