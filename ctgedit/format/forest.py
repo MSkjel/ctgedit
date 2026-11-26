@@ -16,6 +16,16 @@ def subtree_end(records: Sequence, index: int) -> int:
     return end
 
 
+def whole_forest(counts: Sequence[int]) -> bool:
+    """The child counts are whole trees: every group's members follow it within the list (the
+    forest check of integrity.py; a list that is not would make a container take the records
+    after it)."""
+    open_slots = 0
+    for c in counts:
+        open_slots = max(open_slots - 1, 0) + c
+    return open_slots == 0
+
+
 def parents_from_counts(counts: Sequence[int]) -> List[Optional[int]]:
     """Each record's parent index (None = a root) from the records' child counts (over-long
     counts are clamped to the records that follow)."""

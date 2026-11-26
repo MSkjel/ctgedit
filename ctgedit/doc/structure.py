@@ -32,6 +32,7 @@ from ..editing_base import (  # noqa: F401
 from ..editing_base import (  # noqa: F401
     _parse_object,
 )
+from ..format.forest import whole_forest
 
 
 class StructureEdits:
@@ -414,7 +415,7 @@ class StructureEdits:
                     raise ValueError(
                         "This touch command comes from a library copy and cannot be edited here."
                     )
-                new_blocks.append([inputs.with_values(head, want, inputs.TOUCH_KEYS)])
+                new_blocks.append([inputs.with_values(head, want, inputs.TOUCH_KEYS)] + blk[1:])
             elif head.type_code == inputs.KEYBOARD_TC and keys is not None:
                 if c not in reuse:
                     continue  # a removed key sequence
@@ -428,7 +429,7 @@ class StructureEdits:
                     raise ValueError(
                         "This keyboard command comes from a library copy and cannot be edited here."
                     )
-                new_blocks.append([inputs.with_values(head, want, inputs.KEYBOARD_KEYS)])
+                new_blocks.append([inputs.with_values(head, want, inputs.KEYBOARD_KEYS)] + blk[1:])
             else:
                 new_blocks.append(blk)
         for src, want in plan:
@@ -1402,8 +1403,8 @@ class StructureEdits:
                 + body
             )
             recs.append(_parse_object(0, 0, len(blob), 0, blob))
-        if not recs:
-            return []
+        if not recs or not whole_forest([p.class_flag for p in recs]):
+            return []  # (a container would take the page's next records as its members)
         if not self.composites_allowed and any(
             p.type_code == 0x08 and p.class_flag and b"_compositioncaches" in bytes(p.body_raw[:512]).lower()
             for p in recs
