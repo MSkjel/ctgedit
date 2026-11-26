@@ -91,11 +91,14 @@ class Dbf:
         return self.fh.read(self.rlen)
 
     def field(self, rec: bytes, name: str) -> str:
+        """The field's value: its bytes less the space padding (a trailing tab or no-break
+        space is part of the value, as the index keys built from it are)."""
         o, ln = self.fmap[name.upper()]
-        return rec[o : o + ln].decode(CODEC).rstrip()
+        return rec[o : o + ln].rstrip(b" ").decode(CODEC)
 
     def decode(self, rec: bytes) -> Dict[str, str]:
-        return {n: rec[o : o + ln].decode(CODEC).rstrip() for n, o, ln in self.fields}
+        """Every field's value (:meth:`field`)."""
+        return {n: rec[o : o + ln].rstrip(b" ").decode(CODEC) for n, o, ln in self.fields}
 
     def encode(self, row: Dict[str, str], flag: bytes = b" ") -> bytes:
         """A record of ``row``'s values; ``UnencodableTextError`` when a value
@@ -256,6 +259,9 @@ class Ndx:
         self.case = case
         self.fh = journal.open_patch(path) if writable else open(path, "rb")
         h = self.fh.read(PAGE_SIZE)
+        if len(h) < 24:
+            self.fh.close()
+            raise ValueError("%s: not an NDX (%d bytes)" % (path, len(h)))
         self.root, self.npages = struct.unpack_from("<II", h, 0)
         self.klen, self.kpn, self.ktype, self.esize = struct.unpack_from("<HHHH", h, 12)
         self.unique = h[23]

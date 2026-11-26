@@ -184,9 +184,9 @@ def test_pg_rows_equal_the_rows_ctdraw_writes(tmp_path):
 
 def test_compare_rows_fast_path_counts_like_decoded_rows(tmp_path):
     """compare_rows matches equal record BYTES first, then decodes the rest: a stored record
-    that differs only where decoding cannot see it (trailing white space in a field, the
-    PAGE spelling) still counts equal, a changed value does not. FxButtons' 12 pgtouch
-    rows."""
+    that differs only where decoding cannot see it (the PAGE spelling) still counts equal, a
+    changed value does not (a tab where a pad space was is part of the value). FxButtons' 12
+    pgtouch rows."""
     from ctgedit.format.dbf import Dbf
 
     page = "FxButtons"
@@ -201,14 +201,13 @@ def test_compare_rows_fast_path_counts_like_decoded_rows(tmp_path):
         o, ln = d.fmap["CMD"]
         po, pl = d.fmap["PAGE"]
         r0 = bytearray(d.read(recs[0]))
-        val = bytes(r0[o : o + ln]).rstrip()
-        assert len(val) < ln
-        r0[o + len(val)] = 0x09  # a tab where a pad space was
         r0[po : po + pl] = bytes(r0[po : po + pl]).upper()
         d.fh.seek(d._off(recs[0]))
         d.fh.write(bytes(r0))
         r1 = bytearray(d.read(recs[1]))
-        r1[o] = ord("#") if r1[o] != ord("#") else ord("!")  # a real difference
+        val = bytes(r1[o : o + ln]).rstrip(b" ")
+        assert len(val) < ln
+        r1[o + len(val)] = 0x09  # a tab where a pad space was: a real difference
         d.fh.seek(d._off(recs[1]))
         d.fh.write(bytes(r1))
     assert PM.compare_rows(str(tmp_path), page, rows)["pgtouch"] == (n, n, n - 1)

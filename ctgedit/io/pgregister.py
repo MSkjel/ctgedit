@@ -509,7 +509,7 @@ def _open_ndx(folder: str, table: str, writable: bool = True, case: bool = False
         return None
     try:
         return Ndx(p, writable=writable, case=case)
-    except ValueError, OSError, struct.error:
+    except ValueError, OSError:
         return None
 
 
