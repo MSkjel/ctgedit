@@ -18,31 +18,43 @@ def _lpstr(body: bytes, o: int) -> Tuple[str, int]:
     return body[o + 2 : o + 2 + n].decode(CODEC), o + 2 + n
 
 
-def find_list(body: bytes):
+def _list_at(body: bytes, start: int):
+    """find_list's tuple for a list whose ProgID lpstr starts at ``start``, or None."""
+    try:
+        prog, o = _lpstr(body, start)
+    except ValueError, struct.error, UnicodeDecodeError:
+        return None
+    if not prog or "." not in prog or not all(32 <= ord(c) < 127 for c in prog):
+        return None
+    try:
+        count_at = o
+        n = struct.unpack_from("<H", body, o)[0]
+        o += 2
+        pairs = []
+        for _ in range(n):
+            k, o = _lpstr(body, o)
+            v, o = _lpstr(body, o)
+            pairs.append((k, v))
+    except ValueError, struct.error, UnicodeDecodeError:
+        return None
+    return (start, prog, count_at, pairs) if o == len(body) else None
+
+
+def find_list(body: bytes, at: Optional[int] = None):
     """(start of the ProgID lpstr, ProgID, start of the u16 count, pairs), or
-    None when the body does not end with such a list. Scans back from the end
-    for a printable ProgID containing '.' whose list ends exactly at the body
-    end (the list is the last thing a control record stores)."""
+    None when the body does not end with such a list. ``at``: where the list starts
+    when it is known (the end of the control's saved state, :func:`storage_span`), tried
+    first. Else scans back from the end for a printable ProgID containing '.' whose list
+    ends exactly at the body end (the list is the last thing a control record stores);
+    a later pair can pass that test too (a last key with a '.' and an empty value)."""
+    if at is not None and 0 <= at < len(body):
+        found = _list_at(body, at)
+        if found is not None:
+            return found
     for start in range(len(body) - 4, max(-1, len(body) - 8192), -1):
-        try:
-            prog, o = _lpstr(body, start)
-        except ValueError, struct.error, UnicodeDecodeError:
-            continue
-        if not prog or "." not in prog or not all(32 <= ord(c) < 127 for c in prog):
-            continue
-        try:
-            count_at = o
-            n = struct.unpack_from("<H", body, o)[0]
-            o += 2
-            pairs = []
-            for _ in range(n):
-                k, o = _lpstr(body, o)
-                v, o = _lpstr(body, o)
-                pairs.append((k, v))
-        except ValueError, struct.error, UnicodeDecodeError:
-            continue
-        if o == len(body):
-            return start, prog, count_at, pairs
+        found = _list_at(body, start)
+        if found is not None:
+            return found
     return None
 
 
@@ -62,7 +74,8 @@ def rebuild_list(po: PageObject, props=None) -> bool:
     A record whose body does not end with a list is left alone."""
     if po.type_code != 0x0D:
         return False
-    found = find_list(po.body_raw)
+    span = storage_span(po)
+    found = find_list(po.body_raw, span[1] if span is not None else None)
     if found is None:
         return False
     _start, _prog, count_at, pairs = found

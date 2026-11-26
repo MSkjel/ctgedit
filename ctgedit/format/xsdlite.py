@@ -46,11 +46,14 @@ def parse_positioned(data: bytes) -> PositionedTree:
     positions: Dict[int, Tuple[int, int]] = {}
     p = xml.parsers.expat.ParserCreate()
     p.buffer_text = True
+    # expat counts a byte order mark as line 1's first column; .NET does not
+    bom = 1 if data[:3] == b"\xef\xbb\xbf" or data[:2] in (b"\xff\xfe", b"\xfe\xff") else 0
 
     def start(tag, attrs):
         el = builder.start(tag, attrs)
         # expat points at the '<' (0-based column); .NET reports the name
-        positions[id(el)] = (p.CurrentLineNumber, p.CurrentColumnNumber + 2)
+        line = p.CurrentLineNumber
+        positions[id(el)] = (line, p.CurrentColumnNumber + 2 - (bom if line == 1 else 0))
 
     p.StartElementHandler = start
     p.EndElementHandler = builder.end
@@ -63,7 +66,7 @@ def parse_positioned(data: bytes) -> PositionedTree:
                 "The file is not valid XML: %s."
                 % xml.parsers.expat.errors.messages.get(e.code, str(e)).rstrip("."),
                 e.lineno,
-                (e.offset or 0) + 1,
+                (e.offset or 0) + 1 - (bom if e.lineno == 1 else 0),
             )
         ) from None
     root = builder.close()
