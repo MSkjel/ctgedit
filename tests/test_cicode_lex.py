@@ -63,6 +63,33 @@ def test_numbers_and_what_the_compiler_refuses():
     assert [k for k, _ in _kinds("0x1F 0b101 0o17 1.5e3 42")] == [L.NUMBER] * 5
     for bad in ("99999999999", "0x123456789", "a == b", "a >< b"):
         assert any(t.kind == L.INVALID and t.problem for t in L.tokenize(bad)), bad
+    # where CtCmp32 ends a number past 32 bits: hex before the digit that passes, the rest after
+    assert _kinds("0x100000000")[0] == (L.INVALID, "0x10000000")
+    assert _kinds("99999999999")[0] == (L.INVALID, "9999999999")
+    assert _kinds("10000000000")[0] == (L.INVALID, "10000000000")
+    assert _kinds("0b" + "1" * 33)[0] == (L.INVALID, "0b" + "1" * 33)
+    assert _kinds("0o40000000000")[0] == (L.INVALID, "0o40000000000")
+    largest = "0xFFFFFFFF 0b%s 0o37777777777 4294967295 00004294967295" % ("1" * 32)
+    assert [k for k, _ in _kinds(largest)] == [L.NUMBER] * 5
+    assert _kinds("Level:0x100000000")[2] == (L.INVALID, "0x10000000")
+    # '12b' is no binary number: the compiler cuts it as digits
+    assert _kinds("4294967296x")[0] == (L.NUMBER, "4294967296")
+
+
+def test_a_digit_that_is_not_ascii_is_no_number():
+    """'²' and the like: str.isdigit() takes them, the compiler does not (and the
+    tokenizer must move past them)."""
+    import threading
+
+    out = {}
+    texts = ("²", "a = 1²", "x:³", "٣", "Level * 10¹")
+    t = threading.Thread(target=lambda: out.update({s: L.tokenize(s) for s in texts}), daemon=True)
+    t.start()
+    t.join(10)
+    assert len(out) == len(texts), "the tokenizer did not finish"
+    for s in texts:
+        assert not any(tok.kind == L.NUMBER and not s[tok.start : tok.end].isascii() for tok in out[s]), s
+        assert out[s][-1].end == len(s), s
     assert L.tokenize("CiCode")[0].kind == L.INVALID  # reserved
     assert "character" in L.tokenize("a $ b")[1].problem
 
@@ -160,3 +187,11 @@ def test_a_parameters_default_may_hold_quotes():
     assert ("%Desc%", L.PARAM) in got
     assert L.param_parts('%Line3=" Hello"%') == ("Line3", '" Hello"')
     assert L.param_parts("%Tag%") == ("Tag", None) and L.param_parts("%a=%") == ("a", None)
+    assert L.param_parts("%=Q%") == ("Q", None) and L.param_parts("%=R=dflt%") == ("R", "dflt")
+
+
+def test_an_open_string_that_ends_with_a_parameter_shows_its_problem():
+    toks = L.tokenize('Msg("Tank %name%')
+    assert all(t.end > t.start for t in toks)
+    open_ = [t for t in toks if t.problem]
+    assert len(open_) == 1 and open_[0].kind == L.STRING and 'Msg("Tank %name%'[open_[0].start] == '"'

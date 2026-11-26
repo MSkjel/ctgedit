@@ -73,23 +73,70 @@ _RESERVED = frozenset(("nop", "var", "cicode", "civba"))
 
 _NAME = re.compile("%s%s*" % (_cn.START, _cn.PART))
 _SPACE = re.compile(r"\s*")
-_NUMBERS = (
-    (re.compile(r"0+[xX]0*[1-9A-Fa-f][0-9A-Fa-f]{8,}"), "The number is larger than 32 bits."),
-    (re.compile(r"0+[xX][0-9A-Fa-f]*"), ""),
-    (re.compile(r"0+[bB]0*1[01]{32,}"), "The number is larger than 32 bits."),
-    (re.compile(r"0+[bB][01]*"), ""),
-    (re.compile(r"0+[oO]0*(?:[1-7][0-7]{11,}|[4-7][0-7]{10})"), "The number is larger than 32 bits."),
-    (re.compile(r"0+[oO][0-7]*"), ""),
-    (re.compile(r"[0-9]+(?:\.[0-9]*(?:[eE][+-]?[0-9]*)?|[eE][+-]?[0-9]*)"), ""),
-    (
-        re.compile(
-            r"0*(?:[1-9][0-9]{10,}|[5-9][0-9]{9}|4[3-9][0-9]{8}|429[5-9][0-9]{6}|42949[7-9][0-9]{4}"
-            r"|429496[89][0-9]{3}|4294967[3-9][0-9]{2}|429496729[6-9])(?![0-9bBoOxX])"
-        ),
-        "The number is larger than 4294967295.",
-    ),
-    (re.compile(r"[0-9]+"), ""),
-)
+_TOO_BIG_RADIX = "The number is larger than 32 bits."
+_TOO_BIG_DECIMAL = "The number is larger than 4294967295."
+_RADIX = {"b": 2, "B": 2, "o": 8, "O": 8, "x": 16, "X": 16}
+_HEX_DIGIT = {c: int(c, 16) for c in "0123456789abcdefABCDEF"}
+
+
+def _digit(c: str) -> bool:
+    """An ASCII digit, as the compiler reads one (``str.isdigit`` also takes superscripts)."""
+    return "0" <= c <= "9" and len(c) == 1
+
+
+def _radix_digit(c: str, radix: int) -> int:
+    d = _HEX_DIGIT.get(c, -1)
+    return d if d < radix else -1
+
+
+def _scan_number(text: str, i: int) -> Tuple[int, str]:
+    """The number token at ``text[i]`` (an ASCII digit) as CtCmp32 cuts it: (end, problem).
+    A value past 32 bits is E2058: a hex number stops before the digit that passes 32 bits,
+    a binary, octal or decimal one after it ('{0x10000000}0', '{0o40000000000}',
+    '{9999999999}9'). A radix letter after other digits ('12b') is no radix number; the token
+    is then the digits of that radix after the first one. The engine's Lexer.ScanNumber."""
+    n = len(text)
+    p = i
+    while p < n and text[p] == "0":
+        p += 1
+    first = p
+    while p < n and _digit(text[p]):
+        p += 1
+    c = text[p] if p < n else ""
+    if c in (".", "e", "E"):
+        if c == ".":
+            p += 1
+            while p < n and _digit(text[p]):
+                p += 1
+        if p < n and text[p] in ("e", "E"):
+            p += 1
+            if p < n and text[p] in ("+", "-"):
+                p += 1
+            while p < n and _digit(text[p]):
+                p += 1
+        return p, ""
+    radix = _RADIX.get(c, 0)
+    if radix:
+        q = first + 1
+        if p == first:
+            v = 0
+            while q < n and _radix_digit(text[q], radix) >= 0:
+                v = v * radix + _radix_digit(text[q], radix)
+                if v > 0xFFFFFFFF:
+                    return (q if radix == 16 else q + 1), _TOO_BIG_RADIX
+                q += 1
+            return q, ""
+        while q < n and _radix_digit(text[q], radix) >= 0:
+            q += 1
+        return q, ""
+    v = 0
+    for q in range(first, p):
+        v = v * 10 + ord(text[q]) - 48
+        if v > 0xFFFFFFFF:
+            return q + 1, _TOO_BIG_DECIMAL
+    return p, ""
+
+
 _PICTURE = re.compile(r"#[#0\-]*(?:!|(?:[.s]#*)?(?:[ \t]*(?:eu|engunit)\b)?)", re.IGNORECASE)
 _FORMAT_SPEC = re.compile(
     _PICTURE.pattern
@@ -122,9 +169,10 @@ def _param_end(text: str, i: int, in_string: bool = False) -> int:
 
 def param_parts(token_text: str) -> Tuple[str, Optional[str]]:
     """(name, default or None) of a genie parameter token ('%Line3=" Hello"%' ->
-    ('Line3', '" Hello"')): the default is the text after the first '=', quotes and all."""
-    name, eq, default = token_text[1:-1].replace("^%", "%").partition("=")
-    return name.strip(), (default if eq and default else None)
+    ('Line3', '" Hello"')): as CtDraw reads it, leading '='s skipped ('%=Q%' is Q), the
+    default the text after the next '=', quotes and all."""
+    name, _eq, default = token_text[1:-1].replace("^%", "%").lstrip("=").partition("=")
+    return name.strip(), (default or None)
 
 
 def tokenize(text: str) -> List[Token]:
@@ -166,8 +214,15 @@ def tokenize(text: str) -> List[Token]:
             after_colon = False
             m = _FORMAT_SPEC.match(text, i)
             if m and m.end() > i:
-                out.append(Token(i, m.end(), FORMAT))
-                i = m.end()
+                # a number spec is a number token: past 32 bits it is E2058 too
+                k = len(m.group(0)) - len(m.group(0).lstrip("- 	")) + i
+                j, problem = _scan_number(text, k) if _digit(text[k : k + 1]) else (0, "")
+                if problem:
+                    out.append(Token(i, j, INVALID, problem))
+                    i = j
+                else:
+                    out.append(Token(i, m.end(), FORMAT))
+                    i = m.end()
                 continue
         # strings, with the genie parameters inside them
         if c == '"':
@@ -216,13 +271,10 @@ def tokenize(text: str) -> List[Token]:
             out.append(Token(i, j, kind))
             i = j
             continue
-        if c.isdigit():
-            for rx, problem in _NUMBERS:
-                m = rx.match(text, i)
-                if m and m.end() > i:
-                    out.append(Token(i, m.end(), INVALID if problem else NUMBER, problem))
-                    i = m.end()
-                    break
+        if _digit(c):
+            j, problem = _scan_number(text, i)
+            out.append(Token(i, j, INVALID if problem else NUMBER, problem))
+            i = j
             continue
         m = _BAD_OPERATOR.match(text, i)
         if m:
@@ -262,6 +314,7 @@ def _string(text: str, i: int, out: List[Token]) -> int:
     n = len(text)
     j = i + 1
     part = i
+    first = len(out)
     while j < n:
         c = text[j]
         if c == "^" and j + 1 < n:
@@ -281,7 +334,12 @@ def _string(text: str, i: int, out: List[Token]) -> int:
                 part = j = e
                 continue
         j += 1
-    out.append(Token(part, j, STRING, 'The string is not closed: a " is missing.'))
+    problem = 'The string is not closed: a " is missing.'
+    if j > part:
+        out.append(Token(part, j, STRING, problem))
+    else:
+        # it ends with a parameter: the problem goes on the piece with the opening quote
+        out[first] = out[first]._replace(problem=problem)
     return j
 
 

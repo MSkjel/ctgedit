@@ -42,3 +42,31 @@ def test_the_tokenizers_take_code_page_names():
     assert [(r.text, r.kind) for r in L.references("M\u00e5ling(1)")] == [("M\u00e5ling", L.FUNCTION)]
     assert C._tokenize(name + " <> 1")[0] == ("id", name)
     assert S._TOKEN.findall("?" + name + "?") == [name]
+
+
+def test_too_big_numbers_end_where_the_compiler_ends_them():
+    """Every E2058 CtCmp32 reported in the engine's recorded compiles: the field tokens mark
+    the same characters ('{0x10000000}0': a hex number stops before the digit past 32 bits,
+    a decimal, binary or octal one after it)."""
+    import glob
+    import re
+
+    from ctgedit import cicode_lex as L
+
+    root = os.path.join(REPO, "external", "cicode-sim", "conformance", "compile")
+    spans = []
+    for p in glob.glob(os.path.join(root, "**", "*.json"), recursive=True):
+        d = json.load(open(p, encoding="utf-8"))
+        for e in d.get("errors") or [] if isinstance(d, dict) else []:
+            m = re.search(r"\{([^{}]*)\}", e.get("context") or "") if e.get("code") == "E2058" else None
+            if m:
+                spans.append((p, e["context"], m))
+    if not spans:
+        pytest.skip("the engine's conformance/compile records are not checked out")
+    bad = []
+    for p, ctx, m in spans:
+        text = ctx[: m.start()] + m.group(1) + ctx[m.end() :]
+        a, b = m.start(), m.start() + len(m.group(1))
+        if not any(t.kind == L.INVALID and (t.start, t.end) == (a, b) for t in L.tokenize(text)):
+            bad.append("%s: %s" % (os.path.relpath(p, root), ctx))
+    assert not bad
