@@ -583,3 +583,44 @@ def test_a_box_being_deleted_raises_nothing(ctx, capfd):
     dlg.deleteLater()
     QtWidgets.QApplication.processEvents()
     assert "already deleted" not in capfd.readouterr().err
+
+
+def test_the_compilers_warnings_are_underlined_where_they_are():
+    """checkExpression's warnings carry a column (a page or tag name in quotes: its opening
+    quote): the string is underlined; one without a column only shows in the field's mark."""
+    from ctgedit import cicode_lex as L
+    from ctgedit.ui.objprops.cicode_assist import check_problems
+
+    text = 'TagRead("Pump9_PV")'
+    result = {
+        "ok": True,
+        "errors": [],
+        "warnings": [
+            {"kind": "tag", "message": "the project does not define the tag Pump9_PV", "column": 9},
+            {"kind": "tag", "message": "no column", "column": 0},
+        ],
+    }
+    (p,) = check_problems(text, L.tokenize(text), result)
+    assert p.level == "warning" and text[p.start : p.end] == '"Pump9_PV"'
+
+
+def test_a_warning_about_a_name_a_genie_makes_is_left_out():
+    """A warning at a parameter's place, or naming what fill_template made of it, is the
+    template's, not the field's."""
+    from ctgedit import cicode_lex as L
+    from ctgedit.ui.expression_check import without_template
+
+    filled, spans = L.fill_template('_PageDisplay("%Page%")')
+    names = [filled[s:e] for s, e in spans]
+    result = {
+        "ok": True,
+        "errors": [],
+        "warnings": [
+            {"kind": "page", "message": "the project has no page %s" % names[0], "column": 14},
+            {"kind": "tag", "message": "the project does not define the tag X", "column": spans[0][0] + 1},
+            {"kind": "tag", "message": "the project does not define the tag Y", "column": 1},
+        ],
+    }
+    assert [w["message"] for w in without_template(result, spans, names)["warnings"]] == [
+        "the project does not define the tag Y"
+    ]

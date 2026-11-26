@@ -177,7 +177,7 @@ def without_template(result: dict, spans, names) -> dict:
         return at_column and any(s <= col < e for s, e in spans)
 
     errors = [e for e in result.get("errors") or () if not about_template(e, True)]
-    warnings = [w for w in result.get("warnings") or () if not about_template(w, False)]
+    warnings = [w for w in result.get("warnings") or () if not about_template(w, True)]
     return {"ok": not errors, "errors": errors, "warnings": warnings}
 
 

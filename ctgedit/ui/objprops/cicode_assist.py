@@ -162,20 +162,25 @@ def _known(context, how: str, name: str) -> Optional[bool]:
 
 
 def check_problems(text: str, tokens: Sequence[L.Token], result: Optional[dict]) -> List[Problem]:
-    """The compiler's errors of a check result (ui/expression_check), at their column: the
-    token there, or the character."""
+    """The compiler's errors and warnings of a check result (ui/expression_check), at their
+    column: the token there (a page or tag name in quotes: the string), or the character; a
+    warning without a column is not underlined (the field's mark says it)."""
     out: List[Problem] = []
     if not result:
         return out
-    for e in result.get("errors") or ():
-        col = int(e.get("column") or 0)
-        msg = str(e.get("message") or "")
-        if col <= 0 or col > len(text) + 1:
-            start, end = 0, len(text)
-        else:
-            t = L.token_at(list(tokens), col - 1)
-            start, end = (t.start, t.end) if t is not None else (col - 1, min(len(text), col))
-        out.append(Problem(start, max(end, start + 1), "error", msg))
+    toks = list(tokens)
+    for level, items in (("error", result.get("errors")), ("warning", result.get("warnings"))):
+        for e in items or ():
+            col = int(e.get("column") or 0)
+            msg = str(e.get("message") or "")
+            if col <= 0 or col > len(text) + 1:
+                if level == "warning":
+                    continue
+                start, end = 0, len(text)
+            else:
+                t = L.token_at(toks, col - 1)
+                start, end = (t.start, t.end) if t is not None else (col - 1, min(len(text), col))
+            out.append(Problem(start, max(end, start + 1), level, msg))
     return out
 
 

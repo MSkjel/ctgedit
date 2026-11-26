@@ -70,6 +70,28 @@ def _paste(fx_install, element, params):
     return GeniePasteDialog("fxgenie." + element, params, model, uses=uses)
 
 
+class _FakeChecker:
+    """ctsim/checkExpression as the form sees it: the Cicode it is given, and a name of
+    ``undefined`` in it reported as the engine reports an undefined tag."""
+
+    def __init__(self, undefined=()):
+        self.undefined = set(undefined)
+        self.seen = []
+
+    def check(self, text, kind, callback):
+        self.seen.append((kind, text))
+        warn = [
+            {
+                "kind": "tag",
+                "message": "the project does not define the tag %s (the runtime raises error 424 for it)" % n,
+                "column": text.find(n) + 1,
+            }
+            for n in sorted(self.undefined)
+            if n in text
+        ]
+        callback({"ok": True, "errors": [], "warnings": warn})
+
+
 def test_a_tag_prefix_completes_the_values_that_make_tags(fx_install):
     from ctgedit.ui.objprops.expression import ExpressionField, NameCompletionModel
 
@@ -80,14 +102,63 @@ def test_a_tag_prefix_completes_the_values_that_make_tags(fx_install):
     assert names[:2] == ["FX_V1", "FX_V2"] and len(names) == 8
     m = ed.name_completer().model()
     assert m.data(m.index(0, 1)) == "1 of 1 tags"
-    # a value whose tag the project does not have
-    ed.setText("FX_V9")
-    ed.editingFinished.emit()
-    assert "FX_V9_ON" in ed.advice_text()
-    ed.setText("FX_V1")
-    ed.editingFinished.emit()
-    assert ed.advice_text() == ""
     dlg.reject()
+
+
+def test_a_field_checks_the_genies_cicode_with_the_values(fx_install, monkeypatch):
+    """The compiler says whether the genie's Cicode works with the value typed: each
+    command and expression the parameter goes into, the form's values in it."""
+    from ctgedit.ui.dialog import genie_dialogs as GD
+
+    fake = _FakeChecker({"FX_V9_ON"})
+    monkeypatch.setattr(GD, "checker_for", lambda _d: fake)
+    dlg = _paste(fx_install, "fx_valve", {"TagPrefix": ""})
+    ed = dlg.params_form.editor("TagPrefix")
+    ed.setText("FX_V9")
+    assert ed.check_now()
+    assert ("expression", "FX_V9_ON") in fake.seen
+    assert "the project does not define the tag FX_V9_ON" in ed.advice_text()
+    labels = {u.label for u in dlg.params_form.param_uses("TagPrefix").uses}
+    assert any(ed.advice_text().startswith(lab + ": ") for lab in labels)
+    ed.setText("FX_V1")
+    assert ed.check_now() and ed.advice_text() == ""
+    dlg.reject()
+    # the other parameters' values go in; one not filled in stays a token for the template rule
+    dlg = _paste(fx_install, "fx_pump", {"Tag": "", "Label": ""})
+    monkeypatch.setattr(GD, "checker_for", lambda _d: fake)
+    check = GD.GenieCicodeCheck(dlg.params_form, "Tag", fake)
+    texts = [t for _l, _k, t in check.texts("FX_PUMP1")]
+    assert texts and all("%Tag%" not in t for t in texts) and any("FX_PUMP1" in t for t in texts)
+    dlg.reject()
+
+
+def test_problems_of_several_fields_name_their_field():
+    from ctgedit.ui.dialog.genie_dialogs import _merged
+
+    got = _merged(
+        [
+            (
+                "Command",
+                {
+                    "ok": False,
+                    "errors": [{"name": "E2064", "message": "Function 'X' not found", "column": 4}],
+                },
+            ),
+            (
+                "Fill colour condition",
+                {
+                    "ok": True,
+                    "errors": [],
+                    "warnings": [{"kind": "tag", "message": "no tag A_ON", "column": 3}],
+                },
+            ),
+        ]
+    )
+    assert not got["ok"] and got["errors"][0]["message"] == "Command: Function 'X' not found"
+    assert got["errors"][0]["column"] == 0
+    assert got["warnings"][0]["message"] == "Fill colour condition: no tag A_ON"
+    assert got["warnings"][0]["column"] == 0 and got["warnings"][0]["kind"] == "tag"
+    assert _merged([("Command", {"error": "no simulator"})]) == {"error": "no simulator"}
 
 
 def test_fields_follow_the_parameters_roles(fx_install):
@@ -109,10 +180,7 @@ def test_the_uses_panel_follows_the_field_and_its_value(fx_install):
     assert "Where the genie uses TagPrefix:" in dlg.uses_text()
     assert "%TagPrefix%_ON" in dlg.uses_text()
     dlg.params_form.editor("TagPrefix").setText("FX_V2")
-    text = dlg.uses_text()
-    assert "FX_V2_ON" in text and "Tags found: FX_V2_ON." in text
-    dlg.params_form.editor("TagPrefix").setText("FX_V9")
-    assert "Not in the project: FX_V9_ON." in dlg.uses_text()
+    assert "FX_V2_ON" in dlg.uses_text()
     dlg.reject()
 
 

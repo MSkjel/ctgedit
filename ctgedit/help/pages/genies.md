@@ -37,12 +37,18 @@ Each field is made for what the genie does with its value:
 - **Expression or command**: suggests tags as you type, and the Wizard inserts tags and Cicode
   functions. A name that is not a tag in the project gets a warning.
 - **Part of tag names** (the genie uses `%Tag%_PV`, `%Tag%_SP`): suggests the values that make
-  the project's tags, with how many of the genie's tags each one makes. A value whose tags are
-  missing gets a warning that names them.
+  the project's tags, with how many of the genie's tags each one makes.
 - **Text** (captions, tool tips): a plain box.
 
+A field whose parameter goes into the genie's Cicode is checked as you pause typing: the genie's
+commands and expressions, with the values of the form filled in, are compiled as the page
+compiler would (by the simulator, running nothing). What it finds shows at the start of the
+field, each problem headed by the genie's field it is in: a tag the project does not define,
+or a page it does not have that the genie opens, such as `PageDisplay("Mix_%Area%")` with an
+Area that makes no page. A page name is never taken for a tag.
+
 Under the form, the dialog shows where the genie uses the parameter you are editing, with your
-values filled in, and which of its tags are in the project. Situational Awareness genies get
+values filled in. Situational Awareness genies get
 pickers (see [Situational Awareness pages](situational-awareness.md)).
 
 Drag a tag from the [Tags panel](tags-panel.md) onto a genie: if it has one tag or equipment

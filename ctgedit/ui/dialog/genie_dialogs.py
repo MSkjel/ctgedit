@@ -522,9 +522,10 @@ class GenieParamsForm(QtWidgets.QWidget):
         """The text box of a parameter without a list, made for what the genie does with
         its value (features/genie_uses): a command or an expression gets the Wizard's tags
         and functions and the tag advice; a part of tag names ('%Tag%_PV') completes the
-        values that make the scope's tags and says which it makes that are missing; a
-        text or a setting is a plain box. A parameter whose uses are not known completes
-        tag names."""
+        values that make the scope's tags; a text or a setting is a plain box. A parameter
+        whose uses are not known completes tag names. A field whose parameter goes into the
+        genie's Cicode is checked by compiling that Cicode with the form's values
+        (:class:`GenieCicodeCheck`)."""
         from ...features import genie_uses as GU
 
         use = self.param_uses(name)
@@ -551,9 +552,10 @@ class GenieParamsForm(QtWidgets.QWidget):
             w.set_names(NameCompletionModel(self._names_model.project_dir, use.patterns, w))
         else:
             w.set_names(self._names_model)
-        if use is not None and use.patterns:
-            ctx_ref = weakref.ref(self._context)
-            w.set_advice(lambda v, u=use: _missing_names_advice(ctx_ref(), u, v))
+        if use is not None and any(u.kind in GenieCicodeCheck.KINDS for u in use.uses):
+            checker = checker_for(self._names_model.project_dir)
+            if checker is not None:
+                w.set_checker(GenieCicodeCheck(self, name, checker))
         return w
 
     def _build_form(self, form) -> "_FormCanvas":
@@ -684,49 +686,86 @@ class GenieParamsForm(QtWidgets.QWidget):
             self._params[keys.get(low, name)] = value
 
 
-#: the most tag names a note lists
-_NAMES_LISTED = 5
 #: the most uses the panel lists, and the longest field it shows whole
 _USES_LISTED = 6
 _USE_CHARS = 140
 
 
-def _missing_names(context, use, value: str) -> Optional[List[str]]:
-    """The tag names ``value`` makes in the genie that the scope does not have; None when
-    that is not known (no value, a value with a placeholder, no tag list)."""
-    v = (value or "").strip()
-    if context is None or not v or "%" in v or "?" in v:
-        return None
-    idx = context.tag_index()
-    out = []
-    for n in use.names(v):
-        known = idx.is_name(n)
-        if known is None:
-            return None
-        if not known:
-            out.append(n)
-    return out
+def checker_for(project_dir: Optional[str]):
+    """The Cicode check of ``project_dir`` (ui/expression_check; tests put in a fake)."""
+    from ..expression_check import checker_for as _checker_for
+
+    return _checker_for(project_dir)
 
 
-def _listed(names: List[str]) -> str:
-    shown = ", ".join(names[:_NAMES_LISTED])
-    more = len(names) - _NAMES_LISTED
-    return shown + (" and %d more" % more if more > 0 else "")
+class GenieCicodeCheck:
+    """Does the genie's Cicode work with this value? The checker of a parameter's field:
+    each command and expression of the genie the parameter goes into, with the form's
+    values put in (the value checked for this parameter), compiled as the page compiler
+    would, running nothing (ctsim/checkExpression). The parameters not filled in yet are
+    left to the template rule (expression_check.without_template). Each problem names the
+    field it is in."""
+
+    KINDS = ("command", "expression")
+
+    def __init__(self, form: "GenieParamsForm", name: str, checker):
+        self._form = weakref.ref(form)
+        self._name = name
+        self._checker = checker
+
+    def texts(self, value: str) -> List[tuple]:
+        """(the field's label, its kind, its Cicode with the values) of each use."""
+        from ...features import genie_uses as GU
+
+        form = self._form()
+        use = form.param_uses(self._name) if form is not None else None
+        if use is None:
+            return []
+        values = {k.lower(): v for k, v in form.values().items()}
+        values[self._name.lower()] = value
+        out, seen = [], set()
+        for u in use.uses:
+            if u.kind not in self.KINDS:
+                continue
+            text = GU.substitute(u.template, values, keep_missing=True).strip()
+            if text and (u.kind, text) not in seen:
+                seen.add((u.kind, text))
+                out.append((u.label, u.kind, text))
+        return out
+
+    def check(self, value: str, _kind: str, callback) -> None:
+        jobs = self.texts(value)
+        if not jobs:
+            callback({"ok": True, "errors": [], "warnings": []})
+            return
+        got: Dict[int, tuple] = {}
+
+        def done(k: int, label: str, result: dict) -> None:
+            got[k] = (label, result)
+            if len(got) == len(jobs):
+                callback(_merged([got[i] for i in range(len(jobs))]))
+
+        for k, (label, kind, text) in enumerate(jobs):
+            self._checker.check(text, kind, lambda r, k=k, label=label: done(k, label, r))
 
 
-def _missing_names_advice(context, use, value: str) -> list:
-    """Advice on a value that makes tag names the project does not have."""
-    from ..objprops import validators as V
+def _merged(results) -> dict:
+    """One result of the results of several fields [(label, result)]: their problems, each
+    headed by its field (the column is the field's, not the value's: left out)."""
+    errors, warnings = [], []
+    for label, r in results:
+        if r.get("error"):
+            return {"error": r["error"]}
+        for e in r.get("errors") or ():
+            errors.append(dict(e, message="%s: %s" % (label, e.get("message") or ""), column=0))
+        for w in r.get("warnings") or ():
+            warnings.append(dict(w, message="%s: %s" % (label, w.get("message") or ""), column=0))
+    return {"ok": not errors, "errors": errors, "warnings": warnings}
 
-    missing = _missing_names(context, use, value)
-    if not missing:
-        return []
-    return [V.Problem(V.WARNING, "The genie uses tags the project does not have: %s." % _listed(missing))]
 
-
-def uses_html(name: str, use, values: Dict[str, str], context=None) -> str:
+def uses_html(name: str, use, values: Dict[str, str]) -> str:
     """The uses panel's text for parameter ``name``: each field it goes into with the
-    form's values in it (``values`` by lower-case name), then the tags it makes."""
+    form's values in it (``values`` by lower-case name)."""
     from ...features import genie_uses as GU
 
     head = "<b>%s</b>" % _html.escape(name)
@@ -743,18 +782,6 @@ def uses_html(name: str, use, values: Dict[str, str], context=None) -> str:
     more = len(use.uses) - _USES_LISTED
     if more > 0:
         lines.append("And %d more." % more)
-    value = values.get(name.lower(), "")
-    made = use.names(value) if "%" not in value else []
-    if made:
-        missing = _missing_names(context, use, value)
-        if missing is None:
-            lines.append("Tags it makes: %s." % _html.escape(_listed(made)))
-        else:
-            have = [n for n in made if n not in missing]
-            if have:
-                lines.append("Tags found: %s." % _html.escape(_listed(have)))
-            if missing:
-                lines.append("Not in the project: %s." % _html.escape(_listed(missing)))
     return "<br>".join(lines)
 
 
@@ -890,7 +917,7 @@ class _GenieDialogBase(QtWidgets.QDialog):
 
     def _add_uses_panel(self, lay) -> None:
         """Under the form: where the genie uses the parameter being edited, with the
-        values typed, and the tags it makes."""
+        values typed."""
         lab = QtWidgets.QLabel()
         lab.setWordWrap(True)
         lab.setTextFormat(QtCore.Qt.RichText)
@@ -924,9 +951,7 @@ class _GenieDialogBase(QtWidgets.QDialog):
         if self.uses_label is None or name is None:
             return
         values = {k.lower(): v for k, v in self.params_form.values().items()}
-        self.uses_label.setText(
-            uses_html(name, self.params_form.param_uses(name), values, self.params_form._context)
-        )
+        self.uses_label.setText(uses_html(name, self.params_form.param_uses(name), values))
 
     def uses_text(self) -> str:
         """The uses panel's text, plain (tests)."""
