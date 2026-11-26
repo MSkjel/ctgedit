@@ -8,7 +8,8 @@ import struct
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence, Tuple  # noqa: F401 (re-exported)
 
-from ctgedit.format.container import Block, ENTRY_SIZE, HEADER_FIXED, NAME_LEN
+from .cnum import c_atoi
+from ctgedit.format.container import Block, ENTRY_SIZE, HEADER_FIXED, NAME_LEN, directory_capacity
 from ctgedit.format.page import (
     PAGE_HEAD_SIZE,
     LINK_ENTRY_SIZE,
@@ -120,7 +121,7 @@ class LibraryFile:
         (self.version, self.word2, self.ts_created, self.ts_modified, self.dword_c) = struct.unpack_from(
             "<HHIII", data, 0
         )
-        cap = self.dword_c if 0 < self.dword_c <= 0x4000 else 8
+        cap = directory_capacity(self.dword_c)
         self.slots = [
             Slot(i, bytes(data[HEADER_FIXED + i * ENTRY_SIZE : HEADER_FIXED + (i + 1) * ENTRY_SIZE]))
             for i in range(cap)
@@ -471,13 +472,6 @@ def _bag_bytes(pairs: Sequence[Tuple[str, str]]) -> bytes:
     return bytes(out)
 
 
-def _atoi(s: Optional[str]) -> int:
-    try:
-        return int((s or "0").strip() or "0")
-    except ValueError:
-        return 0
-
-
 @dataclass
 class ElementTrailer:
     """The records after the element's root tree (see module docstring)."""
@@ -496,9 +490,9 @@ class ElementTrailer:
         d = dict(props)
         rest = list(payloads[1:])
         assoc = keys = None
-        if _atoi(d.get(KEY_ASSOCIATIONS)) and rest:  # load order: B then C
+        if c_atoi(d.get(KEY_ASSOCIATIONS)) and rest:  # load order: B then C
             assoc, _ = _read_bag(rest.pop(0))
-        if _atoi(d.get(KEY_KEYBOARDS)) and rest:
+        if c_atoi(d.get(KEY_KEYBOARDS)) and rest:
             p = rest.pop(0)
             (n,) = struct.unpack_from("<H", p, 0)
             o, keys = 2, []
@@ -554,9 +548,9 @@ class ElementTrailer:
             return list(self.raw)
         out = [_bag_bytes(self.props)]
         d = dict(self.props)
-        if _atoi(d.get(KEY_ASSOCIATIONS)):
+        if c_atoi(d.get(KEY_ASSOCIATIONS)):
             out.append(_bag_bytes(self.associations or []))
-        if _atoi(d.get(KEY_KEYBOARDS)):
+        if c_atoi(d.get(KEY_KEYBOARDS)):
             kb = bytearray(struct.pack("<H", len(self.keyboards or [])))
             for bag in self.keyboards or []:
                 kb += _bag_bytes(bag)

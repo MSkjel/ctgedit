@@ -61,7 +61,7 @@ def parse_typed(ptype: str, text) -> Tuple[bool, object]:
         return False, None
     if ptype == "Int":
         v = s.strip(" \t\r\n\x0b\x0c")
-        if re.fullmatch(r"[+-]?[0-9]+", v):
+        if re.fullmatch(r"[+-]?0*[0-9]{1,10}", v):  # (a longer number is out of range)
             n = int(v)
             if INT_MIN <= n <= INT_MAX:
                 return True, n

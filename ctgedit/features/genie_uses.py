@@ -9,6 +9,7 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence, Tuple
 
+from ..format.cnum import is_digits
 from .. import cicode_names as _cn
 from ..format import genie_place as GP
 from ..format.codes import TC
@@ -189,7 +190,7 @@ def _composed(template: str, start: int, end: int) -> Optional[Tuple[str, str]]:
         return None
     if (a > 0 and template[a - 1] == "%") or (b < len(template) and template[b] == "%"):
         return None
-    if before[:1].isdigit():
+    if is_digits(before[:1]):
         return None
     return before, after
 

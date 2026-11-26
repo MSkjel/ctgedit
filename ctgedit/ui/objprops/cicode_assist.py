@@ -18,6 +18,7 @@ from typing import Dict, List, NamedTuple, Optional, Sequence, Tuple
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
+from ...format.cnum import is_digits
 from ... import cicode_lex as L
 from ... import cicode_names as _cn
 
@@ -1091,7 +1092,7 @@ class CicodeAssist(QtCore.QObject):
         if (
             need <= 0
             or len(tok) < need
-            or tok[0].isdigit()
+            or is_digits(tok[0])
             or not completes_names_at(self.text(), self.tokens(), start)
         ):
             c.popup().hide()

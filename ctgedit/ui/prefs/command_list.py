@@ -1,6 +1,7 @@
 """A setting that is a list of commands, with Add, Remove, Move Up and Move Down."""
 
 from __future__ import annotations
+from ...format.cnum import is_digits
 from ..style.theme import sp as _sp
 
 from typing import List, Optional
@@ -78,7 +79,7 @@ class CommandListField(QtWidgets.QWidget):
             count[c.label] = count.get(c.label, 0) + 1
         out = {}
         for c in cmds:
-            bare = count[c.label] > 1 or c.label[:1].isdigit()
+            bare = count[c.label] > 1 or is_digits(c.label[:1])
             out[c.id] = "%s (%s)" % (c.label, c.crumb or "Canvas") if bare else c.label
         return out
 

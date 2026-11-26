@@ -8,6 +8,7 @@ import glob
 import os
 from dataclasses import dataclass, field
 from typing import Callable, Dict, Iterable, List, Optional, Set, Tuple
+from ..format.cnum import is_digits
 
 
 @dataclass
@@ -1365,7 +1366,7 @@ def claimed(folder: str) -> Set[int]:
     except OSError:
         return out
     for n in names:
-        if n.isdigit():
+        if is_digits(n):
             out.add(int(n))
     return out
 

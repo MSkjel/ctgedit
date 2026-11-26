@@ -10,6 +10,8 @@ import re
 from dataclasses import dataclass
 from typing import Callable, Dict, Iterator, List, NamedTuple, Optional, Tuple
 
+from ..format.cnum import is_digits
+
 HELP_DIR = os.path.dirname(os.path.abspath(__file__))
 PAGES_DIR = os.path.join(HELP_DIR, "pages")
 IMAGES_DIR = os.path.join(HELP_DIR, "images")
@@ -292,7 +294,9 @@ def markdown_to_html(md: str) -> str:
             while i < len(lines):
                 lm = re.match(r"^(\s*)([-*]|\d+[.)])\s+(.*)$", lines[i])
                 if lm:
-                    items.append((len(lm.group(1).expandtabs(4)) // 2, lm.group(2)[0].isdigit(), lm.group(3)))
+                    items.append(
+                        (len(lm.group(1).expandtabs(4)) // 2, is_digits(lm.group(2)[0]), lm.group(3))
+                    )
                     i += 1
                 elif lines[i].strip() and lines[i].startswith("  ") and items:
                     d, o, t = items[-1]

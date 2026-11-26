@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:  # (names only the annotations use)
     from collections import OrderedDict
 
+from ..format.cnum import c_atoi, is_digits
 from ..editing_base import (  # noqa: F401
     List,
     ObjectKind,
@@ -441,7 +442,7 @@ class PropertyEdits:
         from ..format import webcontent as W
 
         props = self.object_properties(index)
-        return {"url": props.get(W.URL_KEY, ""), "enable_print": W._atoi(props.get(W.PRINT_KEY, "")) != 0}
+        return {"url": props.get(W.URL_KEY, ""), "enable_print": c_atoi(props.get(W.PRINT_KEY, "")) != 0}
 
     def set_web_content(self, index: int, *, url=None, enable_print=None) -> bool:
         """Apply the Web Content page."""
@@ -767,7 +768,7 @@ class PropertyEdits:
         if an is None:
             return ""
         text = str(an).strip()
-        if not (text.isascii() and text.isdigit()):
+        if not is_digits(text):
             return "The AN must be a whole number from %d to %d." % (self.AN_MIN, self.AN_MAX)
         n = int(text)
         if not self.AN_MIN <= n <= self.AN_MAX:

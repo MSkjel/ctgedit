@@ -6,6 +6,7 @@ import os
 import re  # noqa: F401 (re-exported)
 import struct
 from functools import lru_cache
+from ...format.cnum import c_atoi
 from ...format.page import _XFORM_DOUBLES, _geom_name_len
 from ...model.document import (
     Animations,
@@ -449,7 +450,7 @@ def _text_display_anim(raw_props: dict) -> DisplayValue:
     TXT_STR '(expr):format' (the format apart), String TXT_STR."""
     from ...format import dspval as _dsp
 
-    mode = _dsp.atoi(raw_props.get("TXTMODE"))
+    mode = c_atoi(raw_props.get("TXTMODE"))
     txt_str = str(raw_props.get("TXT_STR") or "")
     fmt = ""
     if mode == _dsp.NUMERIC:
@@ -466,9 +467,8 @@ def _fill_colour_anim(raw_props: dict) -> FillColour:
     COLMODE): its expression key (COL_A, COL_ARR or COL_EXP); a Threshold or Gradient
     animation also has its COL_THR_n rows (operator bit 0x1 = greater, 0x2 = or equal)."""
     from ...format import fillcolour as _fc
-    from ...format.dspval import atoi
 
-    mode = atoi(raw_props.get("COLMODE"))
+    mode = c_atoi(raw_props.get("COLMODE"))
     expr = str(raw_props.get(_fc.EXPRESSION_KEY.get(mode, "COL_A")) or "")
     rows = []
     if mode in _fc.RANGED:

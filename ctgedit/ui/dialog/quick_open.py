@@ -1,6 +1,7 @@
 """Quick Open (Ctrl+Shift+O): search pages, library items, tags, functions and objects."""
 
 from __future__ import annotations
+from ...format.cnum import is_digits
 from ..style.theme import sp as _sp
 
 import dataclasses
@@ -425,7 +426,7 @@ class ObjectSource:
             label = po.name or po.kind
             best = None
             why = ""
-            if q.isdigit():
+            if is_digits(q):
                 s = str(po.an) if po.an > 0 else ""
                 if s == q:
                     best = (0, [])
@@ -1063,7 +1064,7 @@ class QuickOpen(QtWidgets.QFrame):
 
 def goto_note(window, an: str) -> str:
     """What ':' shows when no object is found: ``an`` is the text after the colon."""
-    if not an.isdigit():
+    if not is_digits(an):
         return "Type an AN after the colon"
     if getattr(window, "doc", None) is None:
         return "Open a page first: ':' goes to an object by its AN"
@@ -1074,7 +1075,7 @@ def goto_hits(window, objects: ObjectSource, text: str) -> list:
     """':581': the object with AN 581 (one row), or nothing."""
     q = (text or "").strip()[1:].strip()
     doc = getattr(window, "doc", None)
-    if not q.isdigit() or doc is None:
+    if not is_digits(q) or doc is None:
         return []
     po = objects.by_an(doc, int(q))
     if po is None:

@@ -7,6 +7,7 @@ import importlib
 import os
 import sys
 from typing import List, Tuple
+from .cnum import is_digits
 
 # code pages Python ships a single-byte charmap table for
 _SINGLE_BYTE = {874, 1250, 1251, 1252, 1253, 1254, 1255, 1256, 1257, 1258}
@@ -38,7 +39,7 @@ def _lossless_table(cp: int) -> str:
 
 def _detect_codepage() -> int:
     env = os.environ.get("CTG_CODEPAGE", "").strip().lower().lstrip("cp")
-    if env.isdigit():
+    if is_digits(env):
         cp = int(env)
         return cp if cp in _SINGLE_BYTE or cp in _DOUBLE_BYTE else 1252
     if sys.platform == "win32":

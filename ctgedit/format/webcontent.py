@@ -6,6 +6,7 @@ import re
 import struct
 from typing import Optional, Tuple
 
+from .cnum import c_atoi
 from .page import PageObject
 from .textcodec import CODEC
 
@@ -18,11 +19,6 @@ FRAME = 0x6B6F73  # the design-time frame / text colour (COLORREF 0x736f6b)
 FACE = 0xF3F4F5  # the design-time face (COLORREF 0xf5f4f3)
 
 _SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*:")
-
-
-def _atoi(s: str) -> int:
-    m = re.match(r"\s*([+-]?\d+)", s or "")
-    return int(m.group(1)) if m else 0
 
 
 def string_section_offset(po: PageObject) -> Optional[int]:
@@ -66,7 +62,7 @@ def rebuild_string_section(po: PageObject) -> bool:
     props = po.raw_properties()
     url = props.get(URL_KEY, "") or ""
     raw = url.encode(CODEC, "replace")[:0xFFFF]
-    flag = _atoi(props.get(PRINT_KEY, "")) & 0xFF
+    flag = c_atoi(props.get(PRINT_KEY, "")) & 0xFF
     b = po.body_raw
     n = struct.unpack_from("<H", b, o)[0]
     new = struct.pack("<H", len(raw)) + raw + bytes([flag])

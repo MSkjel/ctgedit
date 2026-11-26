@@ -8,6 +8,7 @@ from typing import Dict, List, Optional
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
+from ...format.cnum import is_digits
 from ..style import theme as _theme
 from ..objprops.input import CommandEdit, KeySequenceDialog, command_argument_warnings, key_sequence_warnings
 from ..objprops.scroll import FitTabWidget, scroll_page, unwrap_page
@@ -1150,7 +1151,7 @@ class PagePropertiesDialog(QtWidgets.QDialog):
         if on:
             self._sp_scan.setValue(int(P.default_scan_time()))
         elif self._scan0:
-            self._sp_scan.setValue(int(self._scan0) if self._scan0.isdigit() else 0)
+            self._sp_scan.setValue(int(self._scan0) if is_digits(self._scan0) else 0)
         self._sp_scan.setEnabled(not on and self._db)
 
     def _on_inherit(self, on: bool) -> None:
@@ -1220,7 +1221,7 @@ class PagePropertiesDialog(QtWidgets.QDialog):
                 if (val == "TRUE") == (old.upper() == "TRUE"):
                     continue
             elif col == "SCANTIME":
-                if val == old or (val and old.isdigit() and int(val) == int(old)):
+                if val == old or (val and is_digits(old) and int(val) == int(old)):
                     continue
             if val.strip() == old:
                 continue

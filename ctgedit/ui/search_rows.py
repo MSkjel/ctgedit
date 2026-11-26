@@ -6,6 +6,7 @@ import functools
 from typing import Iterable, List, Optional, Sequence, Tuple
 
 from PySide6 import QtCore, QtGui, QtWidgets
+from ..format.cnum import is_digits
 
 #: the role holding the :class:`Row` of an index
 ROW_ROLE = QtCore.Qt.UserRole + 2
@@ -30,9 +31,9 @@ def word_starts(text: str) -> List[int]:
             out.append(i)
         elif prev.islower() and ch.isupper():
             out.append(i)
-        elif prev.isalpha() and ch.isdigit():
+        elif prev.isalpha() and is_digits(ch):
             out.append(i)
-        elif prev.isdigit() and ch.isalpha():
+        elif is_digits(prev) and ch.isalpha():
             out.append(i)
         prev = ch
     return out

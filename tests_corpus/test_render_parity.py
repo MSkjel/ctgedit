@@ -4,6 +4,7 @@ import os
 
 import pytest
 from PySide6 import QtCore, QtGui, QtWidgets  # noqa: F401
+from ctgedit.format.cnum import c_atoi
 
 
 EX = r"C:\ProgramData\AVEVA Plant SCADA 2023 R2\User\Example"
@@ -284,14 +285,6 @@ _WTP = os.path.join(_SA2, "WTP_INTAKE_HD1080.ctg")
 needs_wtp = pytest.mark.skipif(not os.path.exists(_WTP), reason="R2 ExampleSA WTP demo page absent")
 
 
-def _atoi(v):
-    """C atoi (CtDraw reads AI_ON that way)."""
-    import re
-
-    m = re.match(r"\s*([-+]?\d+)", v or "")
-    return int(m.group(1)) if m else 0
-
-
 def _ai_groups(path):
     """{index: own value bag} of the tc 0x08 records whose own AI_ON is non-zero -- the records
     CtDraw draws an alarm indicator for."""
@@ -301,7 +294,7 @@ def _ai_groups(path):
     out = {}
     for i, po in enumerate(parse_ctg(path).page.objects):
         bag = {k.upper(): v for k, v in (W.value_bag(po) or [])}
-        if po.type_code == 0x08 and _atoi(bag.get("AI_ON")):
+        if po.type_code == 0x08 and c_atoi(bag.get("AI_ON")):
             out[i] = bag
     return out
 

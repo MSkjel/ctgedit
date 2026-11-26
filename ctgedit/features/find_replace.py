@@ -7,6 +7,8 @@ import re
 import weakref
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence, Tuple
+
+from ..format.cnum import c_atoi
 from ..format import codes as _codes
 
 # (read here, not in the functions: an import in a function runs PySide's import hook on
@@ -392,11 +394,6 @@ def _traced_params(po, key: str, levels: int) -> Optional[frozenset]:
     return frozenset(names)
 
 
-def _atoi(v) -> int:
-    m = re.match(r"\s*([+-]?\d+)", v or "")
-    return int(m.group(1)) if m else 0
-
-
 def field_label(key: str) -> str:
     up = key.upper()
     name = FIELD_NAMES.get(up)
@@ -444,7 +441,7 @@ def _own_fields(doc, index: int, po, genie_root: bool, captions: bool = True):
     skip = set()
     tc = po.type_code
     if tc == 0x05:
-        mode = _atoi(_get(vals, "TXTMODE"))
+        mode = c_atoi(_get(vals, "TXTMODE"))
         if mode in (0, 1, 2):
             # a static / on-off / multi-state / array text: its OFF text IS
             # the caption (the tail the loader reads) -- TXT_OFF / STATE_0 /

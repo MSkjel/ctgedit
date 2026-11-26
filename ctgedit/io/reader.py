@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from ..format.cnum import c_atoi
 from ..format import geometry as _geom
 from ..format.page import _extract_bmp, _parse_object, parse_ctg
 from ..model.document import (
@@ -1037,9 +1038,6 @@ _GROUP_TYPE_CODE = 0x08
 # Exports (print, DIB renders, the drag image) never draw it -> editor-only.
 _AI_UNION_SKIP = frozenset({_codes.TC.TOUCH, _codes.TC.KEYBOARD, 0xFFFF})
 
-_c_atoi = _alarmind.c_atoi
-
-_c_strtoul = _alarmind.c_strtoul
 
 _rgb_packed = _alarmind._rgb_packed
 
@@ -1103,7 +1101,7 @@ def _alarm_indicators(page: Page, pobjs, resolver, page_path: str) -> None:
         if not any(str(k).upper() == "AI_ON" for k in (obj.raw.get("_props") or {})):
             continue
         pr = _ai_props(po)
-        if "AI_ON" not in pr or _c_atoi(pr["AI_ON"]) == 0:
+        if "AI_ON" not in pr or c_atoi(pr["AI_ON"]) == 0:
             continue
         U = None
         bounds = []

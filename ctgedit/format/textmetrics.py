@@ -10,6 +10,7 @@ import sys
 import threading
 from typing import Optional, Tuple
 
+from .cnum import is_digits
 from .page import PageObject
 from .textcodec import CODEC
 
@@ -86,7 +87,7 @@ class _Gdi:
             dc = self.user.GetDC(None)
             self.measured_dpi = g.GetDeviceCaps(dc, 90)
             self.user.ReleaseDC(None, dc)
-        self.logpixelsy = int(forced) if forced.isdigit() and int(forced) > 0 else self.measured_dpi
+        self.logpixelsy = int(forced) if is_digits(forced) and int(forced) > 0 else self.measured_dpi
 
     @contextlib.contextmanager
     def system_aware(self):

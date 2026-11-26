@@ -5,6 +5,7 @@ from __future__ import annotations
 import struct
 from typing import List, Optional, Sequence, Tuple
 
+from .cnum import c_atoi
 from . import geometry as G
 from . import placement as P
 from .page import PageObject
@@ -35,23 +36,9 @@ ZERO_LOCAL = (1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
 
 
 # --------------------------------------------------------------------------- bag values
-def atoi(value) -> int:
-    """C ``atoi``: optional blanks and sign, then the leading digits (0 when
-    there are none) -- how CtDraw reads TXTMODE."""
-    s = str(value or "").lstrip()
-    sign, i = 1, 0
-    if s[:1] in ("+", "-"):
-        sign = -1 if s[0] == "-" else 1
-        i = 1
-    j = i
-    while j < len(s) and s[j].isdigit():
-        j += 1
-    return sign * int(s[i:j]) if j > i else 0
-
-
 def set_type(props: dict) -> int:
     """The set's TYPE (the TXTMODE value; absent = On / Off)."""
-    return atoi(props.get("TXTMODE", "0"))
+    return c_atoi(props.get("TXTMODE", "0"))
 
 
 def condition_count(props: dict) -> int:

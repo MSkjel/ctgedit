@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import os
-import re
 from typing import Dict, List, Optional, Sequence, Tuple
+
+from .cnum import c_atoi, c_strtoul
 
 KEYS = (
     "AI_ON",
@@ -50,26 +51,6 @@ EXPR_LIMIT = 254  # pgalmind EXPR
 DEFAULT_FLAG = (20, 20)  # CtDraw's placeholder box / entry 0
 
 Rect = Tuple[int, int, int, int]
-
-
-def c_atoi(s) -> int:
-    """C atoi: leading blanks, optional sign, digits; anything else -> 0."""
-    s = str(s or "").lstrip(" \t\r\n")
-    m = re.match(r"[+-]?\d+", s)
-    return int(m.group(0)) if m else 0
-
-
-def c_strtoul(s, default=None):
-    """strtoul(s, NULL, 0): 0x.. hex, 0.. octal, else decimal; None/garbage -> ``default``."""
-    s = str(s or "").strip()
-    m = re.match(r"[+-]?(0[xX][0-9a-fA-F]+|0[0-7]*|[1-9]\d*)", s)
-    if not m:
-        return default
-    t = m.group(0)
-    neg = t.startswith("-")
-    t = t.lstrip("+-")
-    v = int(t, 16) if t[:2].lower() == "0x" else (int(t, 8) if t.startswith("0") and len(t) > 1 else int(t))
-    return (-v if neg else v) & 0xFFFFFFFF
 
 
 def props_of(po) -> Dict[str, str]:

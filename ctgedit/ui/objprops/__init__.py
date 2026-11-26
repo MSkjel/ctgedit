@@ -7,7 +7,6 @@ from .appearance import VISIBILITY_SUB as _VISIBILITY_SUB  # noqa: F401 (re-expo
 from .display_value import DISPLAY_FIELDS as _DISPLAY_FIELDS  # noqa: F401 (re-exported)
 from .fields import (
     _L_LOG,  # noqa: F401
-    _atoi,  # noqa: F401 (re-exported)
     _Field,  # noqa: F401 (re-exported)
     _OptionalSpin,  # noqa: F401 (re-exported)
     _Sub,  # noqa: F401 (re-exported)

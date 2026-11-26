@@ -17,7 +17,9 @@ OFFSET_MIN, OFFSET_MAX, OFFSET_DEFAULT = -32767, 32767, 0
 #: an expression is at most 253 characters (the sheet's expression limit)
 EXPR_LIMIT = 253
 
-_KEY = re.compile(r"^VERTEX_(VERTEXP|VERTFROMX|VERTFROMY|VERTTOX|VERTTOY)(\d+)$", re.I)
+#: the keys CtDraw prints ("VERTEX_%s%i") and finds without case: no leading zero, ASCII
+#: digits, at most an int's ten
+_KEY = re.compile(r"^VERTEX_(VERTEXP|VERTFROMX|VERTFROMY|VERTTOX|VERTTOY)(0|[1-9][0-9]{0,9})\Z", re.I)
 
 
 def key(name: str, n: int) -> str:
@@ -56,7 +58,7 @@ def offset_value(text: Optional[str]) -> Optional[int]:
     if text is None or not str(text).strip():
         return OFFSET_DEFAULT
     t = str(text).strip()
-    if re.fullmatch(r"[-+]?\d+", t) and OFFSET_MIN <= int(t) <= OFFSET_MAX:
+    if re.fullmatch(r"[-+]?0*[0-9]{1,5}", t) and OFFSET_MIN <= int(t) <= OFFSET_MAX:  # (longer: out of range)
         return int(t)
     return None
 

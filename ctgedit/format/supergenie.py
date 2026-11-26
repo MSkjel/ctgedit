@@ -8,6 +8,7 @@ import os
 import re
 from typing import Iterable, List, Optional, Sequence, Tuple
 
+from .cnum import is_digits
 from .. import cicode_names as _cn
 from . import genie_place as GP
 from . import geometry as G
@@ -273,7 +274,7 @@ def association_tokens(text: str) -> List[str]:
     text = _without_strings(text)
     # tokens do not overlap: '?a?b?c?' is ?a?, b, ?c? (the Cicode tokenizer);
     # a number token is listed as the number ('?INT 02?' -> '2')
-    return [str(int(n)) if n.isdigit() else n for n in (m.group(1) for m in _TOKEN.finditer(text))]
+    return [str(int(n)) if is_digits(n) else n for n in (m.group(1) for m in _TOKEN.finditer(text))]
 
 
 def used_associations(

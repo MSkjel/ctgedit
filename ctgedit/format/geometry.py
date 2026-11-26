@@ -1520,12 +1520,13 @@ def button_caption_lines(text: str) -> List[str]:
 def _button_auto_width(po: PageObject) -> bool:
     """A button sizes its width to its caption when its WIDTH property is
     absent or 0 (atoi(WIDTH) == 0)."""
-    _atoi = _lazy("colourstate")._atoi
+    from .cnum import c_atoi
+
     value_bag = _lazy("writer").value_bag
     vb = value_bag(po)
     props = dict(vb) if vb else po.raw_properties()
     # C atoi, as CtDraw reads it: '12px' is 12, a non-number is 0 (auto)
-    return _atoi(str(props.get("WIDTH") or "")) == 0
+    return c_atoi(props.get("WIDTH")) == 0
 
 
 def refit_button(po: PageObject) -> bool:

@@ -1,6 +1,7 @@
 """The Simulate Inputs and Outputs panels."""
 
 from __future__ import annotations
+from ...format.cnum import is_digits
 from ..style.theme import sp as _sp
 
 import bisect
@@ -107,7 +108,7 @@ TAG_PROPERTIES = (
 
 def _prop_text(t: TagInfo, attr: str) -> str:
     """A tag property's text as the Properties tab shows it ('' = blank)."""
-    if attr.startswith("custom") and attr[6:].isdigit():
+    if attr.startswith("custom") and is_digits(attr[6:]):
         k = int(attr[6:]) - 1
         return t.custom[k] if 0 <= k < len(t.custom) else ""
     v = getattr(t, attr, "")

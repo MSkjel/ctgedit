@@ -7,6 +7,7 @@ import functools
 import re
 from dataclasses import dataclass, field, replace
 from typing import Dict, List, Optional, Sequence, Tuple
+from .cnum import c_atoi
 from .propget import getter as _getter, note_too_long, written_conditions  # noqa: F401 (written_conditions re-exported)
 
 ON_OFF, MULTI_STATE, ARRAY, NUMERIC, STRING = 0, 1, 2, 3, 4
@@ -77,12 +78,6 @@ SCADAHELP_FORMATS = (
 DEFAULT_FORMAT_LABEL = "<default>"
 
 
-def atoi(value) -> int:
-    """C ``atoi`` -- how CtDraw reads TXTMODE (0 when there are no digits)."""
-    m = re.match(r"\s*([+-]?\d+)", str(value or ""))
-    return int(m.group(1)) if m else 0
-
-
 # --------------------------------------------------------------------------- text forms
 def to_caret(text: str) -> str:
     """A stored text as the state / array lists show it: CRLF -> ``^n``
@@ -108,7 +103,8 @@ def from_edit(text: str) -> str:
 
 
 # --------------------------------------------------------------------------- numeric format
-_MASK = re.compile(r"^\s*[#0\-.,s]*#[#0\-.,s]*\s*(?:EU|!)?\s*$", re.IGNORECASE)
+#: a run of mask characters holding a '#' (the lookahead keeps a long run linear)
+_MASK = re.compile(r"^\s*(?=[#0\-.,s]*#)[#0\-.,s]+\s*(?:EU|!)?\s*$", re.IGNORECASE)
 _NUMBER = re.compile(r"^\s*\d+(?:\.\d+)?\s*(?:EU|!)?\s*$", re.IGNORECASE)
 _BAD_TAIL = re.compile(r"[()\"':]")
 
@@ -184,7 +180,7 @@ def read(props: Dict[str, str], caption: Optional[str]) -> TextDisplay:
     whose caption (the text tail) is ``caption`` (None: no tail -- TXT_OFF
     stands in)."""
     get = _getter(props)
-    mode = atoi(get("TXTMODE"))
+    mode = c_atoi(get("TXTMODE"))
     known = mode in TYPES
     if not known:
         mode = ON_OFF

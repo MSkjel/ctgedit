@@ -9,7 +9,7 @@ import zlib
 from dataclasses import dataclass, field, replace
 from typing import BinaryIO, Iterable, List, Optional, Tuple
 
-from .container import ENTRY_SIZE, HEADER_FIXED, NAME_LEN, Block
+from .container import ENTRY_SIZE, HEADER_FIXED, NAME_LEN, Block, directory_capacity
 from .page import LINK_ENTRY_SIZE, PAGE_HEAD_SIZE, PAGE_HEAD_SIZE_LEGACY
 from .symbols import EXTENT_HEAD_SIZE, grown_block_end, is_page_file
 from .textcodec import CODEC
@@ -38,9 +38,6 @@ __all__ = [
     "bmp_to_png",
 ]
 
-# the directory capacity CtDraw uses when the header's dword_c is implausible
-_DEFAULT_SLOTS = 8
-_MAX_SLOTS = 1024
 # a page-shaped block's head (read at once; the legacy head is shorter)
 _HEAD_READ = 0x38
 # default bounded template scan (finds the ref on most pages)
@@ -209,7 +206,7 @@ def _read_dir(fh: BinaryIO, path: str, file_size: int) -> LibraryDirectory:
     if len(hdr) < HEADER_FIXED:
         return d
     d.version, d.word2, d.ts_created, d.ts_modified, d.dword_c = struct.unpack_from("<HHIII", hdr, 0)
-    cap = d.dword_c if 0 < d.dword_c <= _MAX_SLOTS else _DEFAULT_SLOTS
+    cap = directory_capacity(d.dword_c)
     raw = fh.read(cap * ENTRY_SIZE)
     d.slots_missing = cap - len(raw) // ENTRY_SIZE
     for i in range(cap):

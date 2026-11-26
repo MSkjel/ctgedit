@@ -9,6 +9,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Dict, Iterable, List, Optional, Tuple, Union
 
+from ..format.cnum import is_digits
 from ..format import pagesummary
 from ..format.projects import (
     IMPLICIT_INCLUDE_PROJECTS,
@@ -64,12 +65,12 @@ def _norm(path: str) -> str:
     return os.path.normcase(os.path.abspath(path))
 
 
-_NAT_RE = re.compile(r"(\d+)")
+_NAT_RE = re.compile(r"([0-9]+)")
 
 
 def natural_key(s: str) -> tuple:
     """Case-insensitive natural sort key (``page2`` < ``page10``)."""
-    return tuple(int(t) if t.isdigit() else t for t in _NAT_RE.split(s.lower()))
+    return tuple(int(t) if is_digits(t) else t for t in _NAT_RE.split(s.lower()))
 
 
 def is_super_genie(element: str) -> bool:

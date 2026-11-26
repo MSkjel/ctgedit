@@ -8,6 +8,7 @@ import re
 from dataclasses import dataclass, field, replace
 from typing import Dict, List, Optional, Sequence, Tuple
 
+from .cnum import c_atoi
 from . import colourstate as CS
 from .propget import getter as _getter, note_too_long, written_conditions  # noqa: F401 (written_conditions re-exported)
 
@@ -65,12 +66,6 @@ UP, DOWN, LEFT, RIGHT = 0, 1, 2, 3
 DIRECTIONS = ((UP, "Up"), (DOWN, "Down"), (LEFT, "Left"), (RIGHT, "Right"))
 LEVEL_KEYS = ("FIL", "FILMINPC", "FILMAXPC", "FILMODE", "FILCOL")
 TRANSPARENT = (NO_COLOUR, NO_COLOUR)
-
-
-def atoi(value) -> int:
-    """C ``atoi`` -- how CtDraw reads COLMODE / FILMODE (0 without digits)."""
-    m = re.match(r"\s*([+-]?\d+)", str(value or ""))
-    return int(m.group(1)) if m else 0
 
 
 def parse_pair(value) -> Optional[Pair]:
@@ -187,7 +182,7 @@ def read(
 ) -> FillColour:
     """What the page shows for an object with properties ``props``."""
     get = _getter(props)
-    mode = atoi(get("COLMODE"))
+    mode = c_atoi(get("COLMODE"))
     known = mode in TYPES
     if not known:
         mode = ON_OFF
@@ -430,7 +425,7 @@ def written_texts(fc: FillColour) -> List[str]:
 # --------------------------------------------------------------------------- Fill > Level
 def direction(props: Dict[str, str]) -> int:
     """FILMODE as the page shows it: 0..3, anything else Up."""
-    d = atoi(_getter(props)("FILMODE"))
+    d = c_atoi(_getter(props)("FILMODE"))
     return d if 0 <= d <= 3 else UP
 
 

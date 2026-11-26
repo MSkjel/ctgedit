@@ -6,11 +6,12 @@ from typing import Optional
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
+from ...format.cnum import c_atoi, is_digits
 from ...infra import caches as _caches
 from . import modules as M
 from . import registry as R
 from .expression import ExpressionContext, ExpressionField
-from .fields import _GREY_STYLES, _SL_CONTINUOUS, _SL_ON, _atoi, _Field, _OptionalSpin, _RadioChoice, _Sub
+from .fields import _GREY_STYLES, _SL_CONTINUOUS, _SL_ON, _Field, _OptionalSpin, _RadioChoice, _Sub
 from .range_field import RangeField
 from .scroll import FitTabWidget, ensure_visible, scroll_page, unwrap_page
 from ..panels import panel_options as _panels
@@ -892,7 +893,7 @@ class ObjectPropertiesDialog(QtWidgets.QDialog):
             # is off); an ABSENT key reads unticked: CtDraw's sheet shows a new
             # object's 'Continuous update of tag' unticked and a tag typed there
             # is saved with *SLMODE '1'
-            return False if v is None else bool(_atoi(v) & _SL_CONTINUOUS)
+            return False if v is None else bool(c_atoi(v) & _SL_CONTINUOUS)
         if f.kind == "check":
             if v is not None and getattr(f, "loose", False):
                 return v.strip() != ""
@@ -1092,7 +1093,7 @@ class ObjectPropertiesDialog(QtWidgets.QDialog):
         for key in family:
             if key.endswith("*"):
                 pre = key[:-1]
-                out.extend(k for k in self._props if k.startswith(pre) and k[len(pre) :].isdigit())
+                out.extend(k for k in self._props if k.startswith(pre) and is_digits(k[len(pre) :]))
             else:
                 out.append(key)
         return out
@@ -1247,7 +1248,7 @@ class ObjectPropertiesDialog(QtWidgets.QDialog):
             stored = self._props.get(key)
             if tag:
                 edits[key] = str(_SL_ON | (_SL_CONTINUOUS if w.isChecked() else 0))
-            elif stored is not None and (cleared or _atoi(stored) & _SL_ON):
+            elif stored is not None and (cleared or c_atoi(stored) & _SL_ON):
                 edits[key] = None  # no slider without a tag
         for ed in self._eds:
             fn = getattr(ed, "key_edits", None)

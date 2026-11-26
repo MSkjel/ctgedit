@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import html
 from typing import Dict, List, Optional, Tuple
+from ..format.cnum import is_digits
 
 #: the groups whose text is not shown, by their first control word
 _HIDDEN = frozenset(
@@ -204,7 +205,7 @@ class _Reader:
             a = i
             if i < n and s[i] == "-":
                 i += 1
-            while i < n and s[i].isdigit():
+            while i < n and is_digits(s[i]):
                 i += 1
             arg = int(s[a:i]) if i > a and s[i - 1] != "-" else None
             if i < n and s[i] == " ":

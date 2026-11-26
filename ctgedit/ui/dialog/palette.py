@@ -1,6 +1,7 @@
 """The command palette (Ctrl+K): one search for everything."""
 
 from __future__ import annotations
+from ...format.cnum import is_digits
 from ..style.theme import sp as _sp
 
 import re
@@ -340,7 +341,7 @@ def display_name(action, crumb: str, label: str, ids: bool = True) -> tuple:
         text = re.sub(r"^\d\s+", "", text)
     text = " ".join(text.split())
     last = crumb.split(" > ")[-1] if crumb else ""
-    if last and ((ids and not own_id) or text[:1].isdigit()):
+    if last and ((ids and not own_id) or is_digits(text[:1])):
         return "%s: %s" % (last, text), text, extra.strip()
     return text, text, extra.strip()
 

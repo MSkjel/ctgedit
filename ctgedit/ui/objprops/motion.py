@@ -1,6 +1,7 @@
 """Movement, Scaling and Slider pages."""
 
 from __future__ import annotations
+from ...format.cnum import c_atoi
 from ..style.theme import sp as _sp  # (the spacing scale)
 
 import re
@@ -9,7 +10,7 @@ from typing import Dict, List, NamedTuple, Optional, Tuple
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from ..number_field import NumberField
-from .fields import NUMBER_RANGES, _L_EXPR, _L_SLIDER, _atoi, _Field, _i, _OptionalSpin, _Sub
+from .fields import NUMBER_RANGES, _L_EXPR, _L_SLIDER, _Field, _i, _OptionalSpin, _Sub
 
 #: CtDraw's 'At minimum / maximum' spin range (the table the
 #: Properties panel shares: fields.NUMBER_RANGES)
@@ -204,12 +205,12 @@ _Y_NAMES = {-1: "top edge", 0: "middle", 1: "bottom edge"}
 def axis_state(props: Dict[str, str], axis: Axis) -> Tuple[Tuple[bool, int, int], str]:
     """((custom, x, y), locked) of a centre axis offset."""
     low = {k.upper(): v for k, v in props.items()}
-    custom = _atoi(low.get(axis.mode)) != 0
+    custom = c_atoi(low.get(axis.mode)) != 0
     out, locked = [], ""
     for k in (axis.x, axis.y):
         v = low.get(k) if k else None
         if not custom:
-            n = _atoi(v)
+            n = c_atoi(v)
             out.append(n if n in (-1, 0, 1) else 0)
             continue
         text = (v or "").strip()

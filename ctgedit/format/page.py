@@ -9,6 +9,8 @@ import sys
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
+from .cnum import is_digits
+
 _intern = sys.intern
 
 from .container import Block, Container
@@ -316,16 +318,16 @@ class DecodedValue:
         return "%s(%r)" % (self.kind, self.value)
 
 
+#: "0x%08x,0x%08x" (a colour pair) and "0x%08x" (one colour), as CtDraw writes them: hex
+#: digits only (int(.., 16) would also take '_' and a sign)
+_COLOUR_PAIR_RE = re.compile(r"0x[0-9A-Fa-f]{8},0x[0-9A-Fa-f]{8}")
+_COLOUR_RE = re.compile(r"0x[0-9A-Fa-f]{8}")
+#: a decimal integer: ASCII digits only (str.isdigit also takes '²' and other scripts' digits)
+_INT_RE = re.compile(r"-?[0-9]+")
+
+
 def _looks_like_colour_pair(s: str) -> bool:
-    # "0x%08x,0x%08x" -> length 21
-    if len(s) != 21 or s[0:2] != "0x" or s[10] != "," or s[11:13] != "0x":
-        return False
-    try:
-        int(s[2:10], 16)
-        int(s[13:21], 16)
-        return True
-    except ValueError:
-        return False
+    return _COLOUR_PAIR_RE.fullmatch(s) is not None
 
 
 #: (key, raw) -> DecodedValue: a page repeats a few hundred distinct pairs over its records;
@@ -351,7 +353,7 @@ def _decode_value(key: str, raw: str) -> DecodedValue:
     s = raw
 
     # mode digit (single 0-4) for known mode keys
-    if key in _MODE_DIGIT_KEYS and len(s) == 1 and s.isdigit():
+    if key in _MODE_DIGIT_KEYS and len(s) == 1 and "0" <= s <= "9":
         return DecodedValue(raw, "mode", int(s))
 
     # colour pair "0x........,0x........"
@@ -370,19 +372,16 @@ def _decode_value(key: str, raw: str) -> DecodedValue:
         )
 
     # single COLORREF "0x........"
-    if len(s) == 10 and s[0:2] == "0x":
-        try:
-            v = int(s[2:], 16)
-            return DecodedValue(raw, "color", {"value": v, "rgb": colorref_to_rgb(v)})
-        except ValueError:
-            pass
+    if _COLOUR_RE.fullmatch(s) is not None:
+        v = int(s[2:], 16)
+        return DecodedValue(raw, "color", {"value": v, "rgb": colorref_to_rgb(v)})
 
     # integer (decimal ASCII, optional leading '-')
-    if s and (s.lstrip("-").isdigit()) and (s.count("-") <= 1) and not s.startswith("--"):
+    if _INT_RE.fullmatch(s) is not None:
         try:
             return DecodedValue(raw, "int", int(s))
         except ValueError:
-            pass
+            pass  # swallow-ok: a digit run longer than int() converts stays a string
 
     # booleans / common enum keywords
     if s in ("TRUE", "FALSE"):
@@ -539,7 +538,7 @@ def _key_is_known_uncached(key: str) -> bool:
         if key.startswith(stem):
             return True
     # editor object-reference keys: "!*#1403" -> "#1406" (an animation-number link)
-    if key.startswith("!*#") and key[3:].isdigit():
+    if key.startswith("!*#") and is_digits(key[3:]):
         return True
     return False
 

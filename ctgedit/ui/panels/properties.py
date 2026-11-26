@@ -1,6 +1,7 @@
 """The Properties panel."""
 
 from __future__ import annotations
+from ...format.cnum import c_atoi, is_digits
 from ..style.theme import sp as _sp  # (the spacing scale)
 
 import contextlib
@@ -1723,7 +1724,7 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
             return
         from ...format import dspval as DV
 
-        mode = DV.atoi(props.get("TXTMODE"))
+        mode = c_atoi(props.get("TXTMODE"))
         box = self._section(
             "Display value",
             index,
@@ -1883,11 +1884,7 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
         for label, family, keys, page_id in AXIS_ROWS:
             if not any((props.get(k) or "").strip() for k in keys):
                 continue
-            if (
-                family == "rot"
-                and (props.get("ROTSL") or "").strip()
-                and MO._atoi(props.get("ROTSLMODE")) & 1
-            ):
+            if family == "rot" and (props.get("ROTSL") or "").strip() and c_atoi(props.get("ROTSLMODE")) & 1:
                 page_id = "slider_rot"  # the slider owns it: move_rot is greyed
             axis = MO.AXES[family]
             state, locked = MO.axis_state(props, axis)
@@ -1967,7 +1964,7 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
                 if not ctx.mask & page.bit or pid in disabled:
                     continue
             if key == DISPLAY_VALUE:
-                if any(k in props for k in display_keys) or DV.atoi(props.get("TXTMODE")) != DV.ON_OFF:
+                if any(k in props for k in display_keys) or c_atoi(props.get("TXTMODE")) != DV.ON_OFF:
                     continue
             elif key == "COL_MAXON":
                 from ...format import fillcolour as FC
@@ -2090,7 +2087,7 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
         ed.setSpecialValueText("Default (%s ms)" % IN.DEFAULT_RPT_RATE)
         ed.setProperty("propKey", "RPT_RATE")
         text = str(value or "").strip()
-        ed.load(int(text) if text.isdigit() and lo <= int(text) <= hi else lo - 1)
+        ed.load(int(text) if is_digits(text) and lo <= int(text) <= hi else lo - 1)
         ed.setToolTip("Delay before the first repeat and between repeats")
         return ed
 
@@ -2131,7 +2128,7 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
         if ed.text() == ed.property("orig"):
             return
         text = ed.text().strip() if key == "RPT_RATE" else ed.text()
-        if key == "RPT_RATE" and text and not text.isdigit():
+        if key == "RPT_RATE" and text and not is_digits(text):
             self.statusMessage.emit("The repeat rate is a number of milliseconds.")
             ed.setText(str(ed.property("orig")))
             return
@@ -2181,7 +2178,7 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
             "Fill colour", index, "fill_color", remove=lambda i=index: self._remove_family(i, "fill_color")
         )
         form = box.form()
-        mode = FC.atoi(props.get("COLMODE"))
+        mode = c_atoi(props.get("COLMODE"))
         form.addRow("Type", self._ro_label(FC.TYPE_LABELS.get(mode, str(props.get("COLMODE")))))
         if "COL_MAXON" in props:
             # COL_MAXON's two halves are the two FLASH phases of ONE colour (the
@@ -2244,7 +2241,7 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
         for key in fam:
             if key.endswith("*"):
                 pre = key[:-1]
-                out.extend(k for k in props if k.startswith(pre) and k[len(pre) :].isdigit())
+                out.extend(k for k in props if k.startswith(pre) and is_digits(k[len(pre) :]))
             elif key in props and key not in out:
                 out.append(key)
         return out

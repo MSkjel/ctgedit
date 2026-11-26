@@ -12,6 +12,8 @@ from collections import OrderedDict
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
+
+from ..format.cnum import is_digits
 from ..format import dbfcols
 from ..format.textcodec import CODEC
 from . import tagscope as TS
@@ -1869,7 +1871,7 @@ def default_scan_time() -> str:
         v = (ini_value("page", "scantime", "250") or "250").strip()
     except Exception:  # noqa: BLE001 -- a hint only
         v = "250"
-    return v if v.isdigit() else "250"
+    return v if is_digits(v) else "250"
 
 
 def page_area(page_path: str) -> str:

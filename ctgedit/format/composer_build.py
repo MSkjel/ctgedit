@@ -6,6 +6,7 @@ import copy
 import os
 from typing import Dict, List, Optional, Sequence, Tuple
 
+from .cnum import is_digits
 from . import composer as CP
 from . import genie_place as GP
 from . import geometry as G
@@ -368,7 +369,7 @@ def _button_size(po: PageObject) -> PageObject:
     for bag in r.entries[0][1:3]:
         for key, v in want.items():
             cur = bag.get(key)
-            if cur is not None and cur != v and cur.strip().lstrip("-").isdigit():
+            if cur is not None and cur != v and is_digits(cur.strip().lstrip("-")):
                 bag.set(key, v)
                 changed = True
     return to_po(encode(r)) if changed else po

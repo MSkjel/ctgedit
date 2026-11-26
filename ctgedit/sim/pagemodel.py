@@ -9,6 +9,7 @@ import os
 import struct
 from typing import Dict, List, Optional, Tuple
 
+from ..format.cnum import c_atoi
 from ..format import colourstate as CS
 from ..format import geometry as G
 from ..format import placement as P
@@ -438,7 +439,7 @@ def object_summary(objs, i: int, par, kids, owners: _OwnerInfo, notes: list, val
     if tc == TEXT_TC:
         t = decode_text(po)
         if t is not None:
-            t["mode"] = SS.atoi(_value_props(po, value_bags).get("TXTMODE", "0"))
+            t["mode"] = c_atoi(_value_props(po, value_bags).get("TXTMODE", "0"))
             if dw & 0x2:
                 tail = G.parse_text_tail(po)
                 if tail is not None and tail.get("text") is not None:
@@ -463,7 +464,7 @@ def object_summary(objs, i: int, par, kids, owners: _OwnerInfo, notes: list, val
                 ss["storedStates"] = cs["states"]
             if cs["hotspot"] is not None:
                 ss["hotspot"] = list(cs["hotspot"])
-        ss["mode"] = SS.atoi(_value_props(po, value_bags).get("TXTMODE", "0"))
+        ss["mode"] = c_atoi(_value_props(po, value_bags).get("TXTMODE", "0"))
         o["symbolSet"] = ss
     elif tc == TREND_TC:
         from ..format import legacy

@@ -9,6 +9,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple
 
+from ...format.cnum import is_digits
 from ...sim.state import ObjectState, PageState
 from ...format import codes as _codes
 
@@ -455,7 +456,7 @@ def page_tags(page) -> List[TagInfo]:
             if not v:
                 continue
             for n in expression_names(v):
-                if n in tags or n.replace(".", "").isdigit():
+                if n in tags or is_digits(n.replace(".", "")):
                     continue
                 equip, item = "", ""
                 if "." in n:

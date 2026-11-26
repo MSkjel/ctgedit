@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Dict, Iterable, List, Optional, Tuple
+
+from ...format.cnum import c_atoi
 from ...format import codes as _codes
 
 
@@ -269,13 +271,6 @@ def _blank(v) -> bool:
     return v is None or not str(v).strip()
 
 
-def _atoi(v) -> int:
-    import re
-
-    m = re.match(r"\s*([-+]?\d+)", str(v or ""))
-    return int(m.group(1)) if m else 0
-
-
 def is_configured(page: Page, ctx: SheetContext, props: Optional[Dict[str, str]] = None) -> bool:
     """CtDraw's check mark for page. CtDraw's key lookup
     ignores ASCII case."""
@@ -289,19 +284,19 @@ def is_configured(page: Page, ctx: SheetContext, props: Optional[Dict[str, str]]
         return _input_configured(page.id, ctx)
     if page.id in ("move_h", "move_v", "move_rot"):
         slider = {"move_h": "MVXSLMODE", "move_v": "MVYSLMODE", "move_rot": "ROTSLMODE"}
-        if _atoi(val(slider[page.id])) & 1:
+        if c_atoi(val(slider[page.id])) & 1:
             return False  # the slider owns the range
         return not _blank(val(page.keys[0]))
     if page.id in ("slider_h", "slider_v", "slider_rot"):
         mode = {"slider_h": "MVXSLMODE", "slider_v": "MVYSLMODE", "slider_rot": "ROTSLMODE"}[page.id]
-        return bool(_atoi(val(mode)) & 1) and not _blank(val(page.keys[0]))
+        return bool(c_atoi(val(mode)) & 1) and not _blank(val(page.keys[0]))
     if page.id in ("fill_color", "display_value"):
         # the key depends on the page's mode (CtDraw loads it into per
         # case: COLMODE 0 COL_A, 1 COL_A..COL_E, 2 COL_ARR, 3/4 COL_EXP;
         # TXTMODE 0/2 TXT_A, 1 TXT_A..TXT_E, 3/4 TXT_STR; any other mode: none)
         fill = page.id == "fill_color"
         pre = "COL_" if fill else "TXT_"
-        mode = _atoi(val("COLMODE" if fill else "TXTMODE"))
+        mode = c_atoi(val("COLMODE" if fill else "TXTMODE"))
         if mode == 1:  # multi-state: any of A..E
             return any(not _blank(val(pre + c)) for c in "ABCDE")
         key = {
@@ -313,7 +308,7 @@ def is_configured(page: Page, ctx: SheetContext, props: Optional[Dict[str, str]]
         return key is not None and not _blank(val(key))
     if page.id == "set_object":
         # a symbol set's mode is its TXTMODE: 0 and 3 TXT_A, 1 TXT_A..TXT_E, 2 SET_ARR; other modes none
-        mode = _atoi(val("TXTMODE"))
+        mode = c_atoi(val("TXTMODE"))
         if mode == 1:
             return any(not _blank(val("TXT_" + c)) for c in "ABCDE")
         key = {0: "TXT_A", 2: "SET_ARR", 3: "TXT_A"}.get(mode)
@@ -322,7 +317,7 @@ def is_configured(page: Page, ctx: SheetContext, props: Optional[Dict[str, str]]
         # 'Disable when' set, or DISMODE stored at all (a raw non-empty test)
         return not _blank(val("DISABLED")) or bool(val("DISMODE"))
     if page.id == "alarm_indicator":
-        return _atoi(val("AI_ON")) != 0
+        return c_atoi(val("AI_ON")) != 0
     if page.id == "access" and not _blank(val("NAME")):
         # the legacy object-name key counts as the name
         return True

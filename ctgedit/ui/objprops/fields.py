@@ -245,9 +245,3 @@ class _RadioChoice(QtWidgets.QWidget):
         b = self._group.button(k)
         if b is not None:
             b.setChecked(True)
-
-
-def _atoi(value) -> int:
-    """C atoi: the leading integer of ``value``, 0 when there is none."""
-    m = re.match(r"\s*([-+]?\d+)", str(value or ""))
-    return int(m.group(1)) if m else 0

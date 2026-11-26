@@ -9,6 +9,7 @@ from typing import List, Optional, Sequence
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
+from ...format.cnum import is_digits
 from ... import cicode_names as _cicode_names
 from ..panels import panel_options as _panels
 from . import validators as V
@@ -1076,7 +1077,7 @@ class ExpressionField(QtWidgets.QLineEdit):
             return
         start, _cur, tok = self._token()
         need = self.min_completion()
-        if need <= 0 or len(tok) < need or tok[0].isdigit() or self._no_names_at(start):
+        if need <= 0 or len(tok) < need or is_digits(tok[0]) or self._no_names_at(start):
             c.popup().hide()  # (a number: '> 100' is no tag name)
             return
         if self._dynamic is not None:

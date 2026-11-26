@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections import OrderedDict
 
+from ..format.cnum import is_digits
 from ..editing_base import (  # noqa: F401
     CODEC,
     List,
@@ -291,7 +292,7 @@ class PageEdits:
         if width and n > width:
             return "The %s can be at most %d characters long (this one has %d)." % (what, width, n)
         v = value.strip()
-        if col == "SCANTIME" and v and not (v.isdigit() and int(v) <= 60000):
+        if col == "SCANTIME" and v and not (is_digits(v) and int(v) <= 60000):
             return (
                 "The page scan time must be a whole number of milliseconds from 0 to "
                 "60000, or empty for the default."

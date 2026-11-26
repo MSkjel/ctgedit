@@ -7,6 +7,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence, Tuple
 
+from .cnum import c_atoi
 from . import textcodec
 
 __all__ = [
@@ -152,6 +153,11 @@ class _Tok:
 _ESCAPES = {'"': '"', "'": "'", "^": "^", "n": "\n", "r": "\r", "t": "\t"}
 
 
+def _digit(c: str) -> bool:
+    """A digit as CtDraw's ANSI reader sees one: 0-9 only ('²' is text)."""
+    return "0" <= c <= "9"
+
+
 def _lex(text: str) -> List[_Tok]:
     """CtDraw's (CTUTIL32) tokenizer for .frm files: '!' and '//' comments to
     the end of the line, '/* */' comments, Cicode strings ('^' escapes the
@@ -204,11 +210,11 @@ def _lex(text: str) -> List[_Tok]:
                 i += 1
             out.append(_Tok("str", "".join(buf), start, s0, i))
             continue
-        if c.isdigit():
+        if _digit(c):
             j = i
-            while j < n and text[j].isdigit():
+            while j < n and _digit(text[j]):
                 j += 1
-            out.append(_Tok("num", int(text[i:j]), line, i, j))
+            out.append(_Tok("num", c_atoi(text[i:j]), line, i, j))
             i = j
             continue
         if c.isalpha() or c == "_":
@@ -335,11 +341,11 @@ def parse_layout(text: str, form: Optional[GenieForm] = None) -> List[LayoutItem
             continue
         if c == "{":
             j = i + 1
-            if j < n and text[j].isdigit():
+            if j < n and _digit(text[j]):
                 k = j
-                while k < n and text[k].isdigit():
+                while k < n and _digit(text[k]):
                     k += 1
-                num = int(text[j:k])
+                num = c_atoi(text[j:k])
                 end = text.find("}", k)
                 nl = text.find("\n", k)
                 if end < 0 or (0 <= nl < end):
@@ -363,7 +369,7 @@ def parse_layout(text: str, form: Optional[GenieForm] = None) -> List[LayoutItem
                 raise FormError("layout line %d: unknown layout item {%s" % (line, word))
             end, value = k, 0
             while end < n and text[end] not in "}\n":
-                if text[end].isdigit():
+                if _digit(text[end]):
                     value = value * 10 + int(text[end])
                 end += 1
             if value == 0:
