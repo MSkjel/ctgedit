@@ -391,7 +391,7 @@ class PageFiles:
             pages,
             before=self._before_delete_or_rename,
             reopen=self._reopen_renamed,
-            find_references=self._find_page_references,
+            check_references=self._check_project_dialog,
         )
         dlg.setAttribute(QtCore.Qt.WA_DeleteOnClose)
         dlg.setModal(False)
@@ -413,15 +413,36 @@ class PageFiles:
             except Exception as e:  # noqa: BLE001 -- swallow-ok: said in the status bar
                 self.statusBar().showMessage("%s could not be opened: %s" % (os.path.basename(p), e), 8000)
 
-    def _find_page_references(self, text: str, project: str, includes: bool = False) -> None:
-        """Rename Pages > Find References: the Find window lists the fields of the project's
-        pages (and its included projects', with ``includes``) that use the old names
-        (``text``: a regular expression of them)."""
-        from ...features import find_replace as FR
+    def _check_project_dialog(self, project_dir: str = "", includes: bool = False, renames=None) -> None:
+        """Tools > Check Project (and Rename Pages' Check References, with ``renames``): one
+        window, not modal; it checks at once when it comes with renames."""
+        from ..dialog.check_project import CheckProjectDialog
 
-        dlg = self._find_dialog(False)
-        dlg.preset(text, regex=True, match=FR.MATCH_WORD, project=project, includes=includes)
-        dlg.find_all()
+        if (
+            not project_dir
+            and self.doc is not None
+            and str(getattr(self.doc, "path", "")).lower().endswith(".ctg")
+        ):
+            project_dir = os.path.dirname(os.path.abspath(self.doc.path))
+        dlg = getattr(self, "_check_project_dlg", None)
+        if dlg is not None:
+            dlg.close()
+        dlg = CheckProjectDialog(
+            self,
+            project_dir,
+            renames=renames,
+            includes=includes,
+            documents=self.open_documents,
+            open_page=self._find_open_page,
+            goto=self._find_goto,
+            replaced=self._find_replaced,
+        )
+        dlg.setAttribute(QtCore.Qt.WA_DeleteOnClose)
+        dlg.setModal(False)
+        self._check_project_dlg = dlg
+        dlg.show()
+        if renames:
+            dlg.check()
 
     def _after_lifecycle_change(self) -> None:
         with contextlib.suppress(Exception):

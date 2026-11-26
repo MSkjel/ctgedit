@@ -22,8 +22,6 @@ from ...format.cnum import is_digits
 from ... import cicode_lex as L
 from ... import cicode_names as _cn
 
-#: the pause after typing before the names are looked up (ms)
-LOOKUP_MS = 300
 #: the longest description an argument hint shows
 DESCRIPTION_CHARS = 220
 #: the name before the cursor (what completion replaces)
@@ -61,40 +59,6 @@ def lexical_problems(tokens: Sequence[L.Token]) -> List[Problem]:
     """What the tokens themselves say is wrong (a character, a number or an operator
     Cicode does not have, a string or comment left open)."""
     return [Problem(t.start, t.end, "error", t.problem) for t in tokens if t.problem]
-
-
-def unknown_message(kind: str, name: str) -> str:
-    """What a field says of a name (L.NAME) or function (L.FUNCTION) the project does not
-    have."""
-    if kind == L.FUNCTION:
-        return "'%s' is not a known Cicode function." % name
-    return "'%s' is not a tag in the project." % name
-
-
-def name_problems(
-    text: str, tokens: Sequence[L.Token], context, kind: str = "expr", names: bool = True
-) -> List[Problem]:
-    """The names and functions the project does not have (nothing when the lists are not
-    known). ``names`` False: the functions only."""
-    out: List[Problem] = []
-    if context is None:
-        return out
-    names = names and _names_ready(context)
-    seen: Dict[tuple, Optional[bool]] = {}
-    for r in L.references(text, list(tokens), command=kind == "command"):
-        if r.kind == L.NAME and not names:
-            continue  # (not looked up, or the tags are still being read)
-        key = (r.kind, r.text.lower())
-        if key not in seen:
-            if r.kind == L.FUNCTION:
-                seen[key] = _known(context, "is_function", r.text)
-            else:
-                seen[key] = _known(context, "is_name", r.text)
-                if seen[key] is False and L.alarm_field(r.text):
-                    seen[key] = None  # (an alarm tag's field: left to the compiler)
-        if seen[key] is False:
-            out.append(Problem(r.start, r.end, "warning", unknown_message(r.kind, r.text), r.kind))
-    return out
 
 
 def suggestions(context, kind: str, name: str, n: int = SUGGESTIONS) -> List[str]:
@@ -161,10 +125,16 @@ def _known(context, how: str, name: str) -> Optional[bool]:
         return None
 
 
+#: the compiler's error for a function it does not know (E2064 Function 'X' not found)
+UNKNOWN_FUNCTION = 2064
+
+
 def check_problems(text: str, tokens: Sequence[L.Token], result: Optional[dict]) -> List[Problem]:
     """The compiler's errors and warnings of a check result (ui/expression_check), at their
     column: the token there (a page or tag name in quotes: the string), or the character; a
-    warning without a column is not underlined (the field's mark says it)."""
+    warning without a column is not underlined (the field's mark says it). A tag the project
+    does not define written as a name, and a function the compiler does not know, are
+    ``unknown`` (L.NAME, L.FUNCTION): "Did you mean" offers the names like it."""
     out: List[Problem] = []
     if not result:
         return out
@@ -173,6 +143,7 @@ def check_problems(text: str, tokens: Sequence[L.Token], result: Optional[dict])
         for e in items or ():
             col = int(e.get("column") or 0)
             msg = str(e.get("message") or "")
+            t = None
             if col <= 0 or col > len(text) + 1:
                 if level == "warning":
                     continue
@@ -180,7 +151,12 @@ def check_problems(text: str, tokens: Sequence[L.Token], result: Optional[dict])
             else:
                 t = L.token_at(toks, col - 1)
                 start, end = (t.start, t.end) if t is not None else (col - 1, min(len(text), col))
-            out.append(Problem(start, max(end, start + 1), level, msg))
+            unknown = ""
+            if t is not None and t.kind == L.NAME and level == "warning" and e.get("kind") == "tag":
+                unknown = L.NAME
+            elif t is not None and t.kind == L.FUNCTION and e.get("code") == UNKNOWN_FUNCTION:
+                unknown = L.FUNCTION
+            out.append(Problem(start, max(end, start + 1), level, msg, unknown))
     return out
 
 
@@ -313,8 +289,8 @@ _TIPS = {
 def hover_html(
     text: str, tokens: Sequence[L.Token], pos: int, context, problems: Sequence[Problem], suggest=None
 ) -> str:
-    """The hover help at character ``pos``: the problems there (with the names meant,
-    ``suggest(kind, name)``), then what the token is."""
+    """The hover help at character ``pos`` (rich text; '' none): the problems there (with the
+    names meant, ``suggest(kind, name)``), then what the token is."""
     lines = []
     for p in problems:
         if p.start <= pos < p.end:
@@ -322,7 +298,7 @@ def hover_html(
             if p.unknown and suggest is not None:
                 meant = did_you_mean(suggest(p.unknown, text[p.start : p.end]))
                 if meant:
-                    line += " " + html.escape(meant)
+                    line = line.rstrip(".") + ". " + html.escape(meant)
             lines.append(line)
     tokens = list(tokens)
     t = L.token_at(tokens, pos)
@@ -352,7 +328,9 @@ def hover_html(
             lines.append(
                 html.escape(_TIPS[t.kind] % word.strip() if "%s" in _TIPS[t.kind] else _TIPS[t.kind])
             )
-    return "<br>".join(dict.fromkeys(lines))
+    # (marked rich text: a tip without a tag would be shown as plain text, its escaped
+    # characters, such as the quotes around a name, as they are written)
+    return "<qt>%s</qt>" % "<br>".join(dict.fromkeys(lines)) if lines else ""
 
 
 # ------------------------------------------------------------------ display formats
@@ -596,7 +574,6 @@ class CicodeAssist(QtCore.QObject):
         self._text: Optional[str] = None
         self._tokens: List[L.Token] = []
         self._lexical: List[Problem] = []
-        self._names: List[Problem] = []
         self._checked: List[Problem] = []
         self._checked_text: Optional[str] = None
         self._keys: list = []
@@ -606,10 +583,6 @@ class CicodeAssist(QtCore.QObject):
         self._applying = False  # (colouring now: the events it causes are its own)
         self._hint: Optional[HintPopup] = None
         self._hint_closed: Optional[int] = None  # the '(' of a call whose hint Esc closed
-        self._timer = QtCore.QTimer(self)
-        self._timer.setSingleShot(True)
-        self._timer.setInterval(LOOKUP_MS)
-        self._timer.timeout.connect(self.look_up_names)
         self._highlighter = None if self._line else _Highlighter(widget.document(), self)
         widget.installEventFilter(self)
         #: a box's viewport (its mouse and hover events), kept: the filter never asks a box
@@ -622,7 +595,6 @@ class CicodeAssist(QtCore.QObject):
         widget.cursorPositionChanged.connect(self._cursor_moved)
         self._completer = None
         self._typed = False
-        self._retries = 0
         #: the names "Did you mean" found: (kind, lower-case name) -> names
         self._meant: Dict[tuple, List[str]] = {}
         # a hover that shows a simulated value reads it again while it is shown
@@ -633,8 +605,6 @@ class CicodeAssist(QtCore.QObject):
         if complete and not self._line:
             self._set_up_completion()
         self.refresh()
-        if self.text():
-            self._timer.start()  # (a field that opens with a value: its names are looked up)
 
     # -- what the field holds -----------------------------------------------------------
     @property
@@ -654,7 +624,6 @@ class CicodeAssist(QtCore.QObject):
         self._text = text
         self._tokens = L.tokenize(text)
         self._lexical = lexical_problems(self._tokens)
-        self._names = []  # (their places moved: looked up again after a pause)
         self._keys = []
 
     def tokens(self) -> List[L.Token]:
@@ -665,9 +634,9 @@ class CicodeAssist(QtCore.QObject):
         """Every problem shown under the text now."""
         self._ensure()
         checked = self._checked if self._checked_text == self._text else []
-        return self._lexical + self._names + checked
+        return self._lexical + checked
 
-    # -- the compiler's verdict and the name lookups -------------------------------------
+    # -- the compiler's verdict ---------------------------------------------------------------
     def set_check_result(self, text: str, result: Optional[dict]) -> None:
         """The compiler's verdict on ``text`` (ui/expression_check)."""
         self._ensure()
@@ -676,33 +645,6 @@ class CicodeAssist(QtCore.QObject):
         self._checked = check_problems(self._text, self._tokens, result)
         self._checked_text = self._text
         self.refresh()
-
-    #: how often a lookup waits for the tags still being read, and how long each time (ms)
-    LOOKUP_RETRIES = 30
-    LOOKUP_RETRY_MS = 1000
-
-    def look_up_names(self) -> None:
-        """Underline the names and functions the project does not have (again shortly while
-        the project's tags are still being read)."""
-        self._ensure()
-        if (
-            self.context is not None
-            and not _names_ready(self.context)
-            and self._retries < self.LOOKUP_RETRIES
-        ):
-            self._retries += 1
-            self._timer.start(self.LOOKUP_RETRY_MS)
-        else:
-            self._retries = 0
-            self._timer.setInterval(LOOKUP_MS)
-        new = (
-            name_problems(self._text, self._tokens, self.context, self.kind)
-            if option("colour_cicode")
-            else []
-        )
-        if new != self._names:
-            self._names = new
-            self.refresh()
 
     # -- colours ---------------------------------------------------------------------------
     def keys(self) -> list:
@@ -782,7 +724,6 @@ class CicodeAssist(QtCore.QObject):
     def _text_changed(self, *_a) -> None:
         self._ensure()
         self.refresh()
-        self._timer.start()
         self.update_hint()
         if self._typed:
             self._typed = False
@@ -1138,12 +1079,10 @@ _ALL: "weakref.WeakSet[CicodeAssist]" = weakref.WeakSet()
 
 
 def refresh_all() -> None:
-    """Colour every open field again and look its names up (an option changed)."""
+    """Colour every open field again (an option changed)."""
     for a in list(_ALL):
         try:
-            a._names = []
             a._theme_changed()
-            a.look_up_names()
             if not option("function_hints"):
                 a.hide_hint()
         except RuntimeError:  # swallow-ok: a field being deleted

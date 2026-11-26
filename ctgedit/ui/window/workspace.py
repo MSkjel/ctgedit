@@ -65,29 +65,16 @@ class WorkspaceTools:
         """Tools > Check Page: the page checks (ctgedit.features.page_checks) of ``doc`` (default: the
         open page) into the Page Checks panel, the workspace checks of a page with panes
         added, then the engine compiles every expression and command (ui/expression_check)
-        and its errors are added as they come. Returns the report (None = no page)."""
+        and its errors and warnings (tags and pages the project does not have) are added as
+        they come. Returns the report (None = no page)."""
         doc = doc if doc is not None else self.doc
         if doc is None or isinstance(doc, ElementDocument):
             if show:
                 self.statusBar().showMessage("Open a page to check it.", 4000)
             return None
         from ...features import page_checks as PC
-        from ...io import project as PR
 
-        tags = functions = None
-        pdir = os.path.dirname(os.path.abspath(doc.path)) if getattr(doc, "path", "") else ""
-        if pdir:
-            try:
-                tags = PR.tag_index(pdir)
-            except Exception:  # noqa: BLE001  # swallow-ok: without the index the tag check is skipped
-                tags = None
-            try:
-                from ...io.cicode_catalog import FunctionCatalog
-
-                functions = FunctionCatalog(pdir)
-            except Exception:  # noqa: BLE001  # swallow-ok: without the catalog a function reads as a tag
-                functions = None
-        rep = PC.check_document(doc, tags=tags, functions=functions)
+        rep = PC.check_document(doc)
         # (the records as checked: a row finds its object again after an edit, PC.resolve)
         records = list(doc.parsed.page.objects)
         # the workspace checks of a page with panes, as rows of the same list

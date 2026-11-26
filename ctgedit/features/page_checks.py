@@ -5,9 +5,8 @@ from __future__ import annotations
 import dataclasses
 import os
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional
 
-from .. import cicode_lex as L
 from . import find_replace as FR
 from ..model.document import ObjectKind
 
@@ -62,6 +61,10 @@ class Finding:
     code: str = ""
     #: the object's label (kind, AN and name) when it was found
     label: str = ""
+    #: the name an engine warning is about (the tag or page the project does not have)
+    subject: str = ""
+    #: where in the field's text the engine found it (1-based; 0 = not known)
+    column: int = 0
     #: the object's record when it was found (stamp_records): the row finds the object
     #: again after an edit moved it in the list (resolve)
     # (dataclasses.field: 'field' here is the finding's own field above)
@@ -156,22 +159,6 @@ def object_label(doc, index: int) -> str:
         return "Object %d" % index
 
 
-def names_in(text: str, command: bool = False) -> Tuple[List[str], List[str]]:
-    """(the names ``text`` reads as tags, the functions it calls in lower case): once
-    each, the parts of names a genie makes left out (cicode_lex.references)."""
-    names: List[str] = []
-    calls: set = set()
-    seen: set = set()
-    for r in L.references(text or "", command=command):
-        low = r.text.lower()
-        if r.kind == L.FUNCTION:
-            calls.add(low)
-        elif low not in seen:
-            seen.add(low)
-            names.append(r.text)
-    return names, sorted(calls)
-
-
 def expression_fields(doc) -> List[ExpressionField]:
     """Every expression and command field of the page's records, in record order (a genie
     member's substituted values; the template's records too: they run with the page)."""
@@ -199,11 +186,10 @@ def expression_fields(doc) -> List[ExpressionField]:
 
 
 # --------------------------------------------------------------------------- the checks
-def check_document(doc, tags=None, functions=None, measure: Optional[Callable] = None) -> Report:
-    """The synchronous checks of ``doc``. ``tags`` = a TagIndex (``is_name``; None = the
-    tag check is skipped), ``functions`` = a FunctionCatalog (``is_function``; a name
-    the catalog knows as a function is not a tag), ``measure(lines, face, points,
-    attribs)`` = the button caption metrics (default textmetrics.caption_metrics)."""
+def check_document(doc, measure: Optional[Callable] = None) -> Report:
+    """The checks of ``doc`` that need no compiler (the tags and pages its Cicode names
+    are the engine's: :func:`engine_findings`). ``measure(lines, face, points, attribs)`` =
+    the button caption metrics (default textmetrics.caption_metrics)."""
     path = getattr(doc, "path", "") or ""
     rep = Report(os.path.splitext(os.path.basename(path))[0])
     page = doc.page
@@ -217,35 +203,7 @@ def check_document(doc, tags=None, functions=None, measure: Optional[Callable] =
             labels[i] = object_label(doc, i)
         return labels[i]
 
-    # 1. tags not in the project
-    if tags is not None and not getattr(tags, "empty", lambda: False)():
-        reported = set()
-        for f in fields:
-            names, calls = names_in(f.text, command=f.kind == "command")
-            for n in names:
-                low = n.lower()
-                if (f.index, low) in reported:
-                    continue
-                if functions is not None and functions.is_function(n):
-                    continue
-                if L.alarm_field(n):
-                    continue  # an alarm tag's field, or a tag's
-                known = tags.is_name(n)
-                if known is False:
-                    reported.add((f.index, low))
-                    rep.findings.append(
-                        Finding(
-                            WARNING,
-                            "%s names the tag %s, which is not in the project (or "
-                            "the projects it includes). The compiler refuses the page "
-                            "unless it is a local variable or a function argument." % (f.label, n),
-                            f.index,
-                            f.key,
-                            "tag",
-                            label(f.index),
-                        )
-                    )
-    # 2. buttons without a command, numbers and symbol sets without an expression
+    # 1. buttons without a command, numbers and symbol sets without an expression
     for i, o in enumerate(objs):
         if o.raw.get("_from_template") or o.raw.get("_under_missing"):
             continue
@@ -297,7 +255,7 @@ def check_document(doc, tags=None, functions=None, measure: Optional[Callable] =
                         label(i),
                     )
                 )
-    # 3. objects outside the page
+    # 2. objects outside the page
     app = getattr(page, "appearance", None)
     w, h = int(getattr(app, "width", 0) or 0), int(getattr(app, "height", 0) or 0)
     if w > 0 and h > 0:
@@ -328,7 +286,7 @@ def check_document(doc, tags=None, functions=None, measure: Optional[Callable] =
                         label(i),
                     )
                 )
-    # 4. button captions wider than the button
+    # 3. button captions wider than the button
     meas = measure
     if meas is None:
         try:
@@ -370,7 +328,7 @@ def check_document(doc, tags=None, functions=None, measure: Optional[Callable] =
                         label(i),
                     )
                 )
-    # 5. missing library elements
+    # 4. missing library elements
     for i, o in enumerate(objs):
         ref = o.raw.get("_missing_element")
         if ref:
@@ -386,7 +344,7 @@ def check_document(doc, tags=None, functions=None, measure: Optional[Callable] =
                     label(i),
                 )
             )
-    # 6. duplicate key sequences
+    # 5. duplicate key sequences
     from ..format import inputs as _inputs
 
     for i, o in enumerate(objs):
@@ -435,11 +393,25 @@ def check_document(doc, tags=None, functions=None, measure: Optional[Callable] =
 
 
 def engine_findings(doc, f: ExpressionField, result: dict) -> List[Finding]:
-    """The findings of one engine check result for field ``f`` (its errors; the unknown
-    tags are warned about by :func:`check_document`)."""
+    """The findings of one engine check result for field ``f``: its errors, and its
+    warnings (a tag the project does not define, a page it does not have; code = the
+    warning's kind)."""
     out: List[Finding] = []
     if result.get("error"):
         return out
+    for w in result.get("warnings") or ():
+        out.append(
+            Finding(
+                WARNING,
+                "%s: %s" % (f.label, w.get("message") or ""),
+                f.index,
+                f.key,
+                str(w.get("kind") or "compile"),
+                object_label(doc, f.index),
+                str(w.get("name") or ""),
+                int(w.get("column") or 0),
+            )
+        )
     for e in result.get("errors") or ():
         col = e.get("column") or 0
         where = " at column %d" % col if col else ""

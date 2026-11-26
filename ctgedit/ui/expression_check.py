@@ -15,8 +15,6 @@ log = logsetup.get("expression_check")
 
 #: the simulator started for checks ends after this long without one (seconds)
 IDLE_STOP_S = 300.0
-#: how long one check may take (a simulator that starts first takes seconds)
-CHECK_TIMEOUT_S = 60.0
 
 Callback = Callable[[dict], None]
 
@@ -43,19 +41,12 @@ class ExpressionChecker(QtCore.QObject):
     # -- the public part (GUI thread) --------------------------------------------------
     def check(self, text: str, kind: str, callback: Callback) -> None:
         """Compile ``text`` ('expression' or 'command') on a thread; ``callback(result)`` on
-        the GUI thread with ``{"ok", "errors", "warnings"}`` or ``{"error": text}``. A genie's
-        parameters and a super genie's associations are compiled as names, and what the
-        compiler says about the names they make is left out (without_template)."""
-        from .. import cicode_lex as L
-
+        the GUI thread with ``{"ok", "errors", "warnings"}`` or ``{"error": text}``
+        (sim/checks.check_field)."""
         self._last_used = time.monotonic()
         self._idle.start()
-        filled, spans = L.fill_template(text)
-        if spans:
-            names = [filled[s:e] for s, e in spans]
-            callback = lambda result, done=callback: done(without_template(result, spans, names))  # noqa: E731
         t = threading.Thread(
-            target=self._run, args=(filled, kind, callback), name="expression-check", daemon=True
+            target=self._run, args=(text, kind, callback), name="expression-check", daemon=True
         )
         t.start()
 
@@ -72,15 +63,9 @@ class ExpressionChecker(QtCore.QObject):
         gcguard.before_worker()
         with self._lock:
             try:
-                s = self._open()
-                body = (
-                    s.request("checkExpression", {"text": text, "kind": kind}, timeout=CHECK_TIMEOUT_S) or {}
-                )
-                result = {
-                    "ok": bool(body.get("ok")),
-                    "errors": list(body.get("errors") or ()),
-                    "warnings": list(body.get("warnings") or ()),
-                }
+                from ..sim.checks import check_field
+
+                result = check_field(self._open(), text, kind)
             except Exception as e:  # noqa: BLE001  # swallow-ok: the field shows the error
                 self._drop()
                 result = {"error": str(e).strip() or type(e).__name__}
@@ -153,32 +138,6 @@ def shutdown_all() -> None:
     """End every checker's session (the application ends)."""
     for c in list(_CHECKERS.values()):
         c.close()
-
-
-#: the compiler's type errors (E2024 Incompatible types): a genie parameter's type is
-#: known when the genie is placed, the compiler reads the name it is given as a number
-TYPE_ERRORS = frozenset({2024})
-
-
-def without_template(result: dict, spans, names) -> dict:
-    """``result`` without the errors at ``spans`` (the names fill_template made), the
-    errors and warnings that name one of ``names``, and the type errors."""
-    if result.get("error"):
-        return result
-    low = [n.lower() for n in names]
-
-    def about_template(problem: dict, at_column: bool) -> bool:
-        msg = str(problem.get("message") or "").lower()
-        if any(n in msg for n in low):
-            return True
-        if at_column and problem.get("code") in TYPE_ERRORS:
-            return True
-        col = int(problem.get("column") or 0) - 1
-        return at_column and any(s <= col < e for s, e in spans)
-
-    errors = [e for e in result.get("errors") or () if not about_template(e, True)]
-    warnings = [w for w in result.get("warnings") or () if not about_template(w, True)]
-    return {"ok": not errors, "errors": errors, "warnings": warnings}
 
 
 def summary(result: dict) -> str:

@@ -675,11 +675,34 @@ def test_expression_fields_have_the_cicode_check(tmp_path, fx_page):
     _show(panel, doc, [r])
     ed = _field(panel, "VISIBLE", ExpressionField)
     assert ed.checker() is not None
+
+    class Engine:
+        """The project's engine, as the field's checker answers: an undefined tag."""
+
+        def check(self, text, kind, callback):
+            callback(
+                {
+                    "ok": True,
+                    "errors": [],
+                    "warnings": [
+                        {
+                            "kind": "tag",
+                            "name": text,
+                            "message": "the project does not define the tag %s (the runtime raises error 424 for it)"
+                            % text,
+                            "column": 1,
+                        }
+                    ],
+                }
+            )
+
+    ed.set_checker(Engine())
     ed.setFocus()
     QTest.keyClicks(ed, "No_Such_Tag_Here")
     QTest.keyClick(ed, QtCore.Qt.Key_Return)
+    assert ed.check_now()
     _app().processEvents()
-    assert any("not a tag in the project" in p.message for p in ed.problems())
+    assert any("does not define the tag No_Such_Tag_Here" in p.message for p in ed.problems())
     assert ed._advice_action is not None and ed._advice_action.isVisible()
 
 

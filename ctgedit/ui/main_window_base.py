@@ -235,6 +235,7 @@ DESCRIPTIONS = {
     "act_copy_to_lib": "Save the selected objects as a symbol or genie in a library.",
     "act_pack_libs": "Make library files smaller by removing deleted elements.",
     "act_update_pages": "Bring the symbols and genies of the project's pages up to date.",
+    "act_check_project": "Check every page of a project: Cicode that does not compile, tags and pages it does not have, and the other page checks.",
     "act_rename_pages": "Rename the project's pages, one or many at once, with their project database rows.",
     "act_close_builder": "Close the Graphics Builder so that it reads the changed libraries again.",
     "act_attach_super": "Attach super genies to the genie, to open from its buttons.",

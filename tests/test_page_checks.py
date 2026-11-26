@@ -10,33 +10,6 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6 import QtWidgets  # noqa: E402
 
 
-class _Tags:
-    """A tag index that knows two names."""
-
-    known = {"tank_1_level", "motor_a"}
-
-    def empty(self):
-        return False
-
-    def is_name(self, name):
-        low = name.lower().split(".", 1)[0]
-        return low in self.known
-
-
-class _Funcs:
-    def is_function(self, name):
-        return name.lower() in {"pumpon", "pagedisplay", "dsppopup"}
-
-
-def test_names_in_leaves_out_strings_numbers_keywords_and_calls():
-    from ctgedit.features.page_checks import names_in
-
-    names, calls = names_in('Tank_1_Level > 10.5 AND PumpOn("Motor_B", Motor_A) OR NOT Flag.V')
-    assert names == ["Tank_1_Level", "Motor_A", "Flag.V"] and calls == ["pumpon"]
-    assert names_in("") == ([], [])
-    assert names_in("TRUE AND 0x1F") == ([], [])
-
-
 @pytest.fixture
 def doc(fx_page, tmp_path):
     from ctgedit.editing import EditableDocument
@@ -59,22 +32,15 @@ def test_check_document_finds_the_planted_problems(doc):
     from ctgedit.features import page_checks as PC
     from ctgedit.model.document import ObjectKind
 
-    # an unknown tag in an existing expression field
-    f0 = next(f for f in PC.expression_fields(doc) if f.kind == "expression")
-    assert doc.set_property(f0.index, f0.key, "NOPE_TAG_123 + Tank_1_Level")
     # a button without a command
     b = doc.create_object("button", rect=(50, 50, 120, 80), text="Go")
     assert doc.page.objects[b].kind is ObjectKind.BUTTON
     # an object off the page
     r = doc.create_object("rectangle", rect=(3000, 3000, 3040, 3040), colour=0x336699)
-    rep = PC.check_document(doc, tags=_Tags(), functions=_Funcs(), measure=lambda *a: None)
+    rep = PC.check_document(doc, measure=lambda *a: None)
     codes = {(f.code, f.index) for f in rep.findings}
-    assert ("tag", f0.index) in codes
     assert ("no_command", b) in codes
     assert ("off_page", r) in codes
-    tagf = next(f for f in rep.findings if f.code == "tag" and f.index == f0.index)
-    assert "NOPE_TAG_123" in tagf.message and "Tank_1_Level" not in tagf.message
-    assert tagf.level == "warning" and tagf.field == f0.key and tagf.label
     assert rep.expressions == len(PC.expression_fields(doc))
     assert "warning" in rep.summary()
     # the findings are ordered errors, warnings, notes
@@ -96,7 +62,7 @@ def test_check_document_measures_button_captions_and_duplicate_keys(doc):
     def measure(lines, face, points, attribs):
         return ([120 * len(lines)], 14, 11)
 
-    rep = PC.check_document(doc, tags=None, functions=None, measure=measure)
+    rep = PC.check_document(doc, measure=measure)
     codes = {(f.code, f.index) for f in rep.findings}
     assert ("caption_wide", b) in codes
     assert ("dup_key", b) in codes
@@ -131,6 +97,35 @@ def test_engine_findings_turn_compile_errors_into_rows():
     assert "column 3" in out[0].message and "Syntax error" in out[0].message
     assert PC.engine_findings(_Doc(), f, {"error": "no engine"}) == []
     assert PC.engine_findings(_Doc(), f, {"ok": True, "errors": [], "warnings": []}) == []
+    # the engine's warnings: a tag the project does not define, a page it does not have
+    tag, page = PC.engine_findings(
+        _Doc(),
+        f,
+        {
+            "ok": True,
+            "errors": [],
+            "warnings": [
+                {
+                    "kind": "tag",
+                    "message": "the project does not define the tag NOPE_1 (the runtime raises error 424 for it)",
+                    "column": 1,
+                },
+                {
+                    "kind": "page",
+                    "message": "the project has no page Gone (the runtime cannot display it)",
+                    "column": 9,
+                },
+            ],
+        },
+    )
+    assert (tag.code, tag.level, tag.index, tag.field) == ("tag", "warning", 3, "VISIBLE")
+    assert (
+        tag.message
+        == "Hidden when (VISIBLE): the project does not define the tag NOPE_1 (the runtime raises error 424 for it)"
+    )
+    assert page.code == "page" and page.message.endswith(
+        "the project has no page Gone (the runtime cannot display it)"
+    )
 
 
 @pytest.fixture
@@ -253,11 +248,3 @@ def test_a_refresh_with_new_findings_keeps_the_rows_and_the_details_being_read()
         assert [panel.finding(k).message for k in range(3)] == ["m3", "m4", "new"]
     finally:
         panel.deleteLater()
-
-
-def test_names_in_follows_the_field_tokens():
-    from ctgedit.features.page_checks import names_in
-
-    assert names_in("%Tag%_PV + Ghost ! Comment") == (["Ghost"], [])
-    assert names_in("Arg1 + Tag", command=True) == (["Tag"], [])
-    assert names_in("Arg1 + Tag") == (["Arg1", "Tag"], [])

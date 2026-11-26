@@ -439,83 +439,9 @@ def split_signature(signature: str) -> Optional[Tuple[str, List[Argument], str]]
     return signature[: a + 1], args, signature[b:]
 
 
-# ------------------------------------------------------------------ what a field reads
-#: the fields of an alarm tag (Alarm.On, Alarm.Ack ...): alarm tags are not in the tag
-#: index, so a name with one of these extensions is left to the compiler
-ALARM_FIELDS = frozenset(
-    f.lower()
-    for f in (
-        "On",
-        "Off",
-        "Ack",
-        "Disabled",
-        "Desc",
-        "Name",
-        "Tag",
-        "Category",
-        "Priority",
-        "Area",
-        "Help",
-        "Comment",
-        "Time",
-        "Date",
-        "State",
-        "Value",
-        "Millisec",
-        "Paging",
-        "PagingGroup",
-        "Type",
-        "SumState",
-        "SumDesc",
-        "Deadband",
-        "Rate",
-        "High",
-        "Low",
-        "HighHigh",
-        "LowLow",
-        "Delay",
-        "Deviation",
-        "Format",
-        "Var",
-        "VarOn",
-        "VarOff",
-        "LogState",
-        "Cluster",
-        "Equipment",
-        "Item",
-        "Quality",
-        "Custom1",
-        "Custom2",
-        "Custom3",
-        "Custom4",
-        "Custom5",
-        "Custom6",
-        "Custom7",
-        "Custom8",
-        "OnTime",
-        "OffTime",
-        "AckTime",
-        "DisabledTime",
-    )
-)
-#: a key sequence command's arguments (Arg1 ... ArgN): not tags
-_KEY_ARG = re.compile(r"arg\d+$", re.IGNORECASE)
+# ------------------------------------------------------------------ genie templates
 #: the kinds whose text is no name of the project
 _TEMPLATE = (PARAM, ASSOCIATION)
-
-
-def alarm_field(name: str) -> bool:
-    """``name`` ends in an alarm tag's field ('Alarm1.Ack')."""
-    return "." in name and name.rsplit(".", 1)[1].lower() in ALARM_FIELDS
-
-
-class Reference(NamedTuple):
-    """A name a field reads (kind NAME) or a function it calls (kind FUNCTION)."""
-
-    start: int
-    end: int
-    kind: str
-    text: str
 
 
 def beside_template(tokens: List[Token], k: int) -> bool:
@@ -527,22 +453,6 @@ def beside_template(tokens: List[Token], k: int) -> bool:
     return (before is not None and before.end == t.start and before.kind in _TEMPLATE) or (
         after is not None and after.start == t.end and after.kind in (*_TEMPLATE, FIELD)
     )
-
-
-def references(text: str, tokens: Optional[List[Token]] = None, command: bool = False) -> List[Reference]:
-    """The names ``text`` reads and the functions it calls, in order. A part of a name a
-    genie makes ('%Tag%_PV') is left out, and so is a key sequence argument (Arg1) of a
-    ``command``."""
-    tokens = tokenize(text) if tokens is None else tokens
-    out: List[Reference] = []
-    for k, t in enumerate(tokens):
-        if t.kind not in (NAME, FUNCTION) or beside_template(tokens, k):
-            continue
-        word = text[t.start : t.end]
-        if command and t.kind == NAME and _KEY_ARG.match(word):
-            continue
-        out.append(Reference(t.start, t.end, t.kind, word))
-    return out
 
 
 #: what fill_template puts in place of a genie parameter or super genie association

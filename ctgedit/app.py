@@ -375,6 +375,11 @@ def main(argv: list[str] | None = None) -> int:
         from .workers.find_worker import main as find_main
 
         return find_main(argv[2:])
+    if argv[1:2] == ["--check"]:
+        # Check Project: the page checks of a project's pages (check_worker)
+        from .workers.check_worker import main as check_main
+
+        return check_main(argv[2:])
     if argv[1:2] == ["--pictures"]:
         # Find Duplicate Pictures' scan and changes (picture_worker)
         from .workers.picture_worker import main as pictures_main

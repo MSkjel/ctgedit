@@ -161,16 +161,6 @@ def test_signatures_split_into_their_arguments():
     assert L.split_signature("no brackets") is None
 
 
-def test_references_leave_out_names_a_genie_makes_and_key_arguments():
-    text = 'Tank_1 > 1 AND Pump("a", %Tag%_PV, Area%N%.Level, ?INT 2?, Arg1) ! Ghost'
-    got = [(r.text, r.kind) for r in L.references(text)]
-    assert got == [("Tank_1", L.NAME), ("Pump", L.FUNCTION), ("Arg1", L.NAME)]
-    assert [r.text for r in L.references(text, command=True)] == ["Tank_1", "Pump"]
-    r = L.references("1 + Motor.Speed")[0]
-    assert (r.start, r.end, r.text) == (4, 15, "Motor.Speed")
-    assert L.alarm_field("Alarm1.Ack") and not L.alarm_field("Pump.Speed") and not L.alarm_field("On")
-
-
 def test_fill_template_keeps_the_columns():
     text = '%Tag%_PV + ?INT 2? + Area%N%.Level + Message("%Desc%")'
     filled, spans = L.fill_template(text)

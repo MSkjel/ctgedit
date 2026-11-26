@@ -262,9 +262,12 @@ Rename… on a page opens it with that page ticked.
 
 Names can swap (A to B and B to A). A page open here closes and opens again under its new name;
 a page open in the Graphics Builder must be closed there first. Afterwards, **Undo Rename**
-gives the pages their old names back, and **Find References** lists where the old names are
-still used, such as `PageDisplay("Mixing")` in Cicode or a genie parameter. Compile the project
-to use the new names.
+gives the pages their old names back, and **Check References** runs
+[Check Project](troubleshooting.md#check-project) to find the Cicode that still opens a page by
+its old name, such as `PageDisplay("Mixing")`, followed through Include's and the project's
+functions. **Replace References** there gives each one the new name: the open pages in their
+tabs, the closed ones saved after a backup. A name a genie parameter or a genie's definition
+holds is listed, not changed. Compile the project to use the new names.
 
 > **Coming from the Graphics Builder:** its Find and Replace hands off to Studio; ctgedit has its
 > own. Rotate and Mirror are direct commands. Align moves nothing until Apply. Goto Object stays

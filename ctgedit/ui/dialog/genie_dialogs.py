@@ -703,7 +703,7 @@ class GenieCicodeCheck:
     each command and expression of the genie the parameter goes into, with the form's
     values put in (the value checked for this parameter), compiled as the page compiler
     would, running nothing (ctsim/checkExpression). The parameters not filled in yet are
-    left to the template rule (expression_check.without_template). Each problem names the
+    left to the template rule (sim/checks.without_template). Each problem names the
     field it is in."""
 
     KINDS = ("command", "expression")

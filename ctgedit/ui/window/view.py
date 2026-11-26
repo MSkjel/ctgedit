@@ -592,8 +592,9 @@ class ViewState:
         "act_messages",
         # Tools > Update Pages: any root project, also with nothing open
         "act_update_pages",
-        # Tools > Rename Pages: a project's pages, also with nothing open
+        # Tools > Rename Pages and Check Project: a project's pages, also with nothing open
         "act_rename_pages",
+        "act_check_project",
         # Find / Replace (All pages of the project) and Pack Libraries: a whole
         # project, also with nothing open
         "act_find",

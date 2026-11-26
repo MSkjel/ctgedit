@@ -4,7 +4,6 @@ at once."""
 from __future__ import annotations
 
 import os
-import re
 import string
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
@@ -192,7 +191,7 @@ class RenamePagesDialog(QtWidgets.QDialog):
         *,
         before: Optional[Callable] = None,
         reopen: Optional[Callable] = None,
-        find_references: Optional[Callable] = None,
+        check_references: Optional[Callable] = None,
     ):
         super().__init__(parent)
         self.setWindowTitle("Rename Pages")
@@ -201,14 +200,16 @@ class RenamePagesDialog(QtWidgets.QDialog):
         self._before = before
         #: reopen(paths): the renamed pages that had a tab open again under their new names
         self._reopen = reopen
-        #: find_references(text, project, includes): Find lists where the old names are used
-        self._find_references = find_references
+        #: check_references(project folder, includes, {old: new}): Check Project lists the
+        #: references to the renamed pages and can give them the new names
+        self._check_references = check_references
         self._pairs: List[Pair] = []
         self._pages: List[Page] = []
         #: (folder, name before this window, name now) of every page it renamed
         self.renamed: List[Pair] = []
         self._undo: List[Pair] = []
-        self._last_old: List[str] = []
+        #: the renames of the last Rename, {old name, lower case: new name}
+        self._last_names: Dict[str, str] = {}
         from ..pick_fields import ProjectScopeField
         from ..style.theme import SearchField, note_label
 
@@ -284,11 +285,11 @@ class RenamePagesDialog(QtWidgets.QDialog):
         lay.addWidget(self._status)
         after = QtWidgets.QHBoxLayout()
         self._b_refs = QtWidgets.QToolButton()
-        self._b_refs.setText("Find References")
+        self._b_refs.setText("Check References")
         self._b_refs.setAutoRaise(True)
         self._b_refs.setToolTip(
-            'List where the old names are still used: Cicode such as PageDisplay("Name"), '
-            "genie parameters and the other fields of the pages"
+            "Check the project for Cicode that still opens a page by its old name, such as "
+            'PageDisplay("Name"), and give it the new name'
         )
         self._b_undo = QtWidgets.QToolButton()
         self._b_undo.setText("Undo Rename")
@@ -321,7 +322,7 @@ class RenamePagesDialog(QtWidgets.QDialog):
         self._table.itemChanged.connect(self._ticked)
         self._b_check.clicked.connect(lambda: self._tick_all(True))
         self._b_clear.clicked.connect(lambda: self._tick_all(False))
-        self._b_refs.clicked.connect(self.find_references)
+        self._b_refs.clicked.connect(self.check_references)
         self._b_undo.clicked.connect(self.undo_rename)
         self._scope.changed.connect(lambda: self._load(ticked=self._ticked_keys()))
         self.resize(700, 600)
@@ -553,7 +554,7 @@ class RenamePagesDialog(QtWidgets.QDialog):
         if self._reopen is not None and was_open:
             self._reopen([os.path.join(d, n + ".ctg") for d, n in was_open if self._key(d, n) in renamed])
         self._undo = [] if undo else done
-        self._last_old = [] if undo else [o for _d, o, _n in done]
+        self._last_names = {} if undo else {o.lower(): n for _d, o, n in done}
         kept = {self._key(d, o) for d, o, _n in pairs if self._key(d, o) not in renamed}
         self._load(ticked=renamed | kept)
         parts = []
@@ -575,23 +576,20 @@ class RenamePagesDialog(QtWidgets.QDialog):
             parts.append("Compile the project to use the new names.")
             if not undo:
                 parts.append(
-                    "Cicode and fields that name the old pages keep the old names: Find References lists them."
+                    "Cicode that opens the old pages keeps the old names: Check References finds it."
                 )
         if failed:
             parts.append("Not renamed: %s." % "; ".join(failed[:3]))
         self._status.setText(" ".join(parts) or "Nothing was renamed.")
         set_note_role(self._status, "danger" if failed else "text_dim")
         self._b_undo.setVisible(bool(self._undo))
-        self._b_refs.setVisible(bool(self._last_old) and self._find_references is not None)
+        self._b_refs.setVisible(bool(self._last_names) and self._check_references is not None)
         return bool(done)
 
-    def references_text(self) -> str:
-        """The Find text (a regular expression, whole names) for the old names of the last
-        rename."""
-        return "|".join(re.escape(n) for n in dict.fromkeys(self._last_old))
+    def check_references(self) -> None:
+        """Check Project over the pages renamed, with their new names to give the references."""
+        if self._check_references is not None and self._last_names:
+            from ..pick_fields import project_dirs
 
-    def find_references(self) -> None:
-        if self._find_references is not None and self._last_old:
-            self._find_references(
-                self.references_text(), self._scope.project(), self._scope.includes.isChecked()
-            )
+            own = self._own_dir or next(iter(project_dirs(self._scope.project(), False)), "")
+            self._check_references(own, self._scope.includes.isChecked(), dict(self._last_names))

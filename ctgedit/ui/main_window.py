@@ -885,6 +885,9 @@ class MainWindow(
         self.act_var_tags.setProperty(_keymap.KEYWORDS_PROP, ["variable tags", "tag list"])
         self.act_pack_libs = self._act("Pack Libraries…", self._pack_libraries_dialog)
         self.act_update_pages = self._act("Update Pages…", self._update_pages)
+        self.act_check_project = self._act(
+            "Check Project…", lambda: self._check_project_dialog(), None, "problems"
+        )
         self.act_rename_pages = self._act(
             "Rename Pages…", lambda: self._rename_pages_dialog(), None, "rename"
         )
@@ -1585,6 +1588,7 @@ class MainWindow(
         t.addAction(self.act_var_tags)
         t.addSeparator()
         t.addAction(self.act_check_page)
+        t.addAction(self.act_check_project)
         t.addAction(self.act_check_workspace)
         t.addAction(self.act_check_display)
         t.addAction(self.act_simulate)

@@ -76,6 +76,7 @@ DIALOG_TOPICS = {
     "GotoObjectDialog": "selecting-and-arranging#go-to-an-object",
     "RenameObjectsDialog": "selecting-and-arranging#rename-objects",
     "RenamePagesDialog": "selecting-and-arranging#rename-pages",
+    "CheckProjectDialog": "troubleshooting#check-project",
     "FindReplaceDialog": "selecting-and-arranging#find-and-replace",
     "AdjustPositionDialog": "selecting-and-arranging#exact-position-and-size",
     "SelectByTagDialog": "selecting-and-arranging#select-same-invert-selection-select-previous",

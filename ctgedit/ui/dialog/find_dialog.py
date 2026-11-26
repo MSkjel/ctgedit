@@ -524,30 +524,6 @@ class FindReplaceDialog(QtWidgets.QDialog):
         self._ed_find.setFocus()
         self._ed_find.selectAll()
 
-    def preset(
-        self,
-        text: str,
-        *,
-        regex: bool = False,
-        match: str = FR.MATCH_PART,
-        project: str = "",
-        includes: bool = False,
-    ) -> None:
-        """Start a new search from another window (Rename Pages' Find References): ``text``,
-        the '.*' toggle, the match, every field (the Search in boxes ticked, the Filters
-        emptied) and, with ``project``, every page of that project (and of those it includes,
-        with ``includes``)."""
-        self._find_regex.set_on(regex)
-        self._ed_find.setText(text)
-        if match in self._rb_match:
-            self._rb_match[match].setChecked(True)
-        for cb in self._cb_scope.values():
-            cb.setChecked(True)
-        self._filter_list.clear()
-        if project and self._scope.set_project(project):
-            self._rb_project.setChecked(True)
-            self._cb_includes.setChecked(bool(includes))
-
     def options(self) -> FR.FindOptions:
         match = next((m for m, rb in self._rb_match.items() if rb.isChecked()), FR.MATCH_PART)
         try:

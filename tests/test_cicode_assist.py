@@ -54,6 +54,28 @@ def _roles(f):
     return [(text[s : s + n], k[0], k[1]) for s, n, k in CA.runs(f.assist.keys())]
 
 
+def _tag_warning(name, column):
+    """ctsim/checkExpression's warning for a tag the project does not define."""
+    return {
+        "kind": "tag",
+        "name": name,
+        "message": "the project does not define the tag %s (the runtime raises error 424 for it)" % name,
+        "column": column,
+    }
+
+
+def _unknown_function(name, column):
+    """ctsim/checkExpression's error for a function the compiler does not know."""
+    return {"code": 2064, "name": "E2064", "message": "Function '%s' not found" % name, "column": column}
+
+
+def _checked(f, errors=(), warnings=()):
+    """The engine's verdict on the field's text, as its checker delivers it."""
+    f.assist.set_check_result(
+        f.inner_text(), {"ok": not errors, "errors": list(errors), "warnings": list(warnings)}
+    )
+
+
 # ------------------------------------------------------------------ colours
 def test_a_field_colours_its_cicode():
     f = _field(text='IF Run THEN Message("on") END')
@@ -119,23 +141,28 @@ def test_the_colours_read_on_every_surface():
 
 # ------------------------------------------------------------------ names and functions
 def test_unknown_names_and_functions_are_underlined(ctx):
-    f = _field(ctx, text="FX_PUMP1 AND NoSuchTag AND NoSuchFn(1) AND FxToggle(FX_PUMP2)")
-    f.assist.look_up_names()
-    got = [(p.message, p.level) for p in f.assist.problems()]
-    assert got == [
-        ("'NoSuchTag' is not a tag in the project.", "warning"),
-        ("'NoSuchFn' is not a known Cicode function.", "warning"),
-    ]
+    """The engine says which names are no tags and which functions it does not know; the
+    field underlines them where they are."""
+    text = "FX_PUMP1 AND NoSuchTag AND NoSuchFn(1) AND FxToggle(FX_PUMP2)"
+    f = _field(ctx, text=text)
+    assert f.assist.problems() == []  # (nothing is guessed before the engine says)
+    _checked(f, warnings=[_tag_warning("NoSuchTag", text.index("NoSuchTag") + 1)])
+    (tag,) = f.assist.problems()
+    assert (text[tag.start : tag.end], tag.level, tag.unknown) == ("NoSuchTag", "warning", L.NAME)
     assert ("NoSuchTag", "name", "warning") in _roles(f)
+    _checked(f, errors=[_unknown_function("NoSuchFn", text.index("NoSuchFn") + 1)])
+    (fn,) = f.assist.problems()
+    assert (text[fn.start : fn.end], fn.level, fn.unknown) == ("NoSuchFn", "error", L.FUNCTION)
 
 
-def test_names_a_genie_makes_and_key_arguments_are_not_looked_up(ctx):
-    f = _field(ctx, text="%Tag%_PV + Area%N%.Level + ?INT 2?")
-    f.assist.look_up_names()
-    assert f.assist.problems() == []
-    f = _field(ctx, kind="command", text="FxSet(FX_PUMP1, Arg1)")
-    f.assist.look_up_names()
-    assert f.assist.problems() == []
+def test_a_tag_name_in_quotes_is_underlined_but_offers_no_names(ctx):
+    """TagRead("Pump9_PV"): the engine's warning underlines the string; "Did you mean"
+    is for names written as names."""
+    text = 'TagRead("Pump9_PV")'
+    f = _field(ctx, text=text)
+    _checked(f, warnings=[_tag_warning("Pump9_PV", text.index('"') + 1)])
+    (p,) = f.assist.problems()
+    assert text[p.start : p.end] == '"Pump9_PV"' and p.unknown == ""
 
 
 def test_genie_text_reads_as_the_genie_reads_it(ctx):
@@ -143,7 +170,6 @@ def test_genie_text_reads_as_the_genie_reads_it(ctx):
     tag is offered for a parameter's name or a part of a name the genie makes."""
     text = '%Line1%_%Line2%_%Line3=" Hello"% + Area%N%.Level'
     f = _field(ctx, text=text)
-    f.assist.look_up_names()
     assert f.assist.problems() == [] and f.problems() == []
     assert ('%Line3=" Hello"%', "param") in [(text[t.start : t.end], t.kind) for t in f.assist.tokens()]
     hover = f.assist.hover_text(text.index("Line3"))
@@ -243,7 +269,7 @@ def test_hover_says_what_a_name_is(ctx):
         "'Ghost' is not a tag in the project.",
         L.NAME,
     )
-    assert hover("Ghost", [p]) == "&#x27;Ghost&#x27; is not a tag in the project."
+    assert hover("Ghost", [p]) == "<qt>&#x27;Ghost&#x27; is not a tag in the project.</qt>"
 
 
 # ------------------------------------------------------------------ completion
@@ -331,10 +357,6 @@ def test_nothing_waits_for_tags_still_being_read(fx_install, monkeypatch):
     _app()
     c = ExpressionContext(fx_install.project("FxMain"))
     monkeypatch.setattr(c, "names_ready", lambda: False)
-    f = _field(c, text="NoSuchTag + FX_PUMP1")
-    f.assist.look_up_names()
-    assert f.assist.problems() == []  # (looked up again when they are read)
-    assert f.assist._timer.isActive() and f.assist._timer.interval() == f.assist.LOOKUP_RETRY_MS
     text = "FX_PUMP1"
     assert "still being read" in CA.hover_html(text, L.tokenize(text), 1, c, [])
 
@@ -366,15 +388,19 @@ def test_colours_follow_the_theme_and_a_read_only_field_colours_once():
 # ------------------------------------------------------------------ did you mean
 def test_an_unknown_name_offers_the_names_it_may_mean(ctx):
     f = _field(ctx, text="FX_PUMP7 + FxTogle(1)")
-    f.assist.look_up_names()
-    tag, fn = f.assist.problems()
+    _checked(f, warnings=[_tag_warning("FX_PUMP7", 1)])
+    (tag,) = f.assist.problems()
+    _checked(f, errors=[_unknown_function("FxTogle", 12)])
+    (fn,) = f.assist.problems()
     assert (tag.unknown, fn.unknown) == (L.NAME, L.FUNCTION)
     assert f.assist.suggestions(L.NAME, "FX_PUMP7")[:3] == ["FX_PUMP1", "FX_PUMP2", "FX_PUMP3"]
     assert CA.did_you_mean(["A"]) == "Did you mean A?"
     assert CA.did_you_mean(["A", "B", "C"]) == "Did you mean A, B or C?"
-    assert "Did you mean FX_PUMP1, FX_PUMP2 or FX_PUMP3?" in f.assist.hover_text(2)
     tip = f.assist.hover_text(f.inner_text().index("FxTogle") + 1)
-    assert tip == "&#x27;FxTogle&#x27; is not a known Cicode function. Did you mean FxToggle?"
+    assert tip == "<qt>Function &#x27;FxTogle&#x27; not found. Did you mean FxToggle?</qt>"
+    _checked(f, warnings=[_tag_warning("FX_PUMP7", 1)])
+    assert "Did you mean FX_PUMP1, FX_PUMP2 or FX_PUMP3?" in f.assist.hover_text(2)
+    _checked(f, errors=[_unknown_function("FxTogle", 12)])
     # the menu replaces it (one undo step)
     acts = f.assist.menu_actions(f.inner_text().index("FxTogle") + 2)
     assert [a[0] for a in acts] == ["Replace with FxToggle"]
@@ -389,7 +415,7 @@ def test_the_field_menu_holds_the_replacements_and_the_larger_box(ctx):
     from PySide6 import QtWidgets
 
     f = _field(ctx, text="FX_PUMP7")
-    f.assist.look_up_names()
+    _checked(f, warnings=[_tag_warning("FX_PUMP7", 1)])
     menu = QtWidgets.QMenu()
     menu.addAction("Copy")
     f.assist.add_to_menu(menu, 2)
@@ -608,7 +634,7 @@ def test_a_warning_about_a_name_a_genie_makes_is_left_out():
     """A warning at a parameter's place, or naming what fill_template made of it, is the
     template's, not the field's."""
     from ctgedit import cicode_lex as L
-    from ctgedit.ui.expression_check import without_template
+    from ctgedit.sim.checks import without_template
 
     filled, spans = L.fill_template('_PageDisplay("%Page%")')
     names = [filled[s:e] for s, e in spans]
@@ -624,3 +650,22 @@ def test_a_warning_about_a_name_a_genie_makes_is_left_out():
     assert [w["message"] for w in without_template(result, spans, names)["warnings"]] == [
         "the project does not define the tag Y"
     ]
+
+
+def test_the_hover_of_an_unknown_tag_shows_its_quotes_as_quotes():
+    """A tip without a tag of its own is shown as plain text: the hover is marked rich text,
+    so the quotes around the name ('Pump9', escaped) read as quotes, not as &#x27;."""
+    from PySide6 import QtGui
+
+    from ctgedit import cicode_lex as L
+    from ctgedit.ui.objprops import cicode_assist as CA
+
+    _app()
+    text = "Pump9 + 1"
+    p = CA.Problem(0, 5, "warning", "'Pump9' is not a tag the project defines.", L.NAME)
+    tip = CA.hover_html(text, L.tokenize(text), 1, None, [p])
+    assert QtGui.Qt.mightBeRichText(tip)
+    doc = QtGui.QTextDocument()
+    doc.setHtml(tip)
+    assert doc.toPlainText() == "'Pump9' is not a tag the project defines."
+    assert CA.hover_html("", [], 0, None, []) == ""

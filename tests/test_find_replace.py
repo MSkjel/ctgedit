@@ -839,7 +839,5 @@ def test_the_dialog_filters(fx_install):
             {"kind": "genies", "exclude": False, "text": "fx_valve", "regex": False},
             {"kind": "objects", "exclude": True, "text": "Valve8$", "regex": True},
         ]
-        again.preset("FX_PUMP1")
-        assert again._filter_list.rows == []
     finally:
         again.close()

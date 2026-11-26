@@ -60,10 +60,12 @@ The folders searched are listed below, in order. **Copy** copies it all for a re
 ## Check Page
 
 Tools > Check Page ([[Ctrl+Shift+K]]) lists what would go wrong when the page is compiled or run,
-in the **Page Checks** panel:
+in the **Page Checks** panel. The Cicode is compiled by the simulator, as the page compiler
+would, running nothing:
 
-- tags that aren't defined (warnings: they may be local variables or arguments);
 - expressions and commands that don't compile;
+- tags the project doesn't define, also a tag name given as text, such as `TagRead("Pump9_PV")`;
+- pages the project doesn't have that the page opens, such as `PageDisplay("Mixer9")`;
 - buttons without commands, numbers without expressions, empty symbol sets;
 - objects entirely off the page;
 - button captions wider than the button;
@@ -73,6 +75,12 @@ in the **Page Checks** panel:
 
 Double-click a row to go to the object; **Properties…** opens where the field is set. **Check
 Again** reruns the checks. Checks never change the page.
+
+## Check Project
+
+Tools > Check Project… runs Check Page on every page of a project (and, with **And the projects
+it includes**, of those too), as the pages are saved, in a separate process. **Show** filters the
+list; double-click a row (or **Go To**) to open its page at the object.
 
 ## Check the page display
 

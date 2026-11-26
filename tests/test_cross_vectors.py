@@ -38,8 +38,9 @@ def test_the_tokenizers_take_code_page_names():
     from ctgedit.format import supergenie as S
 
     name = "R\u00f8r_Temp"
-    assert [r.text for r in L.references(name + ".PV + 1")] == [name + ".PV"]
-    assert [(r.text, r.kind) for r in L.references("M\u00e5ling(1)")] == [("M\u00e5ling", L.FUNCTION)]
+    text = name + ".PV + M\u00e5ling(1)"
+    toks = [(text[t.start : t.end], t.kind) for t in L.tokenize(text) if t.kind in (L.NAME, L.FUNCTION)]
+    assert toks == [(name + ".PV", L.NAME), ("M\u00e5ling", L.FUNCTION)]
     assert C._tokenize(name + " <> 1")[0] == ("id", name)
     assert S._TOKEN.findall("?" + name + "?") == [name]
 

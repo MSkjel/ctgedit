@@ -167,7 +167,7 @@ def test_the_dialog_renames_and_undoes_and_finds_references(fx_install):
         return True
 
     dlg = RenamePagesDialog(
-        None, pdir, ["FxGenies", "FxParts"], before=before, find_references=lambda *a: refs.append(a)
+        None, pdir, ["FxGenies", "FxParts"], before=before, check_references=lambda *a: refs.append(a)
     )
     try:
         dlg._mode.setCurrentIndex(1)
@@ -182,8 +182,8 @@ def test_the_dialog_renames_and_undoes_and_finds_references(fx_install):
         assert "PlantGenies.ctg" in names and "FxGenies.ctg" not in names
         assert dlg.renamed == [(pdir, "FxGenies", "PlantGenies"), (pdir, "FxParts", "PlantParts")]
         assert "Renamed 2 pages" in dlg._status.text() and not dlg._b_undo.isHidden()
-        dlg.find_references()
-        assert refs == [("FxGenies|FxParts", "FxMain", False)]
+        dlg.check_references()
+        assert refs == [(pdir, False, {"fxgenies": "PlantGenies", "fxparts": "PlantParts"})]
         assert dlg.undo_rename()
         assert os.path.isfile(fx_install.page("FxGenies")) and dlg.renamed == []
         # a name that cannot be used: Rename stays off, the reason is shown

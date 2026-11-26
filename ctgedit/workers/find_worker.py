@@ -58,7 +58,7 @@ def pages_of(projects) -> List[str]:
     return project_pages(projects)
 
 
-def _open(path: str, prefilter=None):
+def open_page(path: str, prefilter=None):
     """The page as a document, or None when ``prefilter`` (find_replace.PagePrefilter) says
     it cannot hold a hit (it is then not parsed)."""
     from ..editing import EditableDocument, read_with_identity
@@ -110,7 +110,7 @@ def _find_part(req: dict, k: int, n: int, progress=None, skip_now=None) -> dict:
             records.append([i, "skip"])
             continue
         try:
-            doc = _open(path, prefilter)
+            doc = open_page(path, prefilter)
             hits = FR.find_hits(doc, opts) if doc is not None else []
         except Exception as e:  # noqa: BLE001 -- swallow-ok: the page is reported, the search goes on
             records.append([i, "failed", "%s: %s" % (name, e)])
@@ -205,7 +205,7 @@ def replace(req: dict, progress=None, skip_now=None) -> dict:
     def edit(path):
         if not FR.page_allowed(opts, path):
             return None  # (left out by the Pages filter)
-        doc = _open(path, prefilter)
+        doc = open_page(path, prefilter)
         if doc is None:
             return None  # (it cannot hold the text: nothing to replace)
         hits = FR.find_hits(doc, opts)

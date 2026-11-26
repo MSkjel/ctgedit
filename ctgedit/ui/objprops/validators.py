@@ -79,12 +79,6 @@ def advice(text: str, field_kind: str = "expr", context=None) -> List[Problem]:
         return []
     tokens = L.tokenize(text)
     out = structure(text, tokens)
-    if context is not None:
-        # (the same lookups as the field's underlines: cicode_assist)
-        from .cicode_assist import name_problems
-
-        found = name_problems(text, tokens, context, field_kind, names=field_kind in ("expr", "command"))
-        out.extend(Problem(WARNING, p.message) for p in found)
     for hook in list(_HOOKS):
         try:
             out.extend(hook(text, field_kind, context) or [])
