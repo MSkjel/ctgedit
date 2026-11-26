@@ -29,18 +29,27 @@ jobs:
               --json databaseId,event,status,conclusion \
               --jq '.[] | select(.event == "push" or .event == "workflow_dispatch") | "\(.databaseId) \(.status) \(.conclusion)"'
           }
-          if runs | grep -q " completed success$"; then
-            echo "CI passed on $GITHUB_SHA."
-            exit 0
-          fi
-          id=$(runs | awk '$2 != "completed" { print $1; exit }')
-          if [ -n "$id" ]; then
-            echo "Waiting for CI run $id."
-            if gh run watch "$id" --exit-status --interval 60 > /dev/null; then
+          # (a run of a push made with the tag can take a while to be listed: looked for
+          # again for up to 10 minutes before giving up)
+          for try in $(seq 1 20); do
+            if runs | grep -q " completed success$"; then
               echo "CI passed on $GITHUB_SHA."
               exit 0
             fi
-          fi
+            id=$(runs | awk '$2 != "completed" { print $1; exit }')
+            if [ -n "$id" ]; then
+              echo "Waiting for CI run $id."
+              if gh run watch "$id" --exit-status --interval 60 > /dev/null; then
+                echo "CI passed on $GITHUB_SHA."
+                exit 0
+              fi
+              break
+            fi
+            if runs | grep -q " completed "; then
+              break  # (it ran, and did not pass)
+            fi
+            sleep 30
+          done
           echo "::error::CI has not passed on $GITHUB_SHA. Push it to main or run CI on the tag, then re-run this workflow."
           exit 1
 
@@ -71,5 +80,10 @@ jobs:
             echo "::error::The installer is not version $v: $(ls dist)."
             exit 1
           fi
-          gh release create "$GITHUB_REF_NAME" "dist/ctgedit-$v-setup.exe" \
-            --verify-tag --title "ctgedit $v" --generate-notes
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            # (the tag was moved to a newer commit: its release takes the new installer)
+            gh release upload "$GITHUB_REF_NAME" "dist/ctgedit-$v-setup.exe" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "dist/ctgedit-$v-setup.exe" \
+              --verify-tag --title "ctgedit $v" --generate-notes
+          fi

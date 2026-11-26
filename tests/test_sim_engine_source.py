@@ -578,6 +578,10 @@ def test_a_stopped_tab_is_not_kept_alive_by_a_shared_session(servers, hub, page_
         ]
         assert len(s.conn._close_listeners) == 1 and len(own) == 1
         assert len(s.conn._listeners) == 2
+        # (the reader thread holds its copy of the listeners while it hands an event out, a's
+        # among them if a stopped meanwhile: one request answered on the session means the
+        # reader has handled every message before it, that copy included)
+        s.request("tasks")
         ref = weakref.ref(a)
         a = None  # (released: the session must outlive it)
         gc.collect()

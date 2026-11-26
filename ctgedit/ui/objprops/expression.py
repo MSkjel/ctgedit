@@ -894,8 +894,6 @@ class ExpressionField(QtWidgets.QLineEdit):
         if self._assist is not None:
             self._assist.context = context
             self._assist._meant = {}
-        if self._checker is not None and self.value().strip():
-            self._check_timer.start(0)  # (the other project's compiler says)
         if self._wizard is not None:
             self._menu = build_wizard_menu(self, context, self._wizard_entries, self)
         if context is not None and isinstance(self._dynamic, TagCompletionModel):

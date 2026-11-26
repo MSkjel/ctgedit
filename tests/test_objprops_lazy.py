@@ -165,8 +165,23 @@ def test_untouched_pages_of_inert_modules_change_nothing(page_of, tmp_path, src)
             with doc.batch("probe"):
                 assert not ed.apply(), (i, mod)
         assert len(doc._undo) == undo and doc.serialize() == data, i
-        dlg.deleteLater()
+        _free(dlg)
+        dlg = None
     assert checked  # (the pages have editor pages)
+
+
+def _free(dlg) -> None:
+    """Close and delete a sheet now, before the next is built: left to deleteLater with no
+    event loop running, the sheets wait for the garbage collector, which can free one in the
+    middle of building the next (an access violation)."""
+    import gc
+
+    from PySide6 import QtCore, QtWidgets
+
+    dlg.close()
+    dlg.deleteLater()
+    QtWidgets.QApplication.sendPostedEvents(None, QtCore.QEvent.DeferredDelete)
+    gc.collect()
 
 
 def _first_text(doc):
@@ -285,7 +300,8 @@ def test_a_sheet_shown_page_by_page_writes_what_a_built_one_writes(page_of, tmp_
         n = len(doc._undo)
         assert dlg.apply() and len(doc._undo) == n + 1
         out.append((list(doc.object_properties(i).items()), doc.serialize()))
-        dlg.deleteLater()
+        _free(dlg)
+        dlg = None
     assert out[0][0] == out[1][0]
     assert out[0][1] == out[1][1]
 

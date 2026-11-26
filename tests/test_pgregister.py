@@ -752,3 +752,26 @@ def test_a_page_without_a_pages_row_gets_no_register_rows(SA, tmp_path):
     assert rep.get("unregistered") and rep["pages_recno"] is None
     for t, b in before.items():
         assert open(os.path.join(dst, t + ".DBF"), "rb").read() == b, t
+
+
+def test_a_member_keeps_txtmode_zero_with_nothing_of_its_own_after_txt_off(SA):
+    """A genie member one level deep, template and value bag TXT_OFF first: TXTMODE '0' stays
+    in the row when only property sheet state ('!*') lies between them (Example Genies AN 532),
+    and is left out when a key of the record's own does (Example !ServerMonitor's VISIBLE)."""
+    from ctgedit.format.page import parse_ctg
+
+    o = next(
+        o
+        for o in parse_ctg(os.path.join(SA, "FxParts.ctg")).page.objects
+        if o.type_code == 0x05 and len(GP.decode(o).entries) == 2 and len(GP.decode(o).entries[0]) >= 3
+    )
+    r = GP.decode(o)
+    state = [("!*PropSheet.Focus", "#1402.#1403"), ("!*#1402", "#1403")]
+    r.entries[0][2] = GP.Bag([("TXT_OFF", "%OffLabel%")] + state + [("TXTMODE", "0")], r.entries[0][2].ov)
+
+    def dropped(bag):
+        r.entries[0][1] = GP.Bag(bag, r.entries[0][1].ov)
+        return PR._txtmode_dropped(GP.to_po(GP.encode(r)), bag)
+
+    assert not dropped(state + [("TXT_OFF", "@(OFF)"), ("TXTMODE", "0")])
+    assert dropped(state + [("TXT_OFF", "@(OFF)"), ("VISIBLE", "X = 1"), ("TXTMODE", "0")])

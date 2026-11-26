@@ -229,11 +229,26 @@ def _off_before_mode(keys) -> bool:
     return "TXT_OFF" in keys[: keys.index("TXTMODE")]
 
 
+def _key_between(keys) -> bool:
+    """A key of the record's own (not a '!*' property sheet state) lies between TXT_OFF and
+    TXTMODE in ``keys`` (upper case, TXT_OFF first)."""
+    a, b = keys.index("TXT_OFF"), keys.index("TXTMODE")
+    return any(not k.startswith("!") for k in keys[a + 1 : b])
+
+
 def _txtmode_dropped(po, bag) -> bool:
-    """Is a text's TXTMODE='0' left out of its pgdynobj row?"""
+    """Is a text's TXTMODE='0' left out of its pgdynobj row? CtDraw's row builder
+    (FUN_00444c10) copies the value bag it holds, and its setter of a number property
+    (FUN_0041eef0) deletes the key for 0: a text whose Display Value was set to On / Off
+    holds no TXTMODE, and the save writes it after the keys added since. So the key order
+    tells: after COLMODE; a genie member one level deep whose template and value bag list
+    TXT_OFF before TXTMODE with a key of its own between them in the bag (Example Genies AN
+    532, nothing between, keeps it); a free text with TXT_OFF first and a TXT_A. Over the R2
+    corpus' 414 texts with TXTMODE '0' and a stored row, all 414 agree."""
     if _txtmode_after_colmode(bag):
         return True
-    if po.type_code != 0x05 or not _off_before_mode([k.upper() for k, _v in bag]):
+    keys = [k.upper() for k, _v in bag]
+    if po.type_code != 0x05 or not _off_before_mode(keys):
         return False
     try:
         from ..format.genie_place import decode
@@ -245,7 +260,7 @@ def _txtmode_dropped(po, bag) -> bool:
         return any(k.upper() == "TXT_A" and v for k, v in bag)
     if len(e) != 2 or len(e[0]) < 3:
         return False
-    return _off_before_mode([k.upper() for k, _v in e[0][2].pairs])
+    return _off_before_mode([k.upper() for k, _v in e[0][2].pairs]) and _key_between(keys)
 
 
 _WANT: Dict[tuple, Dict[str, str]] = {}

@@ -53,6 +53,20 @@ def _write(path, text):
         f.write(text)
 
 
+def _replace_like_an_editor(src, dst, tries=50):
+    """An editor's save by a rename: another program reading ``dst`` that moment (a virus
+    scanner, the indexer) makes Windows refuse it (WinError 5 / 32), and an editor tries
+    again, as this does."""
+    for k in range(tries):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError:
+            if k == tries - 1:
+                raise
+            time.sleep(0.02)
+
+
 # -- the folder watch --------------------------------------------------------------------
 def test_the_folder_watch_sees_saved_new_and_removed_files(tmp_path):
     _app()
@@ -75,7 +89,7 @@ def test_the_folder_watch_sees_saved_new_and_removed_files(tmp_path):
         # (another size: two saves inside one clock tick of the file times look alike)
         _write(tmp, "FUNCTION A() RETURN 33 END")
         n = seen.count("a.ci")
-        os.replace(tmp, a)
+        _replace_like_an_editor(tmp, a)
         # (the notice of a rename right after a burst can be missed: LiveReload's sweep
         # compares the folders again, as this does after a second)
         if not wait_for(lambda: seen.count("a.ci") > n, timeout=1.0, pump=_pump):
