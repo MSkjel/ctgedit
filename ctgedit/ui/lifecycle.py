@@ -85,7 +85,8 @@ def _open_in_builder(project: str, page: str) -> bool:
         return False
 
 
-def _touch(catalog, directory: str) -> None:
+def touch_catalog(catalog, directory: str) -> None:
+    """The page and library lists read ``directory`` again (its pages or libraries changed)."""
     try:
         if catalog is None:
             from ..io.catalog import catalog_for
@@ -177,7 +178,7 @@ def delete_page(
         _warn(parent, "Delete Page", "Page '%s' could not be deleted: %s" % (name, e))
         return None
     finally:
-        _touch(catalog, pdir)
+        touch_catalog(catalog, pdir)
     _after(after)  # (removed from the project: its tabs close now, not before)
     if rep["errors"]:
         _warn(
@@ -266,7 +267,7 @@ def _library_written(lib_path: str, catalog) -> str:
     from ..editing import ctdraw_cache_warning, libraries_changed
 
     libraries_changed()
-    _touch(catalog, os.path.dirname(os.path.abspath(lib_path)))
+    touch_catalog(catalog, os.path.dirname(os.path.abspath(lib_path)))
     return ctdraw_cache_warning()
 
 

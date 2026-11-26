@@ -124,6 +124,46 @@ COMPOSITE_PARAM_REASON = "Change a composite genie's options with Edit Composite
 
 
 @dataclass(frozen=True)
+class NameFilter:
+    """Which names a search keeps: ``include`` and ``exclude`` are regular expressions,
+    without case, found anywhere in a name ('' = no condition). A name list passes when one
+    of its names matches ``include`` and none matches ``exclude``; an empty list passes
+    only when there is no ``include``."""
+
+    include: str = ""
+    exclude: str = ""
+
+    @property
+    def on(self) -> bool:
+        return bool(self.include or self.exclude)
+
+    def problem(self) -> str:
+        """Why a pattern does not compile ('' = both do)."""
+        for pat in (self.include, self.exclude):
+            if pat:
+                try:
+                    re.compile(pat)
+                except re.error as exc:
+                    return str(exc)
+        return ""
+
+    def allows(self, names) -> bool:
+        names = [n for n in names if n]
+        if self.include:
+            rx = _regex(self.include)
+            if rx is None or not any(rx.search(n) for n in names):
+                return False
+        if self.exclude:
+            rx = _regex(self.exclude)
+            if rx is not None and any(rx.search(n) for n in names):
+                return False
+        return True
+
+
+NO_FILTER = NameFilter()
+
+
+@dataclass(frozen=True)
 class FindOptions:
     """What to look for and where (the Find / Replace dialog's options)."""
 
@@ -144,6 +184,40 @@ class FindOptions:
     #: the Find box's '.*': ``text`` is a regular expression (without case), and the
     #: replacement may name its groups (\1, \g<name>)
     regex: bool = False
+    #: the pages searched, by name ('Mixing_L3')
+    pages: NameFilter = NO_FILTER
+    #: the fields, by key or by the name the Field column shows ('CMD', 'Command (CMD)',
+    #: 'Tag', 'Genie parameter Tag')
+    fields: NameFilter = NO_FILTER
+    #: the genies and symbols an object is placed by or inside, as library.element
+    #: ('pumps.pump_1'); an object in none has no name here
+    genies: NameFilter = NO_FILTER
+    #: the objects by name or AN ('Pump1', 'AN12'), their own or a group's they are in;
+    #: the page's own properties have none
+    objects: NameFilter = NO_FILTER
+
+    def filter_problem(self) -> str:
+        """'<what>: <why>' for the first filter whose pattern does not compile ('' = none)."""
+        for what, f in (
+            ("Pages", self.pages),
+            ("Fields", self.fields),
+            ("Genies and symbols", self.genies),
+            ("Objects", self.objects),
+        ):
+            err = f.problem()
+            if err:
+                return "%s: %s" % (what, err)
+        return ""
+
+
+def page_name_of(path: str) -> str:
+    """The page name a path stands for (the Pages filter's name)."""
+    return os.path.splitext(os.path.basename(path or ""))[0]
+
+
+def page_allowed(opts: FindOptions, path: str) -> bool:
+    """The Pages filter keeps the page at ``path``."""
+    return opts.pages.allows([page_name_of(path)])
 
 
 @dataclass
@@ -629,12 +703,15 @@ def find_hits(doc, opts: FindOptions) -> List[Hit]:
     rows on its root)."""
     if doc is None or not opts.text or getattr(doc, "page", None) is None:
         return []
+    if opts.pages.on and not opts.pages.allows([_doc_page_name(doc)]):
+        return []
     out: List[Hit] = []
-    if SCOPE_PAGE in opts.scopes:
-        out.extend(_page_hits(doc, opts))
+    if SCOPE_PAGE in opts.scopes and opts.genies.allows(()) and opts.objects.allows(()):
+        out.extend(h for h in _page_hits(doc, opts) if opts.fields.allows((h.key, h.label)))
     objs = doc.parsed.page.objects
     sem = doc.page.objects
     cache: dict = {}
+    names: Dict[int, Tuple[str, ...]] = {}  # the Objects filter's names, by record
     for i, po in enumerate(objs):
         if i >= len(sem) or sem[i] is None:
             continue
@@ -643,6 +720,14 @@ def find_hits(doc, opts: FindOptions) -> List[Hit]:
             anc = doc.page.ancestors(i)
         except Exception:  # noqa: BLE001
             anc = []
+        if opts.objects.on and not opts.objects.allows(
+            [n for a in [i] + list(anc) for n in _object_names(doc, a, objs, names)]
+        ):
+            continue
+        if opts.genies.on and not opts.genies.allows(
+            [_link_name(objs[a]) for a in [i] + list(anc) if _linked(objs, sem, a)]
+        ):
+            continue
         genies = [a for a in anc if a < len(objs) and objs[a].subtype_size & 0x200]
         # (the page template's own linked root is not a genie / symbol: its
         # records are 'Inside the page template', whatever this option says)
@@ -672,6 +757,8 @@ def find_hits(doc, opts: FindOptions) -> List[Hit]:
             # element and restores every option, root and members alike
             p_reason = tpl_reason or (COMPOSITE_PARAM_REASON if _is_composite(doc, i) else "")
             for name, value in genie_params(doc, i, cache).items():
+                if opts.fields.on and not opts.fields.allows((name, "Genie parameter %s" % name)):
+                    continue
                 if match_spans(value, opts.text, opts.match, opts.regex):
                     out.append(
                         Hit(
@@ -693,7 +780,9 @@ def find_hits(doc, opts: FindOptions) -> List[Hit]:
         outer = genies[-1] if genies else None
         self_genie = bool(po.class_flag and po.subtype_size & 0x200)
         for scope, kind, key, value, label in _kept_own_fields(doc, i, po, root, opts.scopes):
-            if scope not in opts.scopes or not match_spans(value, opts.text, opts.match, opts.regex):
+            if scope not in opts.scopes or (opts.fields.on and not opts.fields.allows((key, label))):
+                continue
+            if not match_spans(value, opts.text, opts.match, opts.regex):
                 continue
             reason, params = tpl_reason, ()
             if not reason and outer is not None:
@@ -715,6 +804,36 @@ def find_hits(doc, opts: FindOptions) -> List[Hit]:
                 )
             )
     return out
+
+
+def _doc_page_name(doc) -> str:
+    path = getattr(doc, "path", "") or ""
+    if path:
+        return page_name_of(path)
+    return getattr(getattr(doc, "page", None), "name", "") or ""
+
+
+def _linked(objs, sem, a: int) -> bool:
+    """Record ``a`` places a library element (a genie or a symbol; the page template's own
+    root is not one)."""
+    return (
+        0 <= a < len(objs)
+        and bool(objs[a].class_flag and objs[a].subtype_size & 0x1)
+        and not _template_root(sem, a)
+    )
+
+
+def _object_names(doc, a: int, objs, memo: dict) -> Tuple[str, ...]:
+    """Record ``a``'s name and 'AN<n>' (the Objects filter's names of it)."""
+    got = memo.get(a)
+    if got is None:
+        try:
+            name = doc.object_name(a)
+        except Exception:  # noqa: BLE001  # swallow-ok: a record without a name has its AN only
+            name = ""
+        an = G.live_an(objs[a]) if 0 <= a < len(objs) else -1
+        got = memo[a] = (name or "", "AN%d" % an if an > 0 else "")
+    return got
 
 
 def _page_hits(doc, opts: FindOptions) -> List[Hit]:

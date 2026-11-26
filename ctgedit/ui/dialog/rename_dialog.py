@@ -3,6 +3,7 @@
 from __future__ import annotations
 from ..style.theme import sp as _sp
 
+import json
 import re
 import string
 
@@ -236,23 +237,147 @@ def apply_renames(doc, pairs) -> int:
     return count
 
 
+class NamingPanel(QtWidgets.QWidget):
+    """How Rename Objects and Rename Pages name what they rename: a Pattern (with a start
+    and a step) or a Find and Replace in the names (its Find box with the '.*' toggle every
+    search box has; \\1 in Replace with: a group of the match). Remembered in the settings
+    under ``settings_key`` (the '.*' toggle by itself, as every box's is)."""
+
+    #: typed text (the preview waits for a pause)
+    typed = QtCore.Signal()
+    #: another choice (the preview follows at once)
+    changed = QtCore.Signal()
+
+    DEFAULTS = {
+        "pattern": "{name}",
+        "start": 1,
+        "step": 1,
+        "find": "",
+        "replace": "",
+        "case": False,
+        "mode": 1,
+    }
+
+    def __init__(self, settings_key: str, pattern_tip: str, defaults=None, extra_rows=(), parent=None):
+        super().__init__(parent)
+        from ..style.theme import RegexToggle
+
+        self._key = settings_key
+        self.remembered = dict(self.DEFAULTS, **(defaults or {}))
+        self.remembered.update(self._load())
+        last = self.remembered
+        lay = QtWidgets.QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        self.mode = QtWidgets.QTabBar(self)
+        self.mode.addTab("Pattern")
+        self.mode.addTab("Find and Replace")
+        self.mode.setDrawBase(False)
+        lay.addWidget(self.mode)
+        self.stack = QtWidgets.QStackedWidget(self)
+        lay.addWidget(self.stack)
+
+        pat = QtWidgets.QWidget()
+        form = QtWidgets.QFormLayout(pat)
+        form.setContentsMargins(0, _sp(1), 0, 0)
+        self.pattern = QtWidgets.QLineEdit(str(last["pattern"]))
+        self.pattern.setToolTip(pattern_tip)
+        form.addRow("Pattern:", self.pattern)
+        row = QtWidgets.QHBoxLayout()
+        self.start = QtWidgets.QSpinBox()
+        self.start.setRange(0, 99999)
+        self.start.setValue(_int(last["start"], 1))
+        self.step = QtWidgets.QSpinBox()
+        self.step.setRange(1, 1000)
+        self.step.setValue(_int(last["step"], 1))
+        row.addWidget(self.start)
+        row.addWidget(QtWidgets.QLabel("Step:"))
+        row.addWidget(self.step)
+        row.addStretch(1)
+        form.addRow("Start at:", row)
+        for label, widget in extra_rows:
+            form.addRow(label, widget)
+        self.stack.addWidget(pat)
+
+        rep = QtWidgets.QWidget()
+        form = QtWidgets.QFormLayout(rep)
+        form.setContentsMargins(0, _sp(1), 0, 0)
+        self.find = QtWidgets.QLineEdit(str(last["find"]))
+        self.find.setAccessibleName("Find in the names")
+        self.find_regex = RegexToggle(self.find, "Rename find")
+        self.repl = QtWidgets.QLineEdit(str(last["replace"]))
+        self.repl.setToolTip("With .* on, \\1 or \\g<name> inserts a group of the match")
+        form.addRow("Find:", self.find)
+        form.addRow("Replace with:", self.repl)
+        self.case = QtWidgets.QCheckBox("Match case")
+        self.case.setChecked(bool(last["case"]))
+        form.addRow("", self.case)
+        self.stack.addWidget(rep)
+
+        self.mode.currentChanged.connect(self.stack.setCurrentIndex)
+        mode = 1 if _int(last["mode"], 1) else 0
+        self.mode.setCurrentIndex(mode)
+        self.stack.setCurrentIndex(mode)
+        for sig in (self.pattern.textChanged, self.find.textChanged, self.repl.textChanged):
+            sig.connect(lambda *_a: self.typed.emit())
+        for sig in (self.start.valueChanged, self.step.valueChanged, self.mode.currentChanged):
+            sig.connect(lambda *_a: self.changed.emit())
+        self.find_regex.toggled.connect(lambda _on: self.changed.emit())
+        self.case.toggled.connect(lambda _on: self.changed.emit())
+
+    @property
+    def pattern_mode(self) -> bool:
+        return self.mode.currentIndex() == 0
+
+    def replaced(self, name: str) -> str:
+        """``name`` with the Find and Replace applied (ValueError: no regular expression)."""
+        return replaced_name(
+            name, self.find.text(), self.repl.text(), self.find_regex.on, self.case.isChecked()
+        )
+
+    def _load(self) -> dict:
+        try:
+            from ..prefs.settings import app_settings
+
+            got = json.loads(str(app_settings().value(self._key, "") or "{}"))
+            return got if isinstance(got, dict) else {}
+        except Exception:  # noqa: BLE001 -- swallow-ok: a garbled setting starts from the defaults
+            return {}
+
+    def remember(self, **extra) -> None:
+        """Keep the choices for the next time (and ``extra``, the dialog's own)."""
+        state = dict(
+            pattern=self.pattern.text(),
+            start=self.start.value(),
+            step=self.step.value(),
+            find=self.find.text(),
+            replace=self.repl.text(),
+            case=self.case.isChecked(),
+            mode=self.mode.currentIndex(),
+            **extra,
+        )
+        self.remembered.update(state)
+        try:
+            from ..prefs.settings import app_settings
+
+            app_settings().setValue(self._key, json.dumps(state))
+        except Exception:  # noqa: BLE001 -- swallow-ok: not remembered then
+            pass
+
+
+def _int(v, default: int) -> int:
+    try:
+        return int(v)
+    except TypeError, ValueError:
+        return default
+
+
 class RenameObjectsDialog(QtWidgets.QDialog):
     """Edit > Rename Objects…: a pattern or a find and replace, a preview, one undo step."""
 
     #: ms of no typing before the preview follows a pattern, find or replace field
     TYPING_MS = 150
-    #: the last choices in this session (the pattern, start, step, order, find, replace)
-    LAST = {
-        "pattern": "{element}_{n:02}",
-        "start": 1,
-        "step": 1,
-        "order": "reading",
-        "find": "",
-        "replace": "",
-        "regex": False,
-        "case": False,
-        "mode": 0,
-    }
+    #: where the choices are remembered (NamingPanel)
+    SETTINGS = "rename/objects"
 
     def __init__(self, window, doc, indices, refusal=None):
         super().__init__(window)
@@ -277,57 +402,23 @@ class RenameObjectsDialog(QtWidgets.QDialog):
         from ..style.theme import note_label
 
         lay = QtWidgets.QVBoxLayout(self)
-        self._mode = QtWidgets.QTabBar(self)
-        self._mode.addTab("Pattern")
-        self._mode.addTab("Find and Replace")
-        self._mode.setDrawBase(False)
-        lay.addWidget(self._mode)
-        self._pages = QtWidgets.QStackedWidget(self)
-        lay.addWidget(self._pages)
-
-        last = self.LAST
-        pat = QtWidgets.QWidget()
-        form = QtWidgets.QFormLayout(pat)
-        form.setContentsMargins(0, _sp(1), 0, 0)
-        self._pattern = QtWidgets.QLineEdit(last["pattern"])
-        self._pattern.setToolTip(
-            "{n} the number ({n:02}: two digits), {name} the name it "
-            "has, {element} its genie or symbol, {kind}, {an}"
-        )
-        form.addRow("Pattern:", self._pattern)
-        row = QtWidgets.QHBoxLayout()
-        self._start = QtWidgets.QSpinBox()
-        self._start.setRange(0, 99999)
-        self._start.setValue(int(last["start"]))
-        self._step = QtWidgets.QSpinBox()
-        self._step.setRange(1, 1000)
-        self._step.setValue(int(last["step"]))
-        row.addWidget(self._start)
-        row.addWidget(QtWidgets.QLabel("Step:"))
-        row.addWidget(self._step)
-        row.addStretch(1)
-        form.addRow("Start at:", row)
         self._order = QtWidgets.QComboBox()
         for key, label in ORDERS:
             self._order.addItem(label, key)
-        self._order.setCurrentIndex(max(0, [k for k, _l in ORDERS].index(last["order"])))
-        form.addRow("Number in:", self._order)
-        self._pages.addWidget(pat)
-
-        rep = QtWidgets.QWidget()
-        form = QtWidgets.QFormLayout(rep)
-        form.setContentsMargins(0, _sp(1), 0, 0)
-        self._find = QtWidgets.QLineEdit(last["find"])
-        self._repl = QtWidgets.QLineEdit(last["replace"])
-        form.addRow("Find:", self._find)
-        form.addRow("Replace with:", self._repl)
-        self._regex = QtWidgets.QCheckBox("Regular expression (groups as \\1)")
-        self._regex.setChecked(bool(last["regex"]))
-        self._case = QtWidgets.QCheckBox("Match case")
-        self._case.setChecked(bool(last["case"]))
-        form.addRow("", self._regex)
-        form.addRow("", self._case)
-        self._pages.addWidget(rep)
+        self.naming = NamingPanel(
+            self.SETTINGS,
+            "{n} the number ({n:02}: two digits), {name} the name it has, {element} its genie or "
+            "symbol, {kind}, {an}",
+            defaults={"pattern": "{element}_{n:02}", "order": "reading", "mode": 0},
+            extra_rows=[("Number in:", self._order)],
+        )
+        keys = [k for k, _l in ORDERS]
+        order = self.naming.remembered.get("order")
+        self._order.setCurrentIndex(keys.index(order) if order in keys else 0)
+        lay.addWidget(self.naming)
+        nm = self.naming
+        self._mode, self._pattern, self._start, self._step = nm.mode, nm.pattern, nm.start, nm.step
+        self._find, self._repl, self._case = nm.find, nm.repl, nm.case
 
         self._table = QtWidgets.QTableWidget(0, 3, self)
         self._table.setObjectName("renamePreview")
@@ -361,26 +452,15 @@ class RenameObjectsDialog(QtWidgets.QDialog):
         self._buttons.rejected.connect(self.reject)
         lay.addWidget(self._buttons)
 
-        self._mode.currentChanged.connect(self._pages.setCurrentIndex)
-        self._mode.setCurrentIndex(int(last["mode"]))
-        self._pages.setCurrentIndex(int(last["mode"]))
         # (typing: the preview waits for a pause, as a search field does; the other choices
         # show at once)
         self._typing = QtCore.QTimer(self)
         self._typing.setSingleShot(True)
         self._typing.setInterval(self.TYPING_MS)
         self._typing.timeout.connect(self._preview)
-        for sig in (self._pattern.textChanged, self._find.textChanged, self._repl.textChanged):
-            sig.connect(self._typed)
-        for sig in (
-            self._start.valueChanged,
-            self._step.valueChanged,
-            self._order.currentIndexChanged,
-            self._mode.currentChanged,
-        ):
-            sig.connect(self._preview)
-        self._regex.toggled.connect(self._preview)
-        self._case.toggled.connect(self._preview)
+        self.naming.typed.connect(self._typed)
+        self.naming.changed.connect(self._preview)
+        self._order.currentIndexChanged.connect(self._preview)
         self.resize(520, 440)
         self._preview()
 
@@ -397,20 +477,7 @@ class RenameObjectsDialog(QtWidgets.QDialog):
                 out.append((i, pattern_name(page, i, self._pattern.text(), n)))
                 n += step
             return out
-        find, repl = self._find.text(), self._repl.text()
-        return [
-            (
-                i,
-                replaced_name(
-                    object_name_of(page.objects[i]),
-                    find,
-                    repl,
-                    self._regex.isChecked(),
-                    self._case.isChecked(),
-                ),
-            )
-            for i in self._targets
-        ]
+        return [(i, self.naming.replaced(object_name_of(page.objects[i]))) for i in self._targets]
 
     def _typed(self, *_args) -> None:
         # (Rename stays on while the preview waits: Enter right after typing reaches
@@ -488,16 +555,5 @@ class RenameObjectsDialog(QtWidgets.QDialog):
             self._status.setText(str(e))
             self._status.show()
             return
-        last = type(self).LAST
-        last.update(
-            pattern=self._pattern.text(),
-            start=self._start.value(),
-            step=self._step.value(),
-            order=self._order.currentData(),
-            find=self._find.text(),
-            replace=self._repl.text(),
-            regex=self._regex.isChecked(),
-            case=self._case.isChecked(),
-            mode=self._mode.currentIndex(),
-        )
+        self.naming.remember(order=self._order.currentData())
         self.accept()

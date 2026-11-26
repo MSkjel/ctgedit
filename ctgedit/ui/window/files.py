@@ -366,6 +366,63 @@ class PageFiles:
 
         return close
 
+    def _rename_pages_dialog(self, path: str = "") -> None:
+        """Tools > Rename Pages: the project of ``path`` (else of the page shown), that page
+        ticked; one window, not modal (its Find References opens the Find window)."""
+        from ..dialog.rename_pages import RenamePagesDialog
+
+        if not path and self.doc is not None and str(getattr(self.doc, "path", "")).lower().endswith(".ctg"):
+            path = self.doc.path
+        dlg = getattr(self, "_rename_pages_dlg", None)
+        if dlg is not None:
+            dlg.close()
+        pdir = os.path.dirname(os.path.abspath(path)) if path else ""
+        if not pdir:
+            from ..prefs.settings import app_settings
+
+            from ..pick_fields import project_dirs
+
+            last = str(app_settings().value("updatepages/root", "") or "")
+            pdir = next(iter(project_dirs(last, False)), "") if last else ""
+        pages = [os.path.splitext(os.path.basename(path))[0]] if path else []
+        dlg = RenamePagesDialog(
+            self,
+            pdir,
+            pages,
+            before=self._before_delete_or_rename,
+            reopen=self._reopen_renamed,
+            find_references=self._find_page_references,
+        )
+        dlg.setAttribute(QtCore.Qt.WA_DeleteOnClose)
+        dlg.setModal(False)
+        self._rename_pages_dlg = dlg
+        dlg.destroyed.connect(
+            lambda *_a, d=dlg: (
+                setattr(self, "_rename_pages_dlg", None)
+                if getattr(self, "_rename_pages_dlg", None) is d
+                else None
+            )
+        )
+        dlg.show()
+
+    def _reopen_renamed(self, paths) -> None:
+        """Renamed pages that had a tab: open again under their new names."""
+        for p in paths:
+            try:
+                self.open_document(p)
+            except Exception as e:  # noqa: BLE001 -- swallow-ok: said in the status bar
+                self.statusBar().showMessage("%s could not be opened: %s" % (os.path.basename(p), e), 8000)
+
+    def _find_page_references(self, text: str, project: str, includes: bool = False) -> None:
+        """Rename Pages > Find References: the Find window lists the fields of the project's
+        pages (and its included projects', with ``includes``) that use the old names
+        (``text``: a regular expression of them)."""
+        from ...features import find_replace as FR
+
+        dlg = self._find_dialog(False)
+        dlg.preset(text, regex=True, match=FR.MATCH_WORD, project=project, includes=includes)
+        dlg.find_all()
+
     def _after_lifecycle_change(self) -> None:
         with contextlib.suppress(Exception):
             self.library_dock.refresh()

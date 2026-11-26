@@ -4,6 +4,7 @@ from __future__ import annotations
 from ..style.theme import sp as _sp
 
 import contextlib
+import json
 import os
 
 from PySide6 import QtCore, QtGui, QtWidgets
@@ -43,6 +44,30 @@ _MATCH_TIPS = {
     FR.MATCH_WORD: "LOOP_1 does not match LOOP_10 or LOOP_1_SP",
     FR.MATCH_WHOLE: "The field must hold exactly this text",
 }
+
+
+def _group(title: str):
+    """(a titled box, its column layout): one group of the Options."""
+    box = QtWidgets.QGroupBox(title)
+    lay = QtWidgets.QVBoxLayout(box)
+    lay.setSpacing(_sp(1))
+    return box, lay
+
+
+def _radio_row(buttons) -> QtWidgets.QWidget:
+    """A row of ``buttons`` side by side, one choice among them: a button group of their own
+    (the row's ``group``), as the window's rows of radio buttons share a parent."""
+    row = QtWidgets.QWidget()
+    lay = QtWidgets.QHBoxLayout(row)
+    lay.setContentsMargins(0, 0, 0, 0)
+    lay.setSpacing(_sp(4))
+    group = QtWidgets.QButtonGroup(row)
+    for b in buttons:
+        group.addButton(b)
+        lay.addWidget(b)
+    lay.addStretch(1)
+    row.group = group
+    return row
 
 
 def page_name(doc) -> str:
@@ -195,7 +220,8 @@ class FindReplaceDialog(QtWidgets.QDialog):
         #: new member records at the same places)
         self._last = None
         self._replace_mode = False
-        self.setMinimumSize(640, 520)
+        self.setMinimumWidth(640)
+        self.resize(720, 560)
         lay = QtWidgets.QVBoxLayout(self)
         form = QtWidgets.QFormLayout()
         self._ed_find = QtWidgets.QLineEdit()
@@ -221,28 +247,26 @@ class FindReplaceDialog(QtWidgets.QDialog):
         self._lbl_repl = form.labelForField(self._ed_repl)
         lay.addLayout(form)
 
-        box = QtWidgets.QGroupBox("Look in")
-        bl = QtWidgets.QVBoxLayout(box)
+        # Look in: one row of choices; the project's row under it shows with 'All pages of
+        # a project'
         self._rb_page = QtWidgets.QRadioButton("This page")
         self._rb_all = QtWidgets.QRadioButton("All open pages")
-        self._rb_project = QtWidgets.QRadioButton("All pages of the project:")
+        self._rb_project = QtWidgets.QRadioButton("All pages of a project")
         self._rb_project.setToolTip(
             (
                 "Every page of the project, open or not. Replace All saves the closed pages, each "
                 "backed up first in the backups folder (Tools > Restore Backup)"
             )
         )
+        self._look_in = _radio_row((self._rb_page, self._rb_all, self._rb_project))
         self._rb_page.setChecked(True)
-        bl.addWidget(self._rb_page)
-        bl.addWidget(self._rb_all)
-        bl.addWidget(self._rb_project)
+        form.addRow("Look in:", self._look_in)
         # the project and its includes (shared with Replace Genie)
         from ..pick_fields import ProjectScopeField
 
-        self._scope = ProjectScopeField(getattr(doc, "path", "") or "")
+        self._scope = ProjectScopeField(getattr(doc, "path", "") or "", horizontal=True)
         self._cb_project, self._cb_includes = self._scope.combo, self._scope.includes
         self._project_here = self._scope.here
-        bl.addWidget(self._scope)
         # the helper processes that search the closed pages at once (the same setting as
         # Settings > Pages and libraries > Find in closed pages: opt/find_processes)
         from ..prefs.settings import FIND_PROCESSES_RANGE
@@ -263,25 +287,27 @@ class FindReplaceDialog(QtWidgets.QDialog):
         except TypeError, ValueError:  # swallow-ok: a garbled setting shows Automatic
             self._procs.setValue(0)
         self._procs.valueChanged.connect(lambda v: app_settings().setValue("opt/find_processes", int(v)))
-        # (only a project search reads closed pages: the helpers' row shows with it)
         self._procs_row = QtWidgets.QWidget()
         row = QtWidgets.QHBoxLayout(self._procs_row)
-        row.setContentsMargins(_sp(4), 0, 0, 0)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.addWidget(self._scope, 1)
+        row.addSpacing(_sp(3))
         row.addWidget(self._procs_label)
         row.addWidget(self._procs)
-        row.addStretch(1)
-        bl.addWidget(self._procs_row)
-        self._rb_project.toggled.connect(lambda on: self._procs_row.setVisible(on))
-        self._procs_row.setVisible(self._rb_project.isChecked())
-        lay.addWidget(box)
+        form.addRow("Project:", self._procs_row)
+        self._lbl_project = form.labelForField(self._procs_row)
+        self._rb_project.toggled.connect(self._sync_project_row)
+        self._sync_project_row(self._rb_project.isChecked())
         self._build_options(lay)
         self._build_buttons(lay, doc, replace_mode)
 
+    def _sync_project_row(self, on: bool) -> None:
+        self._procs_row.setVisible(bool(on))
+        self._lbl_project.setVisible(bool(on))
+
     def _build_options(self, lay):
-        opts = QtWidgets.QHBoxLayout()
-        left = QtWidgets.QVBoxLayout()
-        # Include, Search in, Match and Direction: under Options, closed by default, its
-        # summary naming what is not the default
+        # Search in, Match, Find Next's direction, Include and Filters: under Options, closed
+        # by default, its line naming what is not the default
         self._opt_toggle = QtWidgets.QToolButton()
         self._opt_toggle.setObjectName("FindOptionsToggle")
         self._opt_toggle.setCheckable(True)
@@ -289,41 +315,34 @@ class FindReplaceDialog(QtWidgets.QDialog):
         self._opt_toggle.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
         self._opt_toggle.setArrowType(QtCore.Qt.RightArrow)
         self._opt_box = QtWidgets.QWidget()
+        self._opt_box.setObjectName("FindOptions")
         self._opt_toggle.toggled.connect(self._show_options)
         lay.addWidget(self._opt_toggle)
         lay.addWidget(self._opt_box)
-        box = QtWidgets.QGroupBox("Include")
-        bl = QtWidgets.QVBoxLayout(box)
-        self._cb_genies = QtWidgets.QCheckBox("Inside genies and symbols")
-        self._cb_genies.setToolTip("The objects a placed genie or symbol consists of")
-        self._cb_genies.setChecked(True)
-        self._cb_template = QtWidgets.QCheckBox("Inside the page template")
-        self._cb_template.setToolTip("The objects the page takes from its template")
-        bl.addWidget(self._cb_genies)
-        bl.addWidget(self._cb_template)
-        left.addWidget(box)
-        box = QtWidgets.QGroupBox("Direction")
-        bl = QtWidgets.QHBoxLayout(box)
-        self._rb_back = QtWidgets.QRadioButton("Backward")
-        self._rb_fwd = QtWidgets.QRadioButton("Forward")
-        self._rb_fwd.setChecked(True)
-        bl.addWidget(self._rb_back)
-        bl.addWidget(self._rb_fwd)
-        left.addWidget(box)
-        opts.addLayout(left)
-        right = QtWidgets.QVBoxLayout()
-        box = QtWidgets.QGroupBox("Search in")
-        bl = QtWidgets.QVBoxLayout(box)
+        # the choices grouped by what they are about, one to a line: Search in and Find
+        # Next on the left, Match and Include on the right, the Filters under both
+        outer = QtWidgets.QVBoxLayout(self._opt_box)
+        outer.setContentsMargins(_sp(3), _sp(2), _sp(3), _sp(3))
+        cols = QtWidgets.QHBoxLayout()
+        left, right = QtWidgets.QVBoxLayout(), QtWidgets.QVBoxLayout()
         self._cb_scope = {}
+        box, bl = _group("Search in")
         for scope, label, tip in _SCOPE_LABELS:
             cb = QtWidgets.QCheckBox(label)
             cb.setToolTip(tip)
             cb.setChecked(True)
             self._cb_scope[scope] = cb
             bl.addWidget(cb)
-        right.addWidget(box)
-        box = QtWidgets.QGroupBox("Match")
-        bl = QtWidgets.QVBoxLayout(box)
+        left.addWidget(box)
+        box, bl = _group("Find Next goes")
+        self._rb_fwd = QtWidgets.QRadioButton("Forward")
+        self._rb_back = QtWidgets.QRadioButton("Backward")
+        self._dir_group = _radio_row((self._rb_fwd, self._rb_back))
+        self._rb_fwd.setChecked(True)
+        bl.addWidget(self._dir_group)
+        left.addWidget(box)
+        left.addStretch(1)
+        box, bl = _group("Match")
         self._rb_match = {}
         for mode, label in _MATCH_LABELS:
             rb = QtWidgets.QRadioButton(label)
@@ -332,9 +351,27 @@ class FindReplaceDialog(QtWidgets.QDialog):
             bl.addWidget(rb)
         self._rb_match[FR.MATCH_PART].setChecked(True)
         right.addWidget(box)
-        opts.addLayout(right)
-        opts.setContentsMargins(0, 0, 0, 0)
-        self._opt_box.setLayout(opts)
+        box, bl = _group("Include")
+        self._cb_genies = QtWidgets.QCheckBox("Inside genies and symbols")
+        self._cb_genies.setToolTip("The objects a placed genie or symbol consists of")
+        self._cb_genies.setChecked(True)
+        self._cb_template = QtWidgets.QCheckBox("Inside the page template")
+        self._cb_template.setToolTip("The objects the page takes from its template")
+        bl.addWidget(self._cb_genies)
+        bl.addWidget(self._cb_template)
+        right.addWidget(box)
+        right.addStretch(1)
+        cols.addLayout(left, 1)
+        cols.addLayout(right, 1)
+        outer.addLayout(cols)
+        from .find_filters import FilterList
+
+        box, bl = _group("Filters")
+        self._filter_list = FilterList()
+        self._filter_list.changed.connect(self._sync_options_text)
+        self._filter_list.changed.connect(self._filters_resized)
+        bl.addWidget(self._filter_list)
+        outer.addWidget(box)
         for b in (
             [self._cb_genies, self._cb_template, self._rb_back, self._rb_fwd]
             + list(self._cb_scope.values())
@@ -357,6 +394,8 @@ class FindReplaceDialog(QtWidgets.QDialog):
         self._list.setRootIsDecorated(False)
         self._list.setUniformRowHeights(True)
         self._list.setAlternatingRowColors(True)
+        # (eight rows at least: the options above never squeeze the results away)
+        self._list.setMinimumHeight(self._list.fontMetrics().height() * 10)
         from ..tables import enable_row_copy, make_resizable
 
         make_resizable(self._list, "FindReplaceDialog/results")
@@ -365,6 +404,14 @@ class FindReplaceDialog(QtWidgets.QDialog):
         self._list.currentItemChanged.connect(self._on_row)
         lay.addWidget(self._list, 1)
         self._status = QtWidgets.QLabel()
+
+    def _filter_values(self) -> dict:
+        """{FindOptions field: NameFilter} of the Filters rows."""
+        return self._filter_list.values()
+
+    def _filters_resized(self) -> None:
+        if self.isVisible() and self._opt_toggle.isChecked():
+            self._fit_height()
 
     def _build_buttons(self, lay, doc, replace_mode):
         self._status.setWordWrap(True)
@@ -455,6 +502,7 @@ class FindReplaceDialog(QtWidgets.QDialog):
             *self._rb_match.values(),
         ]:
             w.toggled.connect(self._options_changed)
+        self._filter_list.changed.connect(self._options_changed)
         self._cb_project.currentTextChanged.connect(self._project_changed)
         self._sync_project_widgets()
         self._ed_find.textChanged.connect(self._options_changed)
@@ -476,6 +524,30 @@ class FindReplaceDialog(QtWidgets.QDialog):
         self._ed_find.setFocus()
         self._ed_find.selectAll()
 
+    def preset(
+        self,
+        text: str,
+        *,
+        regex: bool = False,
+        match: str = FR.MATCH_PART,
+        project: str = "",
+        includes: bool = False,
+    ) -> None:
+        """Start a new search from another window (Rename Pages' Find References): ``text``,
+        the '.*' toggle, the match, every field (the Search in boxes ticked, the Filters
+        emptied) and, with ``project``, every page of that project (and of those it includes,
+        with ``includes``)."""
+        self._find_regex.set_on(regex)
+        self._ed_find.setText(text)
+        if match in self._rb_match:
+            self._rb_match[match].setChecked(True)
+        for cb in self._cb_scope.values():
+            cb.setChecked(True)
+        self._filter_list.clear()
+        if project and self._scope.set_project(project):
+            self._rb_project.setChecked(True)
+            self._cb_includes.setChecked(bool(includes))
+
     def options(self) -> FR.FindOptions:
         match = next((m for m, rb in self._rb_match.items() if rb.isChecked()), FR.MATCH_PART)
         try:
@@ -495,6 +567,7 @@ class FindReplaceDialog(QtWidgets.QDialog):
             template_editable=tpl_edit,
             break_lock=unlocked,
             regex=self._find_regex.on,
+            **self._filter_values(),
         )
 
     def _targets(self) -> list:
@@ -767,6 +840,14 @@ class FindReplaceDialog(QtWidgets.QDialog):
         self._sync_project_widgets()
         self._save_options()
         self._update_buttons()
+        bad = self._filter_problem()
+        if bad:
+            self._status.setText("%s. Correct it to search." % bad)
+
+    def _filter_problem(self) -> str:
+        """'<row> is not a regular expression (why)' for the first Filters box that does not
+        compile ('' = none)."""
+        return self._filter_list.problem()
 
     def _clear_stale(self) -> None:
         """A changed query or scope: the matches of the last search go (their count, Go To
@@ -810,6 +891,7 @@ class FindReplaceDialog(QtWidgets.QDialog):
             st.setValue(self._SETTINGS + "project_pages", self._rb_project.isChecked())
             st.setValue(self._SETTINGS + "includes", self._cb_includes.isChecked())
             st.setValue(self._SETTINGS + "backward", self._rb_back.isChecked())
+            st.setValue(self._SETTINGS + "filters", json.dumps(self._filter_list.state()))
         except Exception:  # noqa: BLE001 -- a convenience only
             pass
 
@@ -837,6 +919,11 @@ class FindReplaceDialog(QtWidgets.QDialog):
             (
                 self._rb_back if st.value(self._SETTINGS + "backward", False, type=bool) else self._rb_fwd
             ).setChecked(True)
+            try:
+                rows = json.loads(str(st.value(self._SETTINGS + "filters", "") or "[]"))
+            except ValueError:  # swallow-ok: a garbled setting starts with no filters
+                rows = []
+            self._filter_list.set_state(rows if isinstance(rows, list) else [])
             # what was searched for last (selected: typing replaces it)
             self._ed_find.setText(str(st.value(self._SETTINGS + "text", "") or ""))
             self._ed_repl.setText(str(st.value(self._SETTINGS + "replace", "") or ""))
@@ -855,8 +942,9 @@ class FindReplaceDialog(QtWidgets.QDialog):
     def _update_buttons(self) -> None:
         has_text = bool(self._ed_find.text())
         has_scope = any(cb.isChecked() for cb in self._cb_scope.values())
+        ok = has_text and has_scope and not self._filter_problem()
         for b in (self._b_all, self._b_next, self._b_rep, self._b_repall):
-            b.setEnabled(has_text and has_scope)
+            b.setEnabled(ok)
         hit = self.current_hit()
         self._b_goto.setEnabled(hit is not None)
         self._b_props.setEnabled(hit is not None)
@@ -864,6 +952,10 @@ class FindReplaceDialog(QtWidgets.QDialog):
     # -- searching ----------------------------------------------------------------
     def _run(self) -> bool:
         """Search again when the list is out of date. True when it did."""
+        bad = self._filter_problem()
+        if bad:
+            self._status.setText("%s. Correct it to search." % bad)
+            return False
         docs = self._targets()
         key = self._search_key(docs)
         if key == self._key:
@@ -1448,6 +1540,24 @@ class FindReplaceDialog(QtWidgets.QDialog):
         self._opt_toggle.setArrowType(QtCore.Qt.DownArrow if on else QtCore.Qt.RightArrow)
         app_settings().setValue("find/options_shown", bool(on))
         self._sync_options_text()
+        if on and self.isVisible():
+            self._fit_height()
+
+    def showEvent(self, ev) -> None:  # noqa: N802 (Qt API)
+        super().showEvent(ev)
+        if self._opt_toggle.isChecked():
+            self._fit_height()
+
+    def _fit_height(self) -> None:
+        """Options shown: the window grows (within its screen) so the results keep their
+        rows, rather than the options squeezing them."""
+        self.layout().activate()
+        want = self.layout().minimumSize().height()
+        screen = self.screen()
+        if screen is not None:
+            want = min(want, screen.availableGeometry().height() - _sp(10))
+        if self.height() < want:
+            self.resize(self.width(), want)
 
     def _sync_options_text(self) -> None:
         """'Options' and, closed, what differs from the defaults (so a match missing because
@@ -1467,12 +1577,13 @@ class FindReplaceDialog(QtWidgets.QDialog):
             notes.append(dict(_MATCH_LABELS).get(mode, "").replace("&", "").lower())
         if self._rb_back.isChecked():
             notes.append("backward")
+        notes.extend(self._filter_list.summary())
         text = "Options"
         if notes and not self._opt_toggle.isChecked():
             text += ": " + "; ".join(notes)
         self._opt_toggle.setText(text)
         self._opt_toggle.setToolTip(
-            "Include, Search in, Match and Direction. Shown here when they are not the defaults"
+            "Include, Search in, Match, Direction and Filters. Shown here when they are not the defaults"
         )
 
     def done(self, r) -> None:

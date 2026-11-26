@@ -1744,7 +1744,7 @@ class PageBrowserDialog(NewMode, QtWidgets.QDialog):
         menu.addAction("Show in Explorer", lambda: reveal_in_explorer(e.path))
         if self.mode == MODE_OPEN and not self._ok_text:
             menu.addSeparator()
-            if e.is_element:
+            if e.is_element or e.kind == "page":
                 menu.addAction("Rename…", self.rename_current)
             menu.addAction("Delete…", self.delete_current)
         return menu
@@ -1808,10 +1808,13 @@ class PageBrowserDialog(NewMode, QtWidgets.QDialog):
         return done
 
     def rename_current(self) -> Optional[str]:
-        """Rename the selected library element; the new name, or None."""
+        """Rename the selected page (Rename Pages, with it ticked) or library element; the
+        new name, or None."""
         from .. import lifecycle
 
         e = self.current_entry()
+        if e is not None and e.kind == "page":
+            return self._rename_page(e)
         if e is None or not e.is_element:
             return None
         new = lifecycle.rename_element(
@@ -1822,6 +1825,23 @@ class PageBrowserDialog(NewMode, QtWidgets.QDialog):
             self._want_select = None
             self._after_lifecycle(e)
             self.select_name(new, e.library)
+        return new
+
+    def _rename_page(self, e: Entry) -> Optional[str]:
+        from ..dialog.rename_pages import RenamePagesDialog
+
+        name = os.path.splitext(os.path.basename(e.path))[0]
+        dlg = RenamePagesDialog(
+            self, os.path.dirname(os.path.abspath(e.path)), [name], before=self.before_delete
+        )
+        dlg.exec()
+        new = next((n for _d, o, n in dlg.renamed if o.lower() == name.lower()), None)
+        if dlg.renamed:
+            self.deleted.extend(os.path.join(d, o + ".ctg") for d, o, _n in dlg.renamed)
+            self._want_select = None
+            self._after_lifecycle(e)
+            if new:
+                self.select_name(new)
         return new
 
     def _after_lifecycle(self, e: Entry) -> None:

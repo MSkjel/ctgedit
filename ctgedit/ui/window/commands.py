@@ -428,8 +428,8 @@ class Commands:
             g = self.doc.page.objects[index].geometry
             self.view.pan_to(QtCore.QPointF(g.x + g.extent_x / 2, g.y + g.extent_y / 2))
 
-    def _find_dialog(self, replace_mode: bool) -> None:
-        """Edit > Find / Replace: one modeless window per editor window."""
+    def _find_dialog(self, replace_mode: bool):
+        """Edit > Find / Replace: one modeless window per editor window. Returns it."""
         dlg = getattr(self, "_find_dlg", None)
         if dlg is None:
             from ..dialog.find_dialog import FindReplaceDialog
@@ -461,6 +461,7 @@ class Commands:
         dlg.show()
         dlg.raise_()
         dlg.activateWindow()
+        return dlg
 
     def _find_open_page(self, path: str):
         """A Find row of a closed page: open it (or show it) in a tab; its document, or

@@ -21,12 +21,22 @@ def options_to_json(opts) -> dict:
         "template_editable": opts.template_editable,
         "break_lock": opts.break_lock,
         "regex": opts.regex,
+        "filters": {k: [f.include, f.exclude] for k, f in _filters(opts).items()},
     }
 
 
-def options_from_json(d: dict):
-    from ..features.find_replace import FindOptions
+def _filters(opts) -> dict:
+    return {"pages": opts.pages, "fields": opts.fields, "genies": opts.genies, "objects": opts.objects}
 
+
+def options_from_json(d: dict):
+    from ..features.find_replace import FindOptions, NameFilter
+
+    filters = {
+        k: NameFilter(str(v[0] or ""), str(v[1] or ""))
+        for k, v in (d.get("filters") or {}).items()
+        if k in ("pages", "fields", "genies", "objects")
+    }
     return FindOptions(
         str(d["text"]),
         scopes=frozenset(d.get("scopes") or ()),
@@ -36,6 +46,7 @@ def options_from_json(d: dict):
         template_editable=bool(d.get("template_editable", False)),
         break_lock=bool(d.get("break_lock", False)),
         regex=bool(d.get("regex", False)),
+        **filters,
     )
 
 
@@ -71,7 +82,8 @@ def find(req: dict, progress=None, skip_now=None) -> dict:
 
 
 def _find_part(req: dict, k: int, n: int, progress=None, skip_now=None) -> dict:
-    """The records of pages k, k + n, ...: [page index, 'skip'] (open in an editor),
+    """The records of pages k, k + n, ...: [page index, 'skip'] (open in an editor, or left
+    out by the Pages filter),
     [index, 'failed', why] or [index, 'hits', rows]. Stops after a page that brings its
     rows past MAX_ROWS: the merged list is full by that page, its later pages are never
     read."""
@@ -90,7 +102,11 @@ def _find_part(req: dict, k: int, n: int, progress=None, skip_now=None) -> dict:
         name = os.path.splitext(os.path.basename(path))[0]
         if progress is not None and progress(j, len(mine), name) is False:
             break
-        if os.path.normcase(os.path.abspath(path)) in skip or (skip_now is not None and skip_now(path)):
+        if (
+            os.path.normcase(os.path.abspath(path)) in skip
+            or (skip_now is not None and skip_now(path))
+            or not FR.page_allowed(opts, path)  # (left out by the Pages filter: not read)
+        ):
             records.append([i, "skip"])
             continue
         try:
@@ -187,6 +203,8 @@ def replace(req: dict, progress=None, skip_now=None) -> dict:
     prefilter = FR.PagePrefilter(opts)
 
     def edit(path):
+        if not FR.page_allowed(opts, path):
+            return None  # (left out by the Pages filter)
         doc = _open(path, prefilter)
         if doc is None:
             return None  # (it cannot hold the text: nothing to replace)

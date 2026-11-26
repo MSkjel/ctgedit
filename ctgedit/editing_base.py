@@ -798,11 +798,25 @@ PAGE_KEY_LABELS = {
 
 
 def _find_options(options: dict) -> dict:
-    """find_replace.FindOptions keyword arguments (``scopes`` as a frozenset)."""
+    """find_replace.FindOptions keyword arguments (``scopes`` as a frozenset; a filter --
+    pages, fields, genies, objects -- as a NameFilter, a pattern to match or an
+    (include, exclude) pair)."""
     out = dict(options)
     if "scopes" in out:
         out["scopes"] = frozenset(out["scopes"])
+    for k in ("pages", "fields", "genies", "objects"):
+        v = out.get(k)
+        if isinstance(v, str):
+            out[k] = _name_filter(v)
+        elif isinstance(v, tuple):
+            out[k] = _name_filter(*v)
     return out
+
+
+def _name_filter(include: str = "", exclude: str = ""):
+    from .features.find_replace import NameFilter
+
+    return NameFilter(include, exclude)
 
 
 # (defined with the register they come from; the save raises them)

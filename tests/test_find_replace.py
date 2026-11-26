@@ -725,3 +725,121 @@ def test_the_kept_search_fields_follow_an_edit_a_replace_and_an_undo(fx_install)
     no_text = FR.FindOptions(text="ZQX_EDITED", scopes=FR.ALL_SCOPES - {FR.SCOPE_TEXT})
     assert not FR.find_hits(doc, no_text)
     assert [h.index for h in FR.find_hits(doc, opts("ZQX_EDITED"))] == [i]
+
+
+# --------------------------------------------------------------------------- filters
+def test_name_filter_keeps_what_matches_and_leaves_out_the_rest():
+    from ctgedit.features import find_replace as FR
+
+    f = FR.NameFilter("^pump", "2$")
+    assert f.on and f.allows(["Pump1"]) and not f.allows(["Pump2"]) and not f.allows(["Valve1"])
+    assert f.allows(["Valve", "pump7"])  # (one name of the list is enough)
+    assert not f.allows([]) and FR.NameFilter("", "x").allows([])
+    assert not FR.NameFilter().on and FR.NameFilter().allows([])
+    assert FR.NameFilter("(").problem() and not FR.NameFilter("a|b").problem()
+    assert not FR.NameFilter("(").allows(["("])  # (a pattern that does not compile keeps nothing)
+    assert FR.FindOptions("x", fields=FR.NameFilter("", "[")).filter_problem().startswith("Fields: ")
+
+
+def test_filters_by_genie_object_field_and_page(fx_install):
+    """FxGenies: FxPump1..3 (fxgenie.fx_pump, Tag), FxValve1..8 (fx_valve,
+    TagPrefix), FxKeys (fx_keys) and FxLamp (fx_lamp, Tag FX_PUMP3)."""
+    from ctgedit.features import find_replace as FR
+
+    doc = _doc(fx_install, "FxGenies")
+    every = doc.find_text("FX_")
+    pumps = doc.find_text("FX_", genies=r"\.fx_pump$")
+    assert pumps and {h.genie for h in pumps if h.genie is not None} <= {
+        h.index for h in pumps if h.kind == FR.K_PARAM
+    }
+    assert {h.value for h in pumps if h.kind == FR.K_PARAM} == {"FX_PUMP1", "FX_PUMP2", "FX_PUMP3"}
+    no_valves = doc.find_text("FX_", genies=("", "valve"))
+    assert len(no_valves) == len(every) - len([h for h in every if h.value.startswith("FX_V")])
+    # an object by its name or AN: its own rows and those of the objects inside it
+    p3 = doc.find_text("FX_", objects="^FxPump3$")
+    assert p3 and all(h.value.endswith("FX_PUMP3)") or h.value == "FX_PUMP3" for h in p3)
+    assert len(p3) < len([h for h in every if "FX_PUMP3" in h.value])  # (FxLamp's are left out)
+    an = next(h for h in p3 if h.kind == FR.K_PARAM).index
+    assert len(doc.find_text("FX_", objects="^AN%d$" % FR.G.live_an(doc.parsed.page.objects[an]))) == len(p3)
+    # fields by key or by the Field column's name; a genie parameter by its name
+    assert {h.key for h in doc.find_text("FX_", fields="^CMD$")} == {"CMD"}
+    assert {h.key for h in doc.find_text("FX_", fields="^Command")} == {"CMD"}
+    assert {(h.kind, h.key) for h in doc.find_text("FX_", fields="^TagPrefix$")} == {
+        (FR.K_PARAM, "TagPrefix")
+    }
+    assert all(h.key != "COL_A" for h in doc.find_text("FX_", fields=("", "COL_A")))
+    # the page by its name; a Replace keeps to what the filters keep
+    assert doc.find_text("FX_", pages="^FxGen") and doc.find_text("FX_", pages=("", "genies$")) == []
+    rep = doc.replace_text("FX_PUMP3", "FX_PUMP9", genies="fx_lamp")
+    assert rep.replaced == 1
+    assert doc.genie_all_params(next(h.index for h in p3 if h.kind == FR.K_PARAM))["Tag"] == "FX_PUMP3"
+
+
+def test_filters_reach_the_closed_pages_helper(fx_install):
+    from ctgedit.features import find_replace as FR
+    from ctgedit.workers import find_worker as FW
+
+    opts = FR.FindOptions(
+        "FX_",
+        pages=FR.NameFilter("^FxGenies$"),
+        fields=FR.NameFilter("", "COL_A"),
+        genies=FR.NameFilter("pump"),
+    )
+    assert FW.options_from_json(FW.options_to_json(opts)) == opts
+    assert FW.options_from_json(FW.options_to_json(FR.FindOptions("x"))) == FR.FindOptions("x")
+    proj = os.path.dirname(fx_install.page("FxGenies"))
+    ans = FW.find({"format": FW.FORMAT, "projects": [proj], "options": FW.options_to_json(opts)})
+    rows = ans["rows"]
+    assert rows and {r["name"] for r in rows} == {"FxGenies"}
+    assert all(r["key"] != "COL_A" for r in rows)
+    assert {r["value"] for r in rows if r["kind"] == FR.K_PARAM} == {"FX_PUMP1", "FX_PUMP2", "FX_PUMP3"}
+
+
+def test_the_dialog_filters(fx_install):
+    """Options > Filters: rows added as wanted, each [what] [match / do not match] [text .*];
+    plain text is found as it is, '.*' makes it a regular expression; one that does not
+    compile is framed and stops the search; the folded Options line names the filters; they
+    come back with the window."""
+    _app()
+    from ctgedit.ui.dialog.find_dialog import FindReplaceDialog
+
+    doc = _doc(fx_install, "FxGenies")
+    dlg = FindReplaceDialog(doc, replace_mode=True)
+    try:
+        dlg._ed_find.setText("FX_")
+        n = len(dlg.find_all())
+        lst = dlg._filter_list
+        assert not lst.rows and not lst.note.isHidden()
+        valve = lst.add("genies", "fx_valve")
+        assert lst.note.isHidden()
+        assert dlg._opt_toggle.text() == "Options: genies and symbols matching fx_valve"
+        valves = dlg.find_all()
+        assert 0 < len(valves) < n and all(h.value.startswith("FX_V") for h in valves)
+        # plain text: '.' is a dot; with .* on it is any character
+        dot = lst.add("objects", "Valve.$", exclude=True)
+        assert len(dlg.find_all()) == len(valves)
+        dot.regex.set_on(True)
+        assert dlg.find_all() == []
+        dot.edit.setText("(")
+        assert dot.edit.property("regexInvalid") is True and valve.edit.property("regexInvalid") is not True
+        assert (
+            not dlg._b_all.isEnabled() and "objects filter is not a regular expression" in dlg._status.text()
+        )
+        dot.edit.setText("Valve8$")
+        assert dlg._b_all.isEnabled() and len(dlg.find_all()) == len(valves) - 3
+        # two 'match' rows of one kind: either is enough
+        lst.add("genies", "fx_pump")
+        assert len(dlg.find_all()) > len(valves) - 3
+        lst.remove(lst.rows[-1])
+    finally:
+        dlg.close()
+    again = FindReplaceDialog(doc, replace_mode=True)
+    try:
+        assert [r.state() for r in again._filter_list.rows] == [
+            {"kind": "genies", "exclude": False, "text": "fx_valve", "regex": False},
+            {"kind": "objects", "exclude": True, "text": "Valve8$", "regex": True},
+        ]
+        again.preset("FX_PUMP1")
+        assert again._filter_list.rows == []
+    finally:
+        again.close()

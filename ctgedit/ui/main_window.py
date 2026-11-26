@@ -885,6 +885,9 @@ class MainWindow(
         self.act_var_tags.setProperty(_keymap.KEYWORDS_PROP, ["variable tags", "tag list"])
         self.act_pack_libs = self._act("Pack Libraries…", self._pack_libraries_dialog)
         self.act_update_pages = self._act("Update Pages…", self._update_pages)
+        self.act_rename_pages = self._act(
+            "Rename Pages…", lambda: self._rename_pages_dialog(), None, "rename"
+        )
         self.act_close_builder = self._act("Close Graphics Builder", self._close_graphics_builder)
         self.act_update_page_template = self._act("Update Template on This Page", self._update_template_here)
         self.act_edit_template = self._act("Edit Page Template", self._edit_page_template)
@@ -1590,6 +1593,7 @@ class MainWindow(
         t.addAction(self.act_update_page_template)
         t.addSeparator()
         t.addAction(self.act_update_pages)
+        t.addAction(self.act_rename_pages)
         t.addAction(self.act_pack_libs)
         t.addAction(self.act_close_builder)
         t.addAction(self.act_restore_backup)
@@ -1927,6 +1931,7 @@ class MainWindow(
         g.add_big(self.act_copy_to_lib)
         g.add_small(self.act_pack_libs)
         g.add_small(self.act_update_pages)
+        g.add_small(self.act_rename_pages)
         g.add_small(self.act_close_builder)
         g.add_small(self.act_attach_super)
         g.add_small(self.act_genie_form)

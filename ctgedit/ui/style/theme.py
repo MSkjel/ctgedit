@@ -1728,17 +1728,21 @@ class RegexToggle(QtCore.QObject):
         self._validate()
 
     def _validate(self) -> None:
-        m = self.matcher()
-        bad = bool(m.error)
-        if bool(self._edit.property("regexInvalid")) != bad:
-            self._edit.setProperty("regexInvalid", bad)
-            self._edit.setStyleSheet("QLineEdit { border: 1px solid %s; }" % COLORS["danger"] if bad else "")
-        tip = self._tip
-        if bad:
-            tip = ("%s\n" % tip if tip else "") + "Not a regular expression: %s" % m.error
-        if self._edit.toolTip() != tip:
-            self._edit.setToolTip(tip)
-        self._edit.setAccessibleDescription(("Not a regular expression: %s" % m.error) if bad else "")
+        show_regex_problem(self._edit, self.matcher().error, self._tip)
+
+
+def show_regex_problem(edit: QtWidgets.QLineEdit, error: str, tip: str = "") -> None:
+    """A box whose regular expression does not compile (``error``; '' = it does): a red frame,
+    and why in its tool tip (after ``tip``, the box's own) and its accessible description."""
+    bad = bool(error)
+    if bool(edit.property("regexInvalid")) != bad:
+        edit.setProperty("regexInvalid", bad)
+        edit.setStyleSheet("QLineEdit { border: 1px solid %s; }" % COLORS["danger"] if bad else "")
+    if bad:
+        tip = ("%s\n" % tip if tip else "") + "Not a regular expression: %s" % error
+    if edit.toolTip() != tip:
+        edit.setToolTip(tip)
+    edit.setAccessibleDescription(("Not a regular expression: %s" % error) if bad else "")
 
 
 class SearchField(QtWidgets.QLineEdit):

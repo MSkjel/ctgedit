@@ -693,10 +693,15 @@ class ProjectScopeField(QtWidgets.QWidget):
     changed = QtCore.Signal()
 
     def __init__(
-        self, current_path: str = "", parent=None, *, what: str = "The project whose pages are searched"
+        self,
+        current_path: str = "",
+        parent=None,
+        *,
+        what: str = "The project whose pages are searched",
+        horizontal: bool = False,
     ):
         super().__init__(parent)
-        lay = QtWidgets.QVBoxLayout(self)
+        lay = QtWidgets.QHBoxLayout(self) if horizontal else QtWidgets.QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         self.combo = QtWidgets.QComboBox()
         self.combo.setSizeAdjustPolicy(QtWidgets.QComboBox.AdjustToContents)
@@ -712,7 +717,7 @@ class ProjectScopeField(QtWidgets.QWidget):
         )
         for w in (self.combo, self.includes):
             row = QtWidgets.QHBoxLayout()
-            row.setContentsMargins(_sp(4), 0, 0, 0)
+            row.setContentsMargins(0 if horizontal else _sp(4), 0, 0, 0)
             row.addWidget(w, 1 if w is self.combo else 0)
             if w is self.includes:
                 row.addStretch(1)

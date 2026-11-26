@@ -308,14 +308,18 @@ class Snapshot:
     def __init__(self, root: str):
         self.root = root
         self.dirs: set = set()
-        #: {relative path: (bytes, (atime_ns, mtime_ns), mode)}
+        #: {relative path: (bytes, (atime_ns, mtime_ns), mode)}, by the path's normcase
         self.files: dict = {}
+        #: {normcase relative path: the relative path as it was spelt} (a test that renames a
+        #: file, or changes the case of its name, gets the old spelling back)
+        self.names: dict = {}
         for dp, _dn, fn in os.walk(root):
             rel = os.path.relpath(dp, root)
             self.dirs.add(os.path.normcase(rel))
             for f in fn:
                 p = os.path.join(dp, f)
                 st = os.stat(p)
+                self.names[os.path.normcase(os.path.join(rel, f))] = os.path.join(rel, f)
                 with open(p, "rb") as fh:
                     self.files[os.path.normcase(os.path.join(rel, f))] = (
                         fh.read(),
@@ -341,6 +345,11 @@ class Snapshot:
                     changed = True
                     continue
                 seen.add(key)
+                spelt = os.path.join(self.root, self.names[key])
+                if f != os.path.basename(spelt):
+                    os.rename(p, spelt)  # (a change of case only)
+                    p = spelt
+                    changed = True
                 st = os.stat(p)
                 if st.st_mtime_ns == was[1][1] and st.st_size == len(was[0]) and st.st_mode == was[2]:
                     with open(p, "rb") as fh:
@@ -358,7 +367,7 @@ class Snapshot:
                 changed = True
         for key, was in self.files.items():
             if key not in seen:
-                self._write(os.path.join(self.root, key), was)
+                self._write(os.path.join(self.root, self.names[key]), was)
                 changed = True
         return changed
 

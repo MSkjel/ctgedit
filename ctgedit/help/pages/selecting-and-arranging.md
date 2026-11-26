@@ -224,6 +224,15 @@ Edit > Find… ([[Ctrl+F]]) and Replace… ([[Ctrl+H]]) open one window that sta
      properties.
    - **Include**: objects inside genies, symbols and the page template.
    - **Match**: anywhere, whole names and words, or whole fields. **Direction** for Find Next.
+   - **Filters**: **Add Filter** adds a row: what it looks at (pages, fields, genies and
+     symbols, or objects), **match** or **do not match**, and the text. The text is found
+     anywhere in the name, not case-sensitive; with its .* on it is a regular expression (^ and
+     $ anchor it). Two match rows of one kind keep what either matches. A field is named by its
+     key or the name in the Field column (`CMD`, `Command`), a genie parameter by its name
+     (`^Tag$`), a genie or symbol as library.element (`pumps.pump_`), an object by its name or
+     AN (`AN12`) or the group or genie it is in. A page a filter leaves out is never opened.
+     For example, Find what `.+` (with .* on), Fields matching `^Tag$` and Genies and symbols
+     matching `fx_pump` lists the Tag of every fx_pump genie.
 4. **Find All** lists matches, with a **Becomes** column when replacing. **Find Next** ([[F3]]),
    **Replace**, **Replace All**, **Go To** and **Properties…** work from there.
 
@@ -233,6 +242,29 @@ grey, with the reason in the tool tip.
 After a Replace All, **Undo Replace All** beside the result line takes it all back: the change in
 each open page, and the closed pages it saved, from their backup. A page you changed again since
 is left as it is, and named.
+
+## Rename pages
+
+Tools > Rename Pages… renames a project's pages, one or many at once. In the Open dialog,
+Rename… on a page opens it with that page ticked.
+
+1. Pick the **Project** (and, as in Find and Replace, **And the projects it includes**), then
+   tick the pages. **Show** filters the list (its .* makes it a regular expression), and **Only
+   ticked** shows the ticked ones alone.
+2. Name them with a **Pattern** (`{name}`, `{title}`, `{n}` the number in the list, `{n:02}`
+   with two digits) or **Find and Replace** in their names (the .* in Find makes it a regular
+   expression, and `\1` in Replace with puts in a group). **New name** shows the result; a name
+   that can't be used, also one a page of a project compiled with it has, is red, with the
+   reason in its tool tip. Rename Objects names objects the same way, and both remember what
+   you used last.
+3. **Rename** renames each page's files and its rows in the project database. **Update the pages
+   that link to them** also changes the Previous, Next and Parent page of the other pages.
+
+Names can swap (A to B and B to A). A page open here closes and opens again under its new name;
+a page open in the Graphics Builder must be closed there first. Afterwards, **Undo Rename**
+gives the pages their old names back, and **Find References** lists where the old names are
+still used, such as `PageDisplay("Mixing")` in Cicode or a genie parameter. Compile the project
+to use the new names.
 
 > **Coming from the Graphics Builder:** its Find and Replace hands off to Studio; ctgedit has its
 > own. Rotate and Mirror are direct commands. Align moves nothing until Apply. Goto Object stays
