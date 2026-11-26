@@ -7,15 +7,16 @@ import re
 import struct
 import threading as _threading
 import time
-import zlib
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 from . import fileio as _fileio
+from .cnum import is_digits
 from .container import Container
 from .page import PageBlock, PageObject, parse_page
 from .textcodec import CODEC, MULTIBYTE
+from .zstream import inflate, inflate_some
 
 # swallowed errors of the read path go to the activity log (rate-limited; control flow unchanged)
 from ..infra.logsetup import note_exception as _note_exc, note_problem as _note_problem
@@ -176,7 +177,7 @@ def legacy_first_symbol(type_code: int, raw: dict) -> str:
     SYMBnnn (the all-off state, SYMB000), an Animated Symbol (0x100D) its OFF_SYMBOL (else
     SYMBOL_1). '' for any other record."""
     if type_code == 0x1007:
-        keys = sorted(k for k in raw if k.upper().startswith("SYMB") and k[4:].isdigit())
+        keys = sorted(k for k in raw if k.upper().startswith("SYMB") and is_digits(k[4:]))
         return str(raw.get(keys[0]) or "") if keys else ""
     if type_code == 0x100D:
         return str(raw.get("OFF_SYMBOL") or raw.get("SYMBOL_1") or "")
@@ -249,12 +250,11 @@ def _inflate_first(body: bytes, start: int) -> Optional[bytes]:
             return None
         chunk = bytes(body[idx:])
         try:
-            return zlib.decompress(chunk)
+            return inflate(chunk)
         except Exception:  # noqa: BLE001 -- partial / truncated streams happen
             _note_exc("symbols._inflate_first")
             try:
-                d = zlib.decompressobj()
-                out = d.decompress(chunk)
+                out = inflate_some(chunk)
                 if out:
                     return out
             except Exception:  # noqa: BLE001
@@ -279,11 +279,10 @@ def _find_stream(body: bytes, start: int):
             return None
         chunk = bytes(body[idx:])
         try:
-            return idx, zlib.decompress(chunk)
+            return idx, inflate(chunk)
         except Exception:  # swallow-ok: a zlib header found by its two bytes may be no stream
             try:
-                d = zlib.decompressobj()
-                out = d.decompress(chunk)
+                out = inflate_some(chunk)
                 if out:
                     return idx, out
             except Exception:  # swallow-ok: (the same: try the next candidate)
@@ -353,7 +352,7 @@ def _embedded_bitmaps(body: bytes, body_start: int):
             if (flags & 0xF00) == 0x100 and off + comp + 4 <= len(body):
                 (comp2,) = struct.unpack_from("<I", body, off + comp)
                 blob = body[off + comp + 4 : off + comp + 4 + comp2]
-                flash = _decode_dib(zlib.decompress(bytes(blob)))
+                flash = _decode_dib(inflate(bytes(blob)))
     except Exception:  # noqa: BLE001 -- a malformed flash half never breaks the primary
         _note_exc("symbols._embedded_bitmaps")
         flash = None

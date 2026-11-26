@@ -8,6 +8,8 @@ import struct
 import zlib
 from typing import Dict, List, Optional, Sequence, Tuple
 
+from .zstream import inflate
+from .cnum import c_atoi
 from . import genie_place as GP
 from . import geometry as G
 from .container import Container
@@ -358,12 +360,11 @@ def _redeflate(stream: bytes, size: int) -> Optional[bytes]:
     """``stream`` inflated (it must give ``size`` bytes) and deflated by :func:`_compress`;
     None when it is no such stream."""
     try:
-        d = zlib.decompressobj()
-        raw = d.decompress(stream)
+        raw = inflate(stream, size)
     except zlib.error:
         _note_exc("ctf._redeflate")
         return None
-    if not d.eof or len(raw) != size:
+    if len(raw) != size:
         return None
     return _compress(raw)
 
@@ -414,24 +415,6 @@ COLOURAN_TC = 0x1008
 _ALWAYS_DYNAMIC = frozenset({TEXT_TC, 0x0D, 0x13})
 #: the probe string of a string display's region
 _W270 = "Wg" + "W" * 268
-
-
-def _atoi(s: Optional[str]) -> int:
-    """C atoi: leading whitespace, a sign, the digits."""
-    if not s:
-        return 0
-    i, n = 0, len(s)
-    while i < n and s[i] in " \t\n\r\v\f":
-        i += 1
-    neg = False
-    if i < n and s[i] in "+-":
-        neg = s[i] == "-"
-        i += 1
-    v = 0
-    while i < n and "0" <= s[i] <= "9":
-        v = v * 10 + ord(s[i]) - 48
-        i += 1
-    return -v if neg else v
 
 
 def _nb(v: Optional[str]) -> bool:
@@ -665,7 +648,7 @@ def _anim_flags(o: _Obj) -> int:
         ("MVY", "MVYSLMODE", F_MVY, F_MVYSL, "MVYSL"),
         ("ROT", "ROTSLMODE", F_ROT, F_ROTSL, "ROTSL"),
     ):
-        if _atoi(g(sl)) & 1:
+        if c_atoi(g(sl)) & 1:
             if _nb(g(slkey)):
                 f |= slbit
         elif _nb(g(key)):
@@ -674,7 +657,7 @@ def _anim_flags(o: _Obj) -> int:
         f |= F_SZX
     if _nb(g("SZY")):
         f |= F_SZY
-    mode = _atoi(g("COLMODE"))
+    mode = c_atoi(g("COLMODE"))
     if mode == 0:
         col = _nb(g("COL_A"))
     elif mode == 1:
@@ -688,7 +671,7 @@ def _anim_flags(o: _Obj) -> int:
     if _nb(g("DISABLED")):
         f |= F_DIS
     if o.tc == TEXT_TC:
-        tm = _atoi(g("TXTMODE"))
+        tm = c_atoi(g("TXTMODE"))
         if tm in (0, 2):
             t = _nb(g("TXT_A"))
         elif tm == 1:
@@ -739,21 +722,21 @@ def _expand(o: _Obj, box, flags: int, rect=None) -> Tuple[bool, tuple]:
     rect = o.bounds if rect is None else rect
     if flags & F_SZX:
         anim = True
-        org, mode = _atoi(g("SZXORG")), _atoi(g("SZXMODE"))
+        org, mode = c_atoi(g("SZXORG")), c_atoi(g("SZXMODE"))
         if mode == 0:
             c = rect[0] if org == -1 else (rect[2] if org == 1 else _cdiv(rect[0] + rect[2], 2))
         else:
             c = _cdiv(rect[0] + rect[2], 2) + org
-        s = max(_atoi(g("SZXMINPC")), _atoi(g("SZXMAXPC")))
+        s = max(c_atoi(g("SZXMINPC")), c_atoi(g("SZXMAXPC")))
         box = _set_rect((c - _cdiv((c - box[0]) * s, 100), box[1], c - _cdiv((c - box[2]) * s, 100), box[3]))
     if flags & F_SZY:
         anim = True
-        org, mode = _atoi(g("SZYORG")), _atoi(g("SZYMODE"))
+        org, mode = c_atoi(g("SZYORG")), c_atoi(g("SZYMODE"))
         if mode == 0:
             c = rect[1] if org == -1 else (rect[3] if org == 1 else _cdiv(rect[1] + rect[3], 2))
         else:
             c = _cdiv(rect[1] + rect[3], 2) + org
-        s = max(_atoi(g("SZYMINPC")), _atoi(g("SZYMAXPC")))
+        s = max(c_atoi(g("SZYMINPC")), c_atoi(g("SZYMAXPC")))
         box = _set_rect((box[0], c - _cdiv((c - box[1]) * s, 100), box[2], c - _cdiv((c - box[3]) * s, 100)))
     # (an empty region stays empty: each step below turns, offsets and ORs it, so a scale
     # with no percentages, SetRectRgn of a flat box, sweeps nothing)
@@ -763,11 +746,11 @@ def _expand(o: _Obj, box, flags: int, rect=None) -> Tuple[bool, tuple]:
             box = _rot_sweep(o, box, rect)
     if flags & (F_MVX | F_MVXSL):
         anim = True
-        lo, hi = -_atoi(g("MVXMINPT")), _atoi(g("MVXMAXPT"))
+        lo, hi = -c_atoi(g("MVXMINPT")), c_atoi(g("MVXMAXPT"))
         box = _or(box, _or(_offset(box, lo, 0), _offset(box, hi, 0)))
     if flags & (F_MVY | F_MVYSL):
         anim = True
-        lo, hi = _atoi(g("MVYMINPT")), -_atoi(g("MVYMAXPT"))
+        lo, hi = c_atoi(g("MVYMINPT")), -c_atoi(g("MVYMAXPT"))
         box = _or(box, _or(_offset(box, 0, lo), _offset(box, 0, hi)))
     if anim and o.style is not None:
         eff = o.style[0]
@@ -882,9 +865,9 @@ def _rot_sweep(o: _Obj, box, rect=None):
     """The area a rotating object sweeps."""
     g = o.get
     origin = rotation_origin(
-        o.bounds if rect is None else rect, _atoi(g("ROTMODE")), _atoi(g("ROTXORG")), _atoi(g("ROTYORG"))
+        o.bounds if rect is None else rect, c_atoi(g("ROTMODE")), c_atoi(g("ROTXORG")), c_atoi(g("ROTYORG"))
     )
-    lo, hi = sorted((-_atoi(g("ROTMINPC")), _atoi(g("ROTMAXPC"))))
+    lo, hi = sorted((-c_atoi(g("ROTMINPC")), c_atoi(g("ROTMAXPC"))))
     return _polygon_union_box(rotation_polygons(box, origin, lo, hi))
 
 
@@ -940,7 +923,7 @@ def _translatable(o: _Obj, flags: int) -> bool:
     if not (flags & F_TXT):
         s = TM.measured_string(o.po, o.caption)
         return s is not None and "@(" in s
-    mode = _atoi(g("TXTMODE"))
+    mode = c_atoi(g("TXTMODE"))
     if mode == 0:
         return "@(" in (g("TXT_OFF") or "") or "@(" in (g("TXT_ON") or "")
     if mode in (1, 2):
@@ -961,7 +944,7 @@ def _text_region(o: _Obj, flags: int):
         # bounds + 'Wg' under the grown transform; no sweep
         box = _inflate3d(o, _map_box(T, o.rect1))
         return _union(box, _text_ext(o, "Wg", T))
-    mode = _atoi(g("TXTMODE"))
+    mode = c_atoi(g("TXTMODE"))
     if mode == 4:
         return _expand(o, _union(o.bounds, _text_ext(o, _W270)), flags)[1]
     if mode == 0:
@@ -2000,7 +1983,7 @@ def _bitmap_dib(c):
     flags, unc, comp = struct.unpack_from("<III", cls, o + 8)
     try:
         if flags & 0x1:
-            raw = zlib.decompress(cls[o + 20 : o + 20 + comp])
+            raw = inflate(cls[o + 20 : o + 20 + comp])
         else:
             raw = cls[o + 16 : o + 16 + unc]
         size, w, h, planes, bpp = struct.unpack_from("<IiiHH", raw, 0)

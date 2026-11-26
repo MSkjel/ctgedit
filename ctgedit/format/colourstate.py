@@ -6,6 +6,8 @@ import re
 import struct
 from typing import Optional
 
+from .zstream import inflate
+from .cnum import c_atoi, c_strtoul
 from .page import PageObject
 from . import codes as _codes
 
@@ -146,21 +148,34 @@ def fmt_pair(p) -> str:
     return "0x%08x,0x%08x" % (p[0] & 0xFFFFFFFF, p[1] & 0xFFFFFFFF)
 
 
-_PAIR_RE = re.compile(r"^\s*0[xX]([0-9A-Fa-f]+)\s*,\s*0[xX]([0-9A-Fa-f]+)")
-_FIRST_RE = re.compile(r"^\s*0[xX]([0-9A-Fa-f]+)")
+#: one %x conversion: C blanks, a sign, a 0x prefix, the hex digits
+_HEX_RE = re.compile(r"[ \t\n\v\f\r]*([+-]?)(?:0[xX](?=[0-9A-Fa-f]))?([0-9A-Fa-f]+)")
+
+
+def _scan_hex(s: str, at: int):
+    m = _HEX_RE.match(s, at)
+    if m is None:
+        return None
+    v = int(m.group(2), 16)
+    return (-v if m.group(1) == "-" else v) & 0xFFFFFFFF, m.end()
 
 
 def _parse(s: str):
     """A "0x%x,0x%x" colour pair read as sscanf reads it, with the 0xff000000 defaults, so
     a value that is not '0x<hex>,0x<hex>' keeps the defaults for what did not match (a
-    decimal '255,0' is two defaults, '0x1,x' one)."""
-    m = _PAIR_RE.match(s or "")
-    if m:
-        return int(m.group(1), 16) & 0xFFFFFFFF, int(m.group(2), 16) & 0xFFFFFFFF
-    m = _FIRST_RE.match(s or "")
-    if m:
-        return int(m.group(1), 16) & 0xFFFFFFFF, NO_COLOUR
-    return NO_COLOUR, NO_COLOUR
+    decimal '255,0' is two defaults, '0x1,x' one). The literals match exactly (no blank
+    before them, a lower-case x); each %x skips blanks and takes a sign and a 0x prefix."""
+    s = s or ""
+    on = off = NO_COLOUR
+    if s.startswith("0x"):
+        r = _scan_hex(s, 2)
+        if r is not None:
+            on, at = r
+            if s.startswith(",0x", at):
+                r = _scan_hex(s, at + 3)
+                if r is not None:
+                    off = r[0]
+    return on, off
 
 
 #: the colour-array defaults (colour number -> (on, off)): the active
@@ -207,19 +222,16 @@ def parse_threshold(s: str):
         return None
     parts = s.split(",")
     cmp_ = parts[0]
-    try:
-        value = int(re.match(r"\s*([+-]?\d+)", parts[1]).group(1)) if len(parts) > 1 else 0
-    except AttributeError, ValueError:
-        value = 0
+    value = c_atoi(parts[1]) if len(parts) > 1 else 0
     value = ((value + 0x8000) & 0xFFFF) - 0x8000  # stored as a short
 
-    def col(k):
-        try:
-            return int(parts[k].strip(), 0) & 0xFFFFFFFF if len(parts) > k else 0
-        except ValueError:
-            return 0
+    return (">" in cmp_, "=" in cmp_, value, _thr_colour(parts, 2), _thr_colour(parts, 3))
 
-    return (">" in cmp_, "=" in cmp_, value, col(2), col(3))
+
+def _thr_colour(parts, k: int) -> int:
+    """A threshold row's colour field: strtoul(.., NULL, 0) of that field alone (octal,
+    hex up to the first non-digit, 0 for no number)."""
+    return c_strtoul(parts[k]) if len(parts) > k else 0
 
 
 def _parse_thr(s: str) -> bytes:
@@ -227,13 +239,8 @@ def _parse_thr(s: str) -> bytes:
     parts = s.split(",")
     cmp_ = parts[0]
     f = (1 if ">" in cmp_ else 0) | (2 if "=" in cmp_ else 0)
-    m = re.match(r"^\s*[-+]?\d+", parts[1] if len(parts) > 1 else "")
-    thr = (int(m.group(0)) if m else 0) & 0xFFFF  # atoi
-    try:
-        on = int(parts[2], 0) & 0xFFFFFFFF if len(parts) > 2 else 0
-        off = int(parts[3], 0) & 0xFFFFFFFF if len(parts) > 3 else 0
-    except ValueError:
-        on = off = 0
+    thr = (c_atoi(parts[1]) if len(parts) > 1 else 0) & 0xFFFF
+    on, off = _thr_colour(parts, 2), _thr_colour(parts, 3)
     return struct.pack("<BHII", f, thr, on, off)
 
 
@@ -377,7 +384,7 @@ def bitmap_flashing(po: PageObject) -> Optional[bool]:
         return False
     try:
         (comp2,) = struct.unpack_from("<I", b, off + comp)
-        flash = zlib.decompress(bytes(b[off + comp + 4 : off + comp + 4 + comp2]))
+        flash = inflate(bytes(b[off + comp + 4 : off + comp + 4 + comp2]))
     except struct.error, zlib.error:
         return False
     return flash != raw
@@ -394,11 +401,6 @@ INPUT_TCS = _codes.INPUT_TCS
 GROUP_TC = 0x08
 
 
-def _atoi(s: str) -> int:
-    m = re.match(r"\s*([+-]?\d+)", s or "")
-    return int(m.group(1)) if m else 0
-
-
 def is_dynamic(
     po: PageObject, values: Optional[dict] = None, *, parent_dynamic: bool = False, input_child: bool = False
 ) -> bool:
@@ -413,7 +415,7 @@ def is_dynamic(
 
         vb = value_bag(po)
         values = dict(vb) if vb is not None else po.raw_properties()
-    ai_on = _atoi(values.get("AI_ON", "")) != 0
+    ai_on = c_atoi(values.get("AI_ON", "")) != 0
     for k in dynamic_keys(values):
         if k == "OrphanedFrom":
             continue

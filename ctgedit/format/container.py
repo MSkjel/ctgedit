@@ -9,6 +9,17 @@ from .textcodec import CODEC
 ENTRY_SIZE = 42
 NAME_LEN = 32
 HEADER_FIXED = 0x10  # directory entries start here
+#: the directory's slot count (dword_c) is read when it is 1..MAX_SLOTS, else DEFAULT_SLOTS
+#: slots are. CtDraw reads any count (in chunks of 0x61) and grows a library's directory 5
+#: slots at a time; the cap only keeps a damaged header from making a writer allocate
+#: gigabytes.
+MAX_SLOTS = 0x4000
+DEFAULT_SLOTS = 8
+
+
+def directory_capacity(dword_c: int) -> int:
+    """The directory slots a reader reads for a header's ``dword_c``."""
+    return dword_c if 0 < dword_c <= MAX_SLOTS else DEFAULT_SLOTS
 
 
 @dataclass
@@ -54,7 +65,7 @@ class Container:
         version, word2, ts_c, ts_m, dword_c = struct.unpack_from("<HHIII", data, 0)
         c = cls(version, word2, ts_c, ts_m, dword_c, raw=data if keep_raw else b"")
         # Directory = fixed array of `dword_c` slots from HEADER_FIXED.
-        capacity = dword_c if 0 < dword_c <= 1024 else 8
+        capacity = directory_capacity(dword_c)
         entries = []
         for i in range(capacity):
             off = HEADER_FIXED + i * ENTRY_SIZE
@@ -79,23 +90,31 @@ class Container:
         return None
 
     # -- serialization -----------------------------------------------------
+    def capacity(self) -> int:
+        """The directory slots :meth:`to_bytes` writes (and writes as dword_c): the header's
+        count, grown to hold every block (a reader reads every slot back)."""
+        cap = max(directory_capacity(self.dword_c), len(self.blocks))
+        if cap > MAX_SLOTS:
+            raise ValueError("a container holds at most %d blocks (this one has %d)" % (MAX_SLOTS, cap))
+        return cap
+
     def relayout(self) -> None:
         """Recompute block offsets/sizes from current data: directory then
         contiguous block data. Call after replacing a block's data."""
-        capacity = self.dword_c if 0 < self.dword_c <= 1024 else max(8, len(self.blocks))
-        off = HEADER_FIXED + capacity * ENTRY_SIZE
+        off = HEADER_FIXED + self.capacity() * ENTRY_SIZE
         for b in self.blocks:
             b.offset = off
             b.size = len(b.data)
             off += b.size
 
     def to_bytes(self) -> bytes:
-        """Serialize back to .ctg bytes. Byte-exact when blocks are unmodified."""
-        capacity = self.dword_c if 0 < self.dword_c <= 1024 else max(8, len(self.blocks))
+        """Serialize back to .ctg bytes. Byte-exact when the blocks are unmodified, except
+        for bytes no block holds (a library's stale element data before a Pack Libraries):
+        a gap between blocks is written as zeros, and the bytes after the last block are left
+        out (format/element.LibraryFile patches a library's own bytes instead)."""
+        capacity = self.capacity()
         out = bytearray()
-        out += struct.pack(
-            "<HHIII", self.version, self.word2, self.ts_created, self.ts_modified, self.dword_c
-        )
+        out += struct.pack("<HHIII", self.version, self.word2, self.ts_created, self.ts_modified, capacity)
         for i in range(capacity):
             if i < len(self.blocks):
                 b = self.blocks[i]

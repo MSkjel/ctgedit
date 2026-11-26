@@ -7,6 +7,7 @@ import zlib
 from dataclasses import dataclass
 from typing import Callable, Optional, Tuple
 
+from .zstream import inflate
 from .page import PageObject
 
 BITMAP_TC = 0x07
@@ -80,7 +81,7 @@ def dib_section(po: PageObject) -> Optional[DibSection]:
 
 def _inflate(stream: bytes) -> Optional[bytes]:
     try:
-        return zlib.decompress(stream)
+        return inflate(stream)
     except zlib.error:
         return None
 
