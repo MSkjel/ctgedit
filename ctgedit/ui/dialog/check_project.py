@@ -95,7 +95,10 @@ class CheckProjectDialog(QtWidgets.QDialog):
         btns = QtWidgets.QHBoxLayout()
         self._b_check = QtWidgets.QPushButton("Check")
         self._b_check.setDefault(True)
-        self._b_check.setToolTip("Check every page of the project, as saved")
+        self._b_check.setToolTip(
+            "Check every page of the project, as saved, and the Cicode of its page properties, "
+            "menu configuration, keyboard commands and Cicode files"
+        )
         self._b_check.clicked.connect(self.check)
         self._b_goto = QtWidgets.QPushButton("Go To")
         self._b_goto.setToolTip("Open the page of the selected row and select its object")
@@ -103,7 +106,8 @@ class CheckProjectDialog(QtWidgets.QDialog):
         self._b_replace = QtWidgets.QPushButton("Replace References")
         self._b_replace.setToolTip(
             "Give every reference listed to a renamed page the page's new name. The closed "
-            "pages are saved, each backed up first (Tools > Restore Backup)"
+            "pages and the Cicode files are saved, each backed up first (Tools > Restore Backup); "
+            "the project's tables are changed in place"
         )
         self._b_replace.clicked.connect(self.replace_references)
         self._b_replace.setVisible(bool(self.renames))
@@ -165,7 +169,8 @@ class CheckProjectDialog(QtWidgets.QDialog):
     def _sync_buttons(self) -> None:
         busy = self._job is not None
         self._b_check.setEnabled(not busy and bool(self._scope.project_dirs()))
-        self._b_goto.setEnabled(self.current_row() is not None)
+        row = self.current_row()
+        self._b_goto.setEnabled(row is not None and not row.get("table") and not row.get("file"))
         self._b_replace.setEnabled(not busy and bool(self.references()))
         self._b_stop.setVisible(busy)
 
@@ -187,7 +192,11 @@ class CheckProjectDialog(QtWidgets.QDialog):
         req = {"format": CW.FORMAT, "projects": self._scope.project_dirs(), "engine": engine_setting() or ""}
         job = HelperJob(self, CW.command, req, data_dir("check"), label="Check Project")
         job.progress.connect(
-            lambda i, n, name: self._status.setText("Checking page %d of %d (%s)…" % (i + 1, n, name))
+            lambda i, n, name: self._status.setText(
+                "Checking the project's tables…"
+                if i >= n
+                else "Checking page %d of %d (%s)…" % (i + 1, n, name)
+            )
         )
         job.finished.connect(lambda res: self._checked(job, res))
         if not job.start():
@@ -253,7 +262,7 @@ class CheckProjectDialog(QtWidgets.QDialog):
     # -- going to a finding --------------------------------------------------------------------
     def go_to(self) -> None:
         r = self.current_row()
-        if r is None or self._open_page is None:
+        if r is None or r.get("table") or r.get("file") or self._open_page is None:
             return
         doc = self._open_page(r["page"])
         if doc is None:
@@ -278,9 +287,41 @@ class CheckProjectDialog(QtWidgets.QDialog):
         refs = self.references()
         if not refs or self._job is not None:
             return False
+        tables = [
+            {
+                "table": r["table"],
+                "record": r["record"],
+                "field": r["field"],
+                "line": r.get("line", 0),
+                "column": r.get("column", 0),
+                "old": r["subject"],
+                "new": self.renames[r["subject"].lower()],
+                "name": r["name"],
+                "object": r["object"],
+            }
+            for r in refs
+            if r.get("table")
+        ]
+        files = [
+            {
+                "file": r["file"],
+                "line": r.get("line", 0),
+                "column": r.get("column", 0),
+                "old": r["subject"],
+                "new": self.renames[r["subject"].lower()],
+            }
+            for r in refs
+            if r.get("file")
+        ]
         edits: Dict[str, list] = {}
         for r in refs:
-            if r["an"] < 1 or not r["field"] or int(r.get("column") or 0) < 1:
+            if (
+                r.get("table")
+                or r.get("file")
+                or r["an"] < 1
+                or not r["field"]
+                or int(r.get("column") or 0) < 1
+            ):
                 continue
             edits.setdefault(r["page"], []).append(
                 {
@@ -293,7 +334,15 @@ class CheckProjectDialog(QtWidgets.QDialog):
                     "column": r.get("column", 0),
                 }
             )
-        changed, replaced, read_only, problems = [], 0, 0, []
+        from ...infra import backups
+
+        backup = backups.new_folder("references")
+        changed, read_only = [], 0
+        replaced, problems = CW.replace_in_tables(tables) if tables else (0, [])
+        if files:
+            k, more = CW.replace_in_files(files, backup)
+            replaced += k
+            problems += more
         closed = []
         for path, es in edits.items():
             doc = self._open_doc(path)
@@ -312,7 +361,6 @@ class CheckProjectDialog(QtWidgets.QDialog):
         if not closed:
             self._replace_done({})
             return True
-        from ...infra import backups
         from ...infra.paths import data_dir
         from ..jobs.helper_job import HelperJob, builder_open_pages
 
@@ -320,7 +368,7 @@ class CheckProjectDialog(QtWidgets.QDialog):
             "format": CW.FORMAT,
             "mode": "replace",
             "edits": closed,
-            "backup": backups.new_folder("references"),
+            "backup": backup,
             "builder_open": builder_open_pages(),
         }
         job = HelperJob(self, CW.command, req, data_dir("check"), label="Replace References")

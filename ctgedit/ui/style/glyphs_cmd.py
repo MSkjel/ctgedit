@@ -1826,6 +1826,7 @@ ACTION_ICONS = {
     "act_replace_genie": "paste_genie",
     "act_var_tags": "variable_tags",
     "act_pack_libs": "pack_libraries",
+    "act_pack_db": "pack_libraries",
     "act_update_pages": "update_pages",
     "act_close_builder": "sync",
     "act_update_page_template": "update_template",

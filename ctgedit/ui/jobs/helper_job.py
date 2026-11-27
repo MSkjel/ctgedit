@@ -116,6 +116,11 @@ class HelperJob(QtCore.QObject):
             with contextlib.suppress(Exception):
                 self._proc.wait(seconds)
 
+    def finish_now(self, seconds: float = 60) -> None:
+        """Wait for the helper to end, then give its answer (``finished``) now."""
+        self.wait(seconds)
+        self._poll()
+
     def _write_skip(self) -> None:
         with contextlib.suppress(OSError):
             with open(self._files["skip_file"], "w", encoding="utf-8") as fh:

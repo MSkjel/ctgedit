@@ -21,9 +21,10 @@ KINDS = {
     "pictures": "Duplicate Pictures",
     "replace": "Replace All",
     "replace-genie": "Replace Genie",
+    "references": "Replace References",
 }
 #: the kinds whose entries are pages (restored by updatepages.restore_backup)
-PAGE_KINDS = ("update-pages", "delete-page", "pictures", "replace", "replace-genie")
+PAGE_KINDS = ("update-pages", "delete-page", "pictures", "replace", "replace-genie", "references")
 #: the backups :func:`prune` keeps: the newest KEEP, none older than MAX_AGE_DAYS (0 = no age
 #: limit), the newest MIN_KEEP always (Settings > Editing > Safety sets the first two)
 KEEP = 10

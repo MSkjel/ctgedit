@@ -13,8 +13,6 @@ from .rename_dialog import NamingPanel
 
 #: the fields a page pattern can use
 PAGE_FIELDS = ("n", "name", "title")
-#: the temporary name a rename cycle (A to B, B to A) goes through
-_SPARE = "_RenameTemp%d"
 
 #: a page of the list: (its project folder, its name, its title)
 Page = Tuple[str, str, str]
@@ -112,63 +110,6 @@ def plan_problems(pairs: Sequence[Pair], pages: Sequence[Page]) -> Dict[Tuple[st
     return out
 
 
-def apply_page_renames(
-    pairs: Sequence[Pair], links: bool = True, link_dirs: Sequence[str] = ()
-) -> Tuple[List[Pair], List[str], List[tuple]]:
-    """Rename ``pairs`` with io.project.rename_page, a cycle through a temporary name. Returns
-    (renames done, failures, links changed)."""
-    from ...io.project import rename_page
-
-    done: List[Pair] = []
-    failed: List[str] = []
-    linked: List[tuple] = []
-    by_dir: Dict[str, List[Tuple[str, str]]] = {}
-    for d, o, n in pairs:
-        if n != o:
-            by_dir.setdefault(d, []).append((o, n))
-    for d, pending in by_dir.items():
-        try:
-            current = {os.path.splitext(f)[0].lower() for f in os.listdir(d) if f.lower().endswith(".ctg")}
-        except OSError as e:
-            failed.extend("%s: %s" % (o, e) for o, _n in pending)
-            continue
-        start = {o: o for o, _n in pending}  # (the name each page had before this run)
-        spare = 0
-
-        def step(old: str, new: str, d=d, current=current, start=start) -> bool:
-            try:
-                rep = rename_page(d, old, new, links=links, link_dirs=link_dirs)
-            except Exception as e:  # noqa: BLE001  # swallow-ok: said as a failure, the others go on
-                failed.append("%s: %s" % (start.get(old, old), e))
-                return False
-            current.discard(old.lower())
-            current.add(new.lower())
-            linked.extend(rep.get("links") or ())
-            failed.extend("%s: %s" % (new, e) for e in rep.get("errors") or ())
-            return True
-
-        while pending:
-            moved = False
-            for item in list(pending):
-                old, new = item
-                if new.lower() == old.lower() or new.lower() not in current:
-                    pending.remove(item)
-                    if step(old, new):
-                        done.append((d, start.pop(old, old), new))
-                    moved = True
-            if pending and not moved:
-                old, new = pending.pop(0)
-                while True:
-                    spare += 1
-                    tmp = _SPARE % spare
-                    if tmp.lower() not in current:
-                        break
-                if step(old, tmp):
-                    start[tmp] = start.pop(old, old)
-                    pending.append((tmp, new))
-    return done, failed, linked
-
-
 class RenamePagesDialog(QtWidgets.QDialog):
     """Rename a project's pages (and its included projects') by a pattern or a find and
     replace, with a preview."""
@@ -183,16 +124,17 @@ class RenamePagesDialog(QtWidgets.QDialog):
         project_dir: str = "",
         pages: Sequence[str] = (),
         *,
-        before: Optional[Callable] = None,
-        reopen: Optional[Callable] = None,
+        hold: Optional[Callable] = None,
+        moved: Optional[Callable] = None,
         check_references: Optional[Callable] = None,
     ):
         super().__init__(parent)
         self.setWindowTitle("Rename Pages")
-        #: before(kind, path, element): False cancels, else a step to run after (lifecycle.BeforeHook)
-        self._before = before
-        #: reopen(paths): opens the renamed pages that had a tab
-        self._reopen = reopen
+        #: hold(paths): the window saves and watches none of these pages until moved()
+        self._hold = hold
+        #: moved([(old path, new path)], held paths): the window's tabs follow the renames
+        self._moved = moved
+        self._job = None
         #: check_references(project folder, includes, {old: new}): opens Check Project
         self._check_references = check_references
         self._pairs: List[Pair] = []
@@ -258,7 +200,7 @@ class RenamePagesDialog(QtWidgets.QDialog):
         self.naming = NamingPanel(
             self.SETTINGS,
             "{name} the page's name, {title} its title, {n} the number in the list ({n:02}: two digits)",
-            defaults={"pattern": "{name}", "mode": 1, "links": True},
+            defaults={"pattern": "{name}", "mode": 1, "links": True, "names": True},
         )
         lay.addWidget(self.naming)
         nm = self.naming
@@ -272,6 +214,13 @@ class RenamePagesDialog(QtWidgets.QDialog):
         )
         self._links.setChecked(bool(nm.remembered.get("links", True)))
         lay.addWidget(self._links)
+        self._names = QtWidgets.QCheckBox("Update the project's tables that name them")
+        self._names.setToolTip(
+            "Equipment pages, menu items, alarm help pages and the startup, home and splash page "
+            "(Parameters) of the project, and of the projects it includes, take the new names"
+        )
+        self._names.setChecked(bool(nm.remembered.get("names", True)))
+        lay.addWidget(self._names)
         self._status = note_label("", "danger", self)
         self._status.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
         lay.addWidget(self._status)
@@ -287,7 +236,11 @@ class RenamePagesDialog(QtWidgets.QDialog):
         self._b_undo.setText("Undo Rename")
         self._b_undo.setAutoRaise(True)
         self._b_undo.setToolTip("Give the pages renamed last their old names again")
-        for b in (self._b_refs, self._b_undo):
+        self._b_stop = QtWidgets.QToolButton()
+        self._b_stop.setText("Stop")
+        self._b_stop.setToolTip("Stop: the project being renamed keeps its old names")
+        self._b_stop.clicked.connect(self.stop)
+        for b in (self._b_refs, self._b_undo, self._b_stop):
             b.setVisible(False)
             after.addWidget(b)
         after.addStretch(1)
@@ -474,30 +427,55 @@ class RenamePagesDialog(QtWidgets.QDialog):
         if msg or not self._undo:
             self._status.setText(msg)
             set_note_role(self._status, "danger" if (error or problems) else "text_dim")
-        self._ok.setEnabled(bool(changes) and not error and not problems)
+        self._ok.setEnabled(bool(changes) and not error and not problems and self._job is None)
 
     # -- renaming ------------------------------------------------------------------------------
     def rename(self) -> bool:
-        """Rename the ticked pages (the Rename button). True when any was renamed."""
+        """Rename the ticked pages (the Rename button), in a helper process. True when it
+        started."""
         self.flush()
         if not self._ok.isEnabled():
             return False
         ok = self._run(list(self._pairs))
         if ok:
-            self.naming.remember(links=self._links.isChecked())
+            self.naming.remember(links=self._links.isChecked(), names=self._names.isChecked())
         return ok
 
     def undo_rename(self) -> bool:
         """Give the pages renamed last their old names again (Undo Rename)."""
         pairs = [(d, new, old) for d, old, new in self._undo]
-        if not pairs:
+        if not pairs or self._job is not None:
             return False
         return self._run(pairs, undo=True)
 
-    def _run(self, pairs: List[Pair], undo: bool = False) -> bool:
-        from ..style.theme import set_note_role
-        from .. import lifecycle
+    def renaming(self) -> bool:
+        return self._job is not None
 
+    def stop(self) -> None:
+        if self._job is not None:
+            self._job.stop()
+            self._status.setText("Stopping…")
+
+    def finish(self, seconds: float = 60) -> None:
+        """Wait for the rename running and take its answer now."""
+        if self._job is not None:
+            self._job.finish_now(seconds)
+
+    def _sync_busy(self) -> None:
+        busy = self._job is not None
+        self._b_stop.setVisible(busy)
+        self._b_undo.setEnabled(not busy)
+        if busy:
+            self._ok.setEnabled(False)
+
+    def _run(self, pairs: List[Pair], undo: bool = False) -> bool:
+        from ...infra.paths import data_dir
+        from ...workers import rename_worker as RW
+        from ..jobs.helper_job import HelperJob
+        from ..style.theme import set_note_role
+
+        if self._job is not None:
+            return False
         busy = [o for d, o, _n in pairs if _in_builder(os.path.join(d, o + ".ctg"))]
         if busy:
             self._status.setText(
@@ -506,43 +484,59 @@ class RenamePagesDialog(QtWidgets.QDialog):
             )
             set_note_role(self._status, "danger")
             return False
-        afters, was_open = [], []
-        for d, old, new in pairs:
-            if self._before is None:
-                continue
-            got = self._before("page", os.path.join(d, old + ".ctg"), "")
-            if not got:
-                self._status.setText("Nothing was renamed.")
-                set_note_role(self._status, "text_dim")
-                return False
-            if callable(got):
-                afters.append(got)
-                was_open.append((d, new))
-        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
-        try:
-            done, failed, linked = apply_page_renames(
-                pairs, links=self._links.isChecked(), link_dirs=self.project_dirs()
+        held = [os.path.join(d, o + ".ctg") for d, o, _n in pairs]
+        req = {
+            "format": RW.FORMAT,
+            "pairs": [list(p) for p in pairs],
+            "links": self._links.isChecked(),
+            "names": self._names.isChecked(),
+            "link_dirs": self.project_dirs(),
+        }
+        job = HelperJob(self, RW.command, req, data_dir("rename"), label="Rename Pages")
+        job.progress.connect(lambda _i, _n, what: self._status.setText("Renaming pages (%s)…" % what))
+        job.finished.connect(lambda res: self._renamed(job, res, pairs, held, undo))
+        if self._hold is not None:
+            self._hold(held)
+        if not job.start():
+            if self._moved is not None:
+                self._moved([], held)
+            self._status.setText("The pages could not be renamed: the helper process did not start.")
+            set_note_role(self._status, "danger")
+            return False
+        self._job = job
+        self._status.setText("Renaming pages…")
+        set_note_role(self._status, "text_dim")
+        self._sync_busy()
+        return True
+
+    def _renamed(self, job, res: dict, pairs: List[Pair], held: List[str], undo: bool) -> None:
+        from ..style.theme import set_note_role
+        from .. import lifecycle
+
+        if job is not self._job:
+            return
+        self._job = None
+        done: List[Pair] = [(d, o, n) for d, o, n in res.get("done") or ()]
+        failed = list(res.get("failed") or ()) + list(res.get("errors") or ())
+        if res.get("error"):
+            failed.append(str(res["error"]))
+        if self._moved is not None:
+            self._moved(
+                [(os.path.join(d, o + ".ctg"), os.path.join(d, n + ".ctg")) for d, o, n in done], held
             )
-        finally:
-            QtWidgets.QApplication.restoreOverrideCursor()
-        if done:
-            for step in afters:
-                step()
-            for d in {d for d, _o, _n in done}:
-                lifecycle.touch_catalog(None, d)
-            for d, o, n in done:
-                k = next(
-                    (i for i, (rd, _a, b) in enumerate(self.renamed) if self._key(rd, b) == self._key(d, o)),
-                    None,
-                )
-                if k is None:
-                    self.renamed.append((d, o, n))
-                else:
-                    self.renamed[k] = (d, self.renamed[k][1], n)
-            self.renamed = [r for r in self.renamed if r[1] != r[2]]
+        for d in {d for d, _o, _n in done}:
+            lifecycle.touch_catalog(None, d)
+        for d, o, n in done:
+            k = next(
+                (i for i, (rd, _a, b) in enumerate(self.renamed) if self._key(rd, b) == self._key(d, o)),
+                None,
+            )
+            if k is None:
+                self.renamed.append((d, o, n))
+            else:
+                self.renamed[k] = (d, self.renamed[k][1], n)
+        self.renamed = [r for r in self.renamed if r[1] != r[2]]
         renamed = {self._key(d, n) for d, _o, n in done}
-        if self._reopen is not None and was_open:
-            self._reopen([os.path.join(d, n + ".ctg") for d, n in was_open if self._key(d, n) in renamed])
         self._undo = [] if undo else done
         self._last_names = {} if undo else {o.lower(): n for _d, o, n in done}
         kept = {self._key(d, o) for d, o, _n in pairs if self._key(d, o) not in renamed}
@@ -559,22 +553,32 @@ class RenamePagesDialog(QtWidgets.QDialog):
                     " to their old names" if undo else "",
                 )
             )
-            if linked:
+            changed = res.get("changed") or ()
+            if changed:
                 parts.append(
-                    "%d link%s from other pages followed." % (len(linked), "" if len(linked) == 1 else "s")
+                    "%d reference%s in the project's tables followed."
+                    % (len(changed), "" if len(changed) == 1 else "s")
                 )
             parts.append("Compile the project to use the new names.")
             if not undo:
                 parts.append(
                     "Cicode that opens the old pages keeps the old names: Check References finds it."
                 )
+        if res.get("stopped"):
+            parts.append("Stopped: the pages not renamed keep their names.")
         if failed:
             parts.append("Not renamed: %s." % "; ".join(failed[:3]))
         self._status.setText(" ".join(parts) or "Nothing was renamed.")
         set_note_role(self._status, "danger" if failed else "text_dim")
         self._b_undo.setVisible(bool(self._undo))
         self._b_refs.setVisible(bool(self._last_names) and self._check_references is not None)
-        return bool(done)
+        self._sync_busy()
+
+    def done(self, r) -> None:
+        if self._job is not None:
+            self._job.stop()
+            self.finish()
+        super().done(r)
 
     def check_references(self) -> None:
         """Check Project over the pages renamed, with their new names to give the references."""

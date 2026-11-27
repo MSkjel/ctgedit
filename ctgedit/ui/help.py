@@ -117,6 +117,7 @@ DIALOG_TOPICS = {
     "NumberExpressionDialog": "drawing#numbers",
     "ZoomWindow": "the-window#the-magnifier",
     "PackLibrariesDialog": "library-elements#pack-libraries",
+    "PackDatabaseDialog": "troubleshooting#pack-the-project-database",
     "ManageSavedViewsDialog": "the-window#saved-views",
     "NavBarCustomiseDialog": "the-window#the-navigation-bar",
     "ObjectPropertiesDialog": _tab_anchor("properties"),

@@ -99,7 +99,7 @@ PAGE_COLUMNS = (
     "ACT_FUNC",
     "DEACT_FUNC",
 )
-_PAGE_COLUMN_NAMES = {
+PAGE_COLUMN_NAMES = {
     "TITLE": "Window title",
     "COMMENT": "Description",
     "PREV_PAGE": "Previous page",
@@ -849,7 +849,7 @@ def _page_hits(doc, opts: FindOptions) -> List[Hit]:
                     K_PAGEREC,
                     col,
                     v,
-                    "Page %s" % _PAGE_COLUMN_NAMES.get(col, col).lower(),
+                    "Page %s" % PAGE_COLUMN_NAMES.get(col, col).lower(),
                 )
             )
     try:

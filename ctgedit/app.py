@@ -380,6 +380,16 @@ def main(argv: list[str] | None = None) -> int:
         from .workers.check_worker import main as check_main
 
         return check_main(argv[2:])
+    if argv[1:2] == ["--rename"]:
+        # Rename Pages (rename_worker)
+        from .workers.rename_worker import main as rename_main
+
+        return rename_main(argv[2:])
+    if argv[1:2] == ["--pack"]:
+        # Pack Database (pack_worker)
+        from .workers.pack_worker import main as pack_main
+
+        return pack_main(argv[2:])
     if argv[1:2] == ["--pictures"]:
         # Find Duplicate Pictures' scan and changes (picture_worker)
         from .workers.picture_worker import main as pictures_main

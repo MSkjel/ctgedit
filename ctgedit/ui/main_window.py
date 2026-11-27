@@ -884,6 +884,7 @@ class MainWindow(
         self.act_var_tags = self._act("Tags Panel", self._variable_tags, "Ctrl+T")
         self.act_var_tags.setProperty(_keymap.KEYWORDS_PROP, ["variable tags", "tag list"])
         self.act_pack_libs = self._act("Pack Libraries…", self._pack_libraries_dialog)
+        self.act_pack_db = self._act("Pack Database…", self._pack_database_dialog)
         self.act_update_pages = self._act("Update Pages…", self._update_pages)
         self.act_check_project = self._act(
             "Check Project…", lambda: self._check_project_dialog(), None, "problems"
@@ -1599,6 +1600,7 @@ class MainWindow(
         t.addAction(self.act_update_pages)
         t.addAction(self.act_rename_pages)
         t.addAction(self.act_pack_libs)
+        t.addAction(self.act_pack_db)
         t.addAction(self.act_close_builder)
         t.addAction(self.act_restore_backup)
         t.addSeparator()
@@ -1934,6 +1936,7 @@ class MainWindow(
         g = self.ribbon.add_group(util, "Libraries", priority=1)
         g.add_big(self.act_copy_to_lib)
         g.add_small(self.act_pack_libs)
+        g.add_small(self.act_pack_db)
         g.add_small(self.act_update_pages)
         g.add_small(self.act_rename_pages)
         g.add_small(self.act_close_builder)

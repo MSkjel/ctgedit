@@ -5033,6 +5033,97 @@ class LibraryCommands:
         if proj:
             self._pack_libraries(chain, ask=False, project_dir=proj)
 
+    def _pack_database_dialog(self) -> None:
+        """Tools > Pack Database: the project and the included projects, then the pack in a
+        helper process; the results window when it ends."""
+        if self._update_pages_running():
+            return
+        from ..dialog.pack_dialog import PackDatabaseDialog
+
+        here = os.path.dirname(os.path.abspath(self.doc.path)) if self.doc is not None else ""
+        dlg = PackDatabaseDialog(self, here)
+        try:
+            if dlg.exec() != QtWidgets.QDialog.Accepted:
+                return
+            proj, chain = dlg.project_dir(), dlg.include_chain()
+        finally:
+            dlg.deleteLater()
+        if proj:
+            self._pack_database(proj, chain)
+
+    def _pack_database(self, project_dir: str, include_chain: bool) -> bool:
+        """Pack the database of ``project_dir`` (and its included projects) in a helper
+        process. False when it did not start."""
+        from ...format.projects import include_search_dirs
+        from ...infra.paths import data_dir
+        from ...workers import pack_worker as PW
+        from ..jobs.helper_job import HelperJob
+
+        try:
+            from ...backend.graphics_builder import _ctdraw_pids
+
+            builder = bool(_ctdraw_pids())
+        except Exception:  # noqa: BLE001  # swallow-ok: no check, the pack reports a table in use
+            builder = False
+        if builder:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Pack Database",
+                "The Graphics Builder is running (Plant SCADA Studio starts one too). Studio and "
+                "the Graphics Builder keep the project's tables open.\n\nClose them, then run "
+                "Pack Database again.",
+            )
+            return False
+        dirs = [project_dir] + (include_search_dirs(project_dir) if include_chain else [])
+        job = HelperJob(
+            self, PW.command, {"format": PW.FORMAT, "dirs": dirs}, data_dir("pack"), label="Pack Database"
+        )
+        job.finished.connect(lambda res: self._database_packed(job, res))
+        if not job.start():
+            self.statusBar().showMessage(
+                "The database could not be packed: the helper process did not start.", 8000
+            )
+            return False
+        self._pack_job = job
+        return True
+
+    def _database_packed(self, job, res: dict) -> None:
+        if getattr(self, "_pack_job", None) is job:
+            self._pack_job = None
+        self._show_run_results("Pack Database", self._pack_database_lines(res))
+
+    @staticmethod
+    def _pack_database_lines(res: dict) -> list:
+        """The lines of Pack Database's result window."""
+        from ..names import plural
+
+        if res.get("error"):
+            return ["The database could not be packed: %s" % _stop(str(res["error"]))]
+        projects = res.get("projects") or []
+        tables = sum(len(p["packed"]) for p in projects)
+        saved = sum(int(p["saved"]) for p in projects)
+        if not tables:
+            lines = ["No deleted rows: nothing to pack."]
+        else:
+            lines = ["%s packed, %.1f MB reclaimed." % (plural(tables, "table"), saved / 1e6)]
+        for p in projects:
+            for table, n in sorted(p["packed"].items(), key=lambda kv: -kv[1])[:20]:
+                lines.append("%s %s: %s removed." % (p["project"], table, plural(n, "deleted row")))
+        kept = ["%s %s" % (p["project"], t) for p in projects for t in p["kept"]]
+        if kept:
+            lines.append("")
+            lines.append(
+                "Kept until the project is compiled (the change log names their rows): %s." % ", ".join(kept)
+            )
+        failed = [(p["project"], t, why) for p in projects for t, why in p["failed"]]
+        if failed:
+            lines.append("")
+            lines.append("These tables were left as they were:")
+            lines += ["%s %s: %s" % (proj, t, _stop(why)) for proj, t, why in failed[:20]]
+        if res.get("stopped"):
+            lines.append("Stopped before every table was packed.")
+        return lines
+
     def _pack_libraries(
         self, include_chain: bool, ask: bool = True, project_dir: Optional[str] = None
     ) -> None:

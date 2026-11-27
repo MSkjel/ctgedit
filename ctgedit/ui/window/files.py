@@ -29,6 +29,8 @@ NEW_TEMPLATE_SIZE = (1920, 1080)
 #: the runs of several steps going on now ('holds'), the notice waiting for their end, and
 #: whether its box was shown this session
 CACHE_NOTICE_RUN = {"holds": 0, "waiting": "", "shown": False}
+#: the pages Rename Pages is moving (normcase paths): no window saves or watches them
+RENAMING: set = set()
 
 
 def new_template_size(lib: str) -> tuple:
@@ -388,8 +390,8 @@ class PageFiles:
             self,
             pdir,
             pages,
-            before=self._before_delete_or_rename,
-            reopen=self._reopen_renamed,
+            hold=self.hold_pages,
+            moved=self.pages_moved,
             check_references=self._check_project_dialog,
         )
         dlg.setAttribute(QtCore.Qt.WA_DeleteOnClose)
@@ -404,13 +406,57 @@ class PageFiles:
         )
         dlg.show()
 
-    def _reopen_renamed(self, paths) -> None:
-        """Renamed pages that had a tab: open again under their new names."""
-        for p in paths:
-            try:
-                self.open_document(p)
-            except Exception as e:  # noqa: BLE001 -- swallow-ok: said in the status bar
-                self.statusBar().showMessage("%s could not be opened: %s" % (os.path.basename(p), e), 8000)
+    def _windows(self) -> list:
+        return [self] + [w for w in type(self)._instances if w is not self]
+
+    def hold_pages(self, paths) -> None:
+        """Rename Pages is moving these pages: no window saves them or watches their files
+        until :meth:`pages_moved`."""
+        keys = {os.path.normcase(os.path.abspath(p)) for p in paths}
+        RENAMING.update(keys)
+        for w in self._windows():
+            with contextlib.suppress(RuntimeError):  # a window being destroyed
+                for e in w._docs:
+                    path = e["doc"].path
+                    if path and os.path.normcase(os.path.abspath(path)) in keys:
+                        with contextlib.suppress(Exception):
+                            w._watcher.removePath(path)
+
+    def pages_moved(self, moves, held) -> None:
+        """Rename Pages ended: the tabs of the pages ``moves`` [(old path, new path)] show
+        their new files, as after Save As, unsaved changes kept; the ``held`` pages are saved
+        and watched again."""
+        from ..prefs.settings import app_settings
+
+        new_of = {os.path.normcase(os.path.abspath(o)): n for o, n in moves}
+        sw = None
+        with contextlib.suppress(Exception):
+            from ..simulate.window import simulate_window
+
+            sw = simulate_window(create=False)
+        for w in self._windows():
+            with contextlib.suppress(RuntimeError):  # a window being destroyed
+                for e in w._docs:
+                    doc = e["doc"]
+                    new = new_of.get(os.path.normcase(os.path.abspath(doc.path))) if doc.path else None
+                    if new is not None:
+                        doc.path = new
+                        doc._project_cache = None
+                        doc._tag_formats = None
+                        if sw is not None:
+                            with contextlib.suppress(Exception):
+                                sw.document_renamed(doc, new)
+                    if doc.path and (
+                        new is not None or os.path.normcase(os.path.abspath(doc.path)) in RENAMING
+                    ):
+                        w._watch(doc.path)
+                w.library_dock.refresh()
+                w._update_title()
+        RENAMING.difference_update(os.path.normcase(os.path.abspath(p)) for p in held)
+        if new_of:
+            st = app_settings()
+            mru = [str(p) for p in st.value("mru", [], type=list)]
+            st.setValue("mru", [new_of.get(os.path.normcase(os.path.abspath(p)), p) for p in mru])
 
     def _check_project_dialog(self, project_dir: str = "", includes: bool = False, renames=None) -> None:
         """Tools > Check Project; with ``renames`` (Rename Pages) it checks at once."""
@@ -2671,6 +2717,12 @@ class PageFiles:
         """Save, and report anything the save couldn't do."""
         if isinstance(self.doc, ElementDocument):
             return self._save_element_to(path, errors=errors)
+        if os.path.normcase(os.path.abspath(self.doc.path)) in RENAMING:
+            why = "%s is being renamed. Save it again in a moment." % os.path.basename(self.doc.path)
+            if errors is not None:
+                errors.append(why)
+            self.statusBar().showMessage(why, 8000)
+            return False
         in_place = path is None or os.path.normcase(os.path.abspath(path)) == os.path.normcase(
             os.path.abspath(self.doc.path)
         )

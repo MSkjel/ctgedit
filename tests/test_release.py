@@ -73,7 +73,7 @@ def test_version_has_one_source_and_the_pins_agree():
     with open(os.path.join(REPO, "pyproject.toml"), "rb") as fh:
         project = tomllib.load(fh)
     assert project["tool"]["setuptools"]["dynamic"]["version"] == {"attr": "ctgedit.__version__"}
-    assert project["project"]["requires-python"].startswith(">=3.14")
+    assert project["project"]["requires-python"].startswith(">=%d.%d" % sys.version_info[:2])
     deps = {}
     for spec in project["project"]["dependencies"]:
         m = re.match(r"^([A-Za-z0-9_.\-]+)==([^\s;]+)", spec)

@@ -79,8 +79,19 @@ Again** reruns the checks. Checks never change the page.
 ## Check Project
 
 Tools > Check Project… runs Check Page on every page of a project (and, with **And the projects
-it includes**, of those too), as the pages are saved, in a separate process. **Show** filters the
-list; double-click a row (or **Go To**) to open its page at the object.
+it includes**, of those too), as the pages are saved, in a separate process. It also compiles the
+Cicode of each page's properties (On page entry and the other events), the menu configuration's
+commands, the keyboard commands and the project's Cicode files. **Show** filters the list;
+double-click a row (or **Go To**) to open its page at the object.
+
+## Pack the project database
+
+Deleting, renaming and saving pages leaves deleted rows in the project's database tables until
+they are packed. Tools > Pack Database… removes them and builds the tables' indexes again, as
+Studio's Pack does, in a separate process; the results window lists what each table gave back.
+Close Plant SCADA Studio and the Graphics Builder first. A table the project's change log still
+names keeps its rows until the project is compiled. A table over 2 GB is one Studio cannot open
+at all: Pack Database packs it.
 
 ## Check the page display
 

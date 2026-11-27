@@ -792,7 +792,10 @@ def main(argv=None) -> int:
                 break
             record(_task((p, opts, skip_list())))
     else:
-        from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
+        from concurrent.futures import FIRST_COMPLETED, wait
+
+        # (the submodule: after PySide6's import hook the package's lazy names stay unresolved)
+        from concurrent.futures.process import ProcessPoolExecutor
 
         todo = list(pages)
         with ProcessPoolExecutor(

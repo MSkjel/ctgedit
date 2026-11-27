@@ -15,15 +15,20 @@ def check_field(session, text: str, kind: str) -> dict:
     """``text`` compiled by ``session``'s engine: {ok, errors, warnings}. Genie parameters and
     super genie associations compile as placeholder names, and what is said of those is dropped."""
     filled, spans = L.fill_template(text)
-    body = session.request("checkExpression", {"text": filled, "kind": kind}, timeout=CHECK_TIMEOUT_S) or {}
-    result = {
+    result = check_text(session, filled, kind)
+    if spans:
+        result = without_template(result, spans, [filled[s:e] for s, e in spans])
+    return result
+
+
+def check_text(session, text: str, kind: str) -> dict:
+    """``text`` compiled as it is by ``session``'s engine: {ok, errors, warnings}."""
+    body = session.request("checkExpression", {"text": text, "kind": kind}, timeout=CHECK_TIMEOUT_S) or {}
+    return {
         "ok": bool(body.get("ok")),
         "errors": list(body.get("errors") or ()),
         "warnings": list(body.get("warnings") or ()),
     }
-    if spans:
-        result = without_template(result, spans, [filled[s:e] for s, e in spans])
-    return result
 
 
 def without_template(result: dict, spans, names) -> dict:

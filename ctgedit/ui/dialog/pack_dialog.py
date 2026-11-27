@@ -1,4 +1,4 @@
-"""Tools > Pack Libraries: confirm, and pick a project when no page is open."""
+"""Tools > Pack Libraries and Pack Database: confirm, and pick a project."""
 
 from __future__ import annotations
 
@@ -12,26 +12,28 @@ class PackLibrariesDialog(QtWidgets.QDialog):
     """See the module notes."""
 
     RESIZE = "width"
+    TITLE = "Pack Libraries"
+    INTRO = (
+        "Compact the symbol, genie and template libraries of the project (deleted elements are "
+        "removed). Composite genie instances no page uses are removed from the composition caches "
+        "too (you are asked first)."
+    )
+    WHAT = "The project whose libraries are packed"
 
     def __init__(self, parent=None, current_dir: str = ""):
         super().__init__(parent)
-        self.setWindowTitle("Pack Libraries")
+        self.setWindowTitle(self.TITLE)
         from .find_dialog import project_choices
         from ..prefs.settings import app_settings
 
         lay = QtWidgets.QVBoxLayout(self)
-        intro = QtWidgets.QLabel(
-            "Compact the symbol, genie and template libraries of the "
-            "project (deleted elements are removed). Composite genie "
-            "instances no page uses are removed from the composition "
-            "caches too (you are asked first)."
-        )
+        intro = QtWidgets.QLabel(self.INTRO)
         intro.setWordWrap(True)
         lay.addWidget(intro)
         form = QtWidgets.QFormLayout()
         self.project = QtWidgets.QComboBox()
         self.project.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
-        self.project.setToolTip("The project whose libraries are packed")
+        self.project.setToolTip(self.WHAT)
         projects, here = project_choices(current_dir)
         for name, folder in projects:
             self.project.addItem(name, folder)
@@ -62,3 +64,14 @@ class PackLibrariesDialog(QtWidgets.QDialog):
 
     def include_chain(self) -> bool:
         return self.includes.isChecked()
+
+
+class PackDatabaseDialog(PackLibrariesDialog):
+    """Tools > Pack Database."""
+
+    TITLE = "Pack Database"
+    INTRO = (
+        "Remove the deleted rows from the project's database tables and build their indexes "
+        "again, as Studio's Pack does. Close Plant SCADA Studio and the Graphics Builder first."
+    )
+    WHAT = "The project whose database is packed"

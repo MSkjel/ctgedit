@@ -261,7 +261,9 @@ def _copy_tree(src: str, dst: str) -> None:
     in threads: the cost is per file, and the install has about 800 small ones. The
     collector is off meanwhile: it never runs on a worker thread (infra/gcguard)."""
     import gc
-    from concurrent.futures import ThreadPoolExecutor
+
+    # (the submodule: after PySide6's import hook the package's lazy names stay unresolved)
+    from concurrent.futures.thread import ThreadPoolExecutor
 
     if not _TREE:
         dirs, files = [], []

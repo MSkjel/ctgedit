@@ -9,6 +9,12 @@ from typing import List
 FORMAT = "ctgedit-check/1"
 #: at most this many rows come back (the answer says when there were more)
 MAX_ROWS = 20000
+#: the Cicode of the project tables checked with the pages: {table: columns}
+TABLE_CICODE = {
+    "pages.dbf": ("ENTRY_FUNC", "EXIT_FUNC", "BGND_FUNC", "READY_FUNC", "ACT_FUNC", "DEACT_FUNC"),
+    "pagemenu.dbf": ("COMMAND",),
+    "keyboard.dbf": ("CMD",),
+}
 
 
 def pages_of(projects) -> List[str]:
@@ -42,13 +48,135 @@ def _row(path: str, doc, f) -> dict:
     }
 
 
+def _table_labels(table: str, row: dict, col: str):
+    """(name, object, field label) a table value is listed under."""
+    from ..features.find_replace import PAGE_COLUMN_NAMES
+    from ..io.project import MENU_LEVELS
+
+    if table == "pages.dbf":
+        return row.get("NAME", "").strip(), "Page Properties", PAGE_COLUMN_NAMES.get(col, col)
+    if table == "pagemenu.dbf":
+        path = ".".join(v for v in (row.get(c, "").strip() for c in MENU_LEVELS) if v)
+        return "Menu %s" % row.get("PAGE", "").strip(), path, "Command"
+    return "Keyboard commands", "Key %s" % row.get("KEY_SEQ", "").strip(), "Command"
+
+
+def table_fields(project_dir: str) -> List[dict]:
+    """The Cicode in ``project_dir``'s tables (TABLE_CICODE), one dict per value: table, record,
+    field, text, name, object, label."""
+    from ..format.dbf import Dbf
+    from ..io.pgregister import find_file
+
+    out = []
+    for table, cols in TABLE_CICODE.items():
+        path = find_file(project_dir, table)
+        if path is None:
+            continue
+        with Dbf(path, writable=False) as d:
+            use = [c for c in cols if c in d.fmap]
+            for i in range(d.nrec):
+                r = d.read(i)
+                if r[:1] == b"*":
+                    continue
+                for c in use:
+                    text = d.field(r, c)
+                    if text.strip():
+                        name, obj, label = _table_labels(table, d.decode(r), c)
+                        out.append(
+                            {
+                                "table": path,
+                                "record": i,
+                                "field": c,
+                                "text": text,
+                                "name": name,
+                                "object": obj,
+                                "label": label,
+                            }
+                        )
+    return out
+
+
+def table_rows(project_dir: str, f: dict, result: dict) -> List[dict]:
+    """check_worker rows of one engine check of table value ``f`` (table_fields)."""
+    base = {
+        "page": f["table"],
+        "name": f["name"],
+        "project": os.path.basename(project_dir),
+        "index": -1,
+        "an": -1,
+        "object": f["object"],
+        "field": f["field"],
+        "table": f["table"],
+        "record": f["record"],
+    }
+    rows = []
+    for w in result.get("warnings") or ():
+        rows.append(
+            dict(
+                base,
+                level="warning",
+                code=str(w.get("kind") or "compile"),
+                message="%s: %s" % (f["label"], w.get("message") or ""),
+                subject=str(w.get("name") or ""),
+                line=int(w.get("line") or 0),
+                column=int(w.get("column") or 0),
+            )
+        )
+    for e in result.get("errors") or ():
+        line, col = int(e.get("line") or 0), int(e.get("column") or 0)
+        where = " at line %d, column %d" % (line, col) if line and col else ""
+        rows.append(
+            dict(
+                base,
+                level="error",
+                code="compile",
+                message="%s does not compile%s: %s"
+                % (f["label"], where, e.get("message") or e.get("name") or ""),
+                subject="",
+                line=0,
+                column=0,
+            )
+        )
+    return rows
+
+
+def function_rows(project_dir: str, result: dict) -> List[dict]:
+    """check_worker rows of the engine's check of the project's Cicode files
+    (ctsim/checkFunctions)."""
+    rows = []
+    for level, problems in (("warning", result.get("warnings") or ()), ("error", result.get("errors") or ())):
+        for w in problems:
+            path, line = str(w.get("file") or ""), int(w.get("line") or 0)
+            where = "%s, line %d" % (w["function"], line) if w.get("function") else "Line %d" % line
+            rows.append(
+                {
+                    "page": path,
+                    "name": os.path.basename(path),
+                    "project": str(w.get("project") or os.path.basename(project_dir)),
+                    "index": -1,
+                    "an": -1,
+                    "object": where if line else "",
+                    "level": level,
+                    "code": str(w.get("kind") or "compile") if level == "warning" else "compile",
+                    "message": str(w.get("message") or w.get("name") or ""),
+                    "field": "",
+                    "subject": str(w.get("name") or "") if level == "warning" else "",
+                    "line": line,
+                    "column": int(w.get("column") or 0),
+                    "file": path,
+                }
+            )
+    return rows
+
+
 def check(req: dict, progress=None, skip_now=None) -> dict:
     """The findings of every page of ``req['projects']``: Check Page's checks, then the engine's
-    check of each expression and command (``req['engine']``: the simulator, '' = bundled)."""
+    check of each expression and command, of the projects' table Cicode and of their Cicode
+    files (``req['engine']``: the simulator, '' = bundled)."""
     from ..editing import EditableDocument
     from ..features import page_checks as PC
     from ..sim import client as C
-    from ..sim.checks import check_field
+    from ..sim.checks import CHECK_TIMEOUT_S, check_field, check_text
 
     pages = pages_of(req["projects"])
     ans: dict = {"format": FORMAT, "rows": [], "pages": len(pages), "checked": 0, "failed": [], "engine": {}}
@@ -94,6 +222,32 @@ def check(req: dict, progress=None, skip_now=None) -> dict:
                     ans["more"] = True
                     return ans
                 ans["rows"].append(_row(path, doc, f))
+        for d in req["projects"]:
+            s = session(d)
+            if s is None or (progress is not None and progress(len(pages), len(pages), "tables") is False):
+                continue
+            for f in table_fields(d):
+                try:
+                    result = check_text(s, f["text"], "command")
+                except Exception as e:  # noqa: BLE001  # swallow-ok: the answer says it
+                    ans["engine"][os.path.basename(d)] = str(e).strip() or type(e).__name__
+                    break
+                ans["rows"].extend(table_rows(d, f, result))
+                if len(ans["rows"]) >= MAX_ROWS:
+                    ans["more"] = True
+                    return ans
+            if sessions.get(d) is None:
+                continue
+            try:
+                result = s.request(
+                    "checkFunctions",
+                    {"project": os.path.basename(os.path.normpath(d))},
+                    timeout=CHECK_TIMEOUT_S,
+                )
+            except Exception as e:  # noqa: BLE001  # swallow-ok: the answer says it
+                ans["engine"][os.path.basename(d)] = str(e).strip() or type(e).__name__
+                continue
+            ans["rows"].extend(function_rows(d, result or {}))
     finally:
         for s in sessions.values():
             if s is not None:
@@ -134,6 +288,108 @@ def replace_in(doc, edits):
         hits = FR.find_hits(doc, opts)
         total.add(FR.replace_hits(doc, hits, opts, r'\g<1>"%s"' % e["new"], label="replace references"))
     return total
+
+
+def _offset(text: str, line: int, column: int):
+    """The index of (line, column), both 1-based, in ``text``; None when it is not in it."""
+    if line < 1 or column < 1:
+        return None
+    starts = [0] + [i + 1 for i, ch in enumerate(text) if ch == "\n"]
+    if line > len(starts):
+        return None
+    at = starts[line - 1] + column - 1
+    return at if at < len(text) else None
+
+
+def replace_in_tables(edits) -> tuple:
+    """Give the table references ``edits`` (table, record, field, line, column, old, new) their
+    new names, the last in a value first. Returns (replaced, problems)."""
+    from ..format import journal, projectlock
+    from ..format.dbf import Dbf
+    from ..io import pgregister
+
+    replaced, problems = 0, []
+    by_table: dict = {}
+    for e in edits:
+        by_table.setdefault(e["table"], {}).setdefault(int(e["record"]), []).append(e)
+    for path, records in by_table.items():
+        d_dir = os.path.dirname(path)
+        changed = 0
+        with projectlock.project(d_dir), journal.transaction("replace references"), Dbf(path) as d:
+            for rec, es in records.items():
+                row = d.decode(d.read(rec))
+                n = 0
+                for e in sorted(es, key=lambda e: (e["field"], -int(e["line"]), -int(e["column"]))):
+                    text = row.get(e["field"], "")
+                    old, new = '"%s"' % e["old"], '"%s"' % e["new"]
+                    at = _offset(text, int(e["line"]), int(e["column"]))
+                    if at is None or text[at : at + len(old)] != old:
+                        problems.append(
+                            "%s, %s: it no longer holds %s there." % (e["name"], e["object"], old)
+                        )
+                        continue
+                    row[e["field"]] = text[:at] + new + text[at + len(old) :]
+                    n += 1
+                if not n:
+                    continue
+                encoded = d.encode(row)
+                if any(d.field(encoded, f) != row[f].rstrip(" ") for f in {e["field"] for e in es}):
+                    problems.append("%s, %s: the new name would not fit." % (es[0]["name"], es[0]["object"]))
+                    continue
+                d.write(rec, encoded)
+                replaced += n
+                changed += n
+            if changed:
+                d.touch()
+        if changed:
+            pgregister.mark_uncompiled(d_dir)
+    return replaced, problems
+
+
+def replace_in_files(edits, backup: str) -> tuple:
+    """Give the Cicode file references ``edits`` (file, line, column, old, new) their new names,
+    the last in a file first, each file backed up into ``backup`` first. Returns (replaced,
+    problems)."""
+    from ..format import projectlock
+    from ..format.fileio import write_atomic
+    from ..infra import backups
+
+    replaced, problems = 0, []
+    by_file: dict = {}
+    for e in edits:
+        by_file.setdefault(e["file"], []).append(e)
+    for path, es in by_file.items():
+        name = os.path.basename(path)
+        try:
+            with projectlock.file(path):
+                with open(path, "rb") as fh:
+                    data = fh.read()
+                text = data.decode("cp1252")
+                n = 0
+                for e in sorted(es, key=lambda e: (-int(e["line"]), -int(e["column"]))):
+                    old, new = '"%s"' % e["old"], '"%s"' % e["new"]
+                    at = _offset(text, int(e["line"]), int(e["column"]))
+                    if at is None or text[at : at + len(old)] != old:
+                        problems.append(
+                            "%s line %d: it no longer holds %s there." % (name, int(e["line"]), old)
+                        )
+                        continue
+                    text = text[:at] + new + text[at + len(old) :]
+                    n += 1
+                if not n:
+                    continue
+                out = text.encode("cp1252")
+                project = os.path.basename(os.path.dirname(os.path.abspath(path)))
+                os.makedirs(os.path.join(backup, project), exist_ok=True)
+                write_atomic(os.path.join(backup, project, name), data)
+                backups.add_entry(
+                    backup, "references", {"library": os.path.abspath(path), "folder": project, "file": name}
+                )
+                write_atomic(path, out)
+                replaced += n
+        except (OSError, UnicodeError) as e:
+            problems.append("%s: %s" % (name, getattr(e, "strerror", None) or e))
+    return replaced, problems
 
 
 def replace_references(req: dict, progress=None, skip_now=None) -> dict:

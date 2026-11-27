@@ -1831,8 +1831,13 @@ class PageBrowserDialog(NewMode, QtWidgets.QDialog):
         from ..dialog.rename_pages import RenamePagesDialog
 
         name = os.path.splitext(os.path.basename(e.path))[0]
+        win = self.parentWidget()
         dlg = RenamePagesDialog(
-            self, os.path.dirname(os.path.abspath(e.path)), [name], before=self.before_delete
+            self,
+            os.path.dirname(os.path.abspath(e.path)),
+            [name],
+            hold=getattr(win, "hold_pages", None),
+            moved=getattr(win, "pages_moved", None),
         )
         dlg.exec()
         new = next((n for _d, o, n in dlg.renamed if o.lower() == name.lower()), None)

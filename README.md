@@ -56,12 +56,12 @@ To report a bug, use Help > Copy Diagnostics and paste the result into an issue.
 
 ## Building from source
 
-You need Python 3.14 and the .NET SDK.
+You need Python 3.15 and the .NET SDK.
 
 ```powershell
 git clone --recursive https://github.com/MSkjel/ctgedit.git
 cd ctgedit
-py -V:3.14 -m venv .venv
+py -V:3.15 -m venv .venv
 .\.venv\Scripts\python -m pip install -r requirements.txt
 dotnet build external\cicode-sim\engine\src\ctsim\ctsim.csproj -c Release -f net48
 .\.venv\Scripts\python -m ctgedit.app

@@ -259,14 +259,19 @@ Rename… on a page opens it with that page ticked.
    you used last.
 3. **Rename** renames each page's files and its rows in the project database. **Update the pages
    that link to them** also changes the Previous, Next and Parent page of the other pages.
+   **Update the project's tables that name them** changes equipment pages, menu items, alarm help
+   pages and the startup, home and splash page parameters.
 
-Names can swap (A to B and B to A). A page open here closes and opens again under its new name;
-a page open in the Graphics Builder must be closed there first. Afterwards, **Undo Rename**
+The rename runs in the background, the progress under the options; **Stop** leaves the
+project being renamed as it was. Names can swap (A to B and B to A). A page open here stays open,
+unsaved changes too, and saves under its new name; a page open in the Graphics Builder must be
+closed there first. Afterwards, **Undo Rename**
 gives the pages their old names back, and **Check References** runs
 [Check Project](troubleshooting.md#check-project) to find the Cicode that still opens a page by
 its old name, such as `PageDisplay("Mixing")`, followed through Include's and the project's
 functions. **Replace References** there gives each one the new name: the open pages in their
-tabs, the closed ones saved after a backup. A name a genie parameter or a genie's definition
+tabs, the closed pages and the Cicode files saved after a backup, the project's tables in place.
+A name a genie parameter or a genie's definition
 holds is listed, not changed. Compile the project to use the new names.
 
 > **Coming from the Graphics Builder:** its Find and Replace hands off to Studio; ctgedit has its

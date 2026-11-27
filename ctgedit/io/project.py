@@ -381,56 +381,61 @@ class Project:
                 d.touch()
         return [i + 1 for i in rows]
 
-    def rename_page_record(self, old: str, new: str) -> list[int]:
-        """Rename page ``old``'s pages.DBF rows to ``new`` (a TITLE equal to the old name too).
-        Returns their 1-based record numbers."""
+    def rename_page_records(self, renames: dict) -> dict:
+        """Give the pages.DBF rows of pages ``renames`` ({old lower case: new}) their new names
+        (a TITLE equal to the old name too). Returns {new: 1-based record numbers}."""
         from ..format.dbf import Dbf
 
         p = self._pages_path()
         if not p:
-            return []
-        out = []
+            return {}
+        out: dict = {}
         with Dbf(p) as d:
-            for i, r in d.find("NAME", old):
+            for i in range(d.nrec):
+                r = d.read(i)
                 if r[:1] == b"*":
+                    continue
+                old = d.field(r, "NAME").strip()
+                new = renames.get(old.lower())
+                if new is None:
                     continue
                 row = d.decode(r)
                 row["NAME"] = new
                 if row.get("TITLE", "").strip().lower() == old.lower():
                     row["TITLE"] = new
                 d.write(i, d.encode(row))
-                out.append(i + 1)
+                out.setdefault(new, []).append(i + 1)
             if out:
                 d.touch()
         return out
 
-    def rename_page_links(self, old: str, new: str) -> list[tuple]:
-        """Point Previous / Next / Parent from ``old`` to ``new``; returns (page, column) of each."""
-        from ..format.dbf import Dbf
-
+    def rename_page_links(self, renames: dict) -> list[tuple]:
+        """Point Previous / Next / Parent at the new names of ``renames`` ({old lower case:
+        new}); returns (page, column) of each."""
         p = self._pages_path()
         if not p:
             return []
+        return [(row.get("NAME", "").strip(), c) for row, c in _rename_values(p, PAGE_LINK_COLUMNS, renames)]
+
+    def rename_page_names(self, renames: dict) -> list[tuple]:
+        """Give the equipment, menu, alarm help and [Page] parameter entries naming a page of
+        ``renames`` ({old lower case: new}) its new name; returns (table, column) of each."""
         out = []
-        low = old.strip().lower()
-        with Dbf(p) as d:
-            cols = [c for c in PAGE_LINK_COLUMNS if c in d.fmap]
-            if not cols:
-                return []
-            for i in range(d.nrec):
-                r = d.read(i)
-                if r[:1] == b"*":
-                    continue
-                hit = [c for c in cols if d.field(r, c).strip().lower() == low]
-                if not hit:
-                    continue
-                row = d.decode(r)
-                for c in hit:
-                    row[c] = new
-                    out.append((row.get("NAME", "").strip(), c))
-                d.write(i, d.encode(row))
-            if out:
-                d.touch()
+        for table, cols in PAGE_NAME_COLUMNS.items():
+            p = self._table_path(table)
+            if p:
+                out += [(table, c) for _row, c in _rename_values(p, cols, renames)]
+        p = self._table_path("param.dbf")
+        if p:
+            keys = {k.lower() for k in PAGE_PARAMETERS}
+
+            def page_parameter(row: dict) -> bool:
+                return (
+                    row.get("SECTION", "").strip().lower() == "page"
+                    and row.get("NAME", "").strip().lower() in keys
+                )
+
+            out += [("param.dbf", c) for _row, c in _rename_values(p, ("DATA",), renames, page_parameter)]
         return out
 
     def _pages_path(self) -> str | None:
@@ -529,87 +534,174 @@ def delete_page(project_dir: str, page_name: str, *, files: bool = True) -> dict
 #: the pages.DBF columns that name another page (Previous, Next, Parent)
 PAGE_LINK_COLUMNS = ("PREV_PAGE", "NEXT_PAGE", "PARENT")
 
+#: the columns of other tables that name a page: equipment, menus, alarm help pages
+PAGE_NAME_COLUMNS = {
+    "equip.dbf": ("PAGE", "HELP"),
+    "pagemenu.dbf": ("PAGE", "TARGETPAGE"),
+    **{
+        t + ".dbf": ("HELP",)
+        for t in ("digalm", "anaalm", "advalm", "argdig", "argana", "hresalm", "tsdig", "tsana", "dbptalm")
+    },
+}
+#: the [Page] parameters that name a page
+PAGE_PARAMETERS = ("Startup", "HomePage", "Splash")
 
-def rename_page(
-    project_dir: str, old: str, new: str, *, links: bool = True, link_dirs: Sequence[str] = ()
+
+def _rename_values(path: str, cols, renames: dict, where=None) -> list[tuple]:
+    """Set the columns ``cols`` of table ``path`` that hold an old name of ``renames`` ({old
+    lower case: new}) to its new name, in the rows ``where(row)`` allows; returns (row, column)
+    of each."""
+    from ..format.dbf import Dbf
+
+    out = []
+    with Dbf(path) as d:
+        cols = [c for c in cols if c in d.fmap]
+        if not cols:
+            return []
+        for i in range(d.nrec):
+            r = d.read(i)
+            if r[:1] == b"*":
+                continue
+            hit = [c for c in cols if d.field(r, c).strip().lower() in renames]
+            if not hit:
+                continue
+            row = d.decode(r)
+            if where is not None and not where(row):
+                continue
+            for c in hit:
+                row[c] = renames[row[c].strip().lower()]
+                out.append((row, c))
+            d.write(i, d.encode(row))
+        if out:
+            d.touch()
+    return out
+
+
+class RenameStopped(Exception):
+    """Stop was asked for: nothing was renamed."""
+
+
+def rename_pages(
+    project_dir: str,
+    pairs: Sequence[tuple],
+    *,
+    links: bool = True,
+    names: bool = True,
+    link_dirs: Sequence[str] = (),
+    progress=None,
 ) -> dict:
-    """Rename page ``old`` to ``new``: its .ctg and .ctF, its pages.DBF row, its page table
-    rows, and with ``links`` the Previous / Next / Parent of the pages in the project and in
-    ``link_dirs`` that name it. A failure changes nothing."""
+    """Rename pages ``pairs`` [(old, new)] of ``project_dir`` in one go: their .ctg and .ctF,
+    pages.DBF rows and page table rows; with ``links`` the Previous / Next / Parent naming them,
+    with ``names`` the equipment, menu, alarm help and [Page] parameter entries
+    (Project.rename_page_names), in the project and in ``link_dirs``. Names may swap. A failure,
+    or ``progress(i, n, step)`` returning False (RenameStopped), changes nothing."""
     import contextlib
 
     from . import pgregister, pendingrows
     from ..format import journal, projectlock
 
-    old_ctg = pgregister.find_file(project_dir, old + ".ctg")
-    if old_ctg is None:
-        raise FileNotFoundError("page %s is not in %s" % (old, project_dir))
-    old = os.path.splitext(os.path.basename(old_ctg))[0]  # (as the file spells it)
-    rep: dict = {"page": old, "new": new, "files": [], "records": [], "tables": {}, "links": []}
-    rep.update(errors=[], compstate=None)
-    if new == old:
+    rep: dict = {"renamed": [], "records": {}, "tables": {}, "links": [], "names": [], "errors": []}
+    rep["compstate"] = None
+    spelt = []
+    for old, new in pairs:
+        f = pgregister.find_file(project_dir, old + ".ctg")
+        if f is None:
+            raise FileNotFoundError("page %s is not in %s" % (old, project_dir))
+        old = os.path.splitext(os.path.basename(f))[0]  # (as the file spells it)
+        if new != old:
+            spelt.append((old, new))
+    if not spelt:
         return rep
-    same = new.lower() == old.lower()  # (a change of case: the same file on Windows)
-    new_ctg = os.path.join(project_dir, new + ".ctg")
+    project = os.path.basename(os.path.normpath(project_dir))
+    leaving = {o.lower() for o, _n in spelt}
+    if len(leaving) < len(spelt) or len({n.lower() for _o, n in spelt}) < len(spelt):
+        raise ValueError("two pages of %s are given the same name" % project)
+    renames = {o.lower(): n for o, n in spelt}
+    here = os.path.normcase(os.path.abspath(project_dir))
+    others = [d for d in link_dirs if os.path.normcase(os.path.abspath(d)) != here]
+    steps = ["page files", "pages", "page tables"] + [
+        os.path.basename(os.path.normpath(d)) for d in [project_dir] + others
+    ]
+
+    def step(k: int) -> None:
+        if progress is not None and progress(k, len(steps), steps[k]) is False:
+            raise RenameStopped()
+
     proj = Project(project_dir)
-    with projectlock.page(old_ctg), projectlock.page(new_ctg), projectlock.project(project_dir):
-        if not same and (
-            pgregister.find_file(project_dir, new + ".ctg") is not None or proj.page_record(new) is not None
-        ):
-            raise FileExistsError("project %s already has a page %s" % (os.path.basename(project_dir), new))
+    with contextlib.ExitStack() as locks:
+        for o, n in spelt:
+            locks.enter_context(projectlock.page(os.path.join(project_dir, o + ".ctg")))
+            locks.enter_context(projectlock.page(os.path.join(project_dir, n + ".ctg")))
+        locks.enter_context(projectlock.project(project_dir))
+        for _o, n in spelt:
+            if n.lower() not in leaving and (
+                pgregister.find_file(project_dir, n + ".ctg") is not None or proj.page_record(n) is not None
+            ):
+                raise FileExistsError("project %s already has a page %s" % (project, n))
+        # every file goes to a spare name first, then to its own: a swap needs no third page
         moves = []
-        for ext in (".ctg", ".ctF"):
-            src = pgregister.find_file(project_dir, old + ext)
-            if src is not None:
-                moves.append((src, os.path.join(project_dir, new + os.path.splitext(src)[1])))
+        for k, (o, n) in enumerate(spelt):
+            for ext in (".ctg", ".ctF"):
+                src = pgregister.find_file(project_dir, o + ext)
+                if src is not None:
+                    spare = os.path.join(project_dir, "~ctgedit-rename-%d%s" % (k, os.path.splitext(src)[1]))
+                    moves.append((src, spare, os.path.join(project_dir, n + os.path.splitext(src)[1])))
         done = []
         try:
-            for src, dst in moves:
-                if not same and os.path.exists(dst):
-                    raise FileExistsError(dst)
-                os.rename(src, dst)
-                done.append((src, dst))
-            with journal.transaction("rename page %s to %s" % (old, new)):
-                rows = pgregister.export_page_rows(project_dir, old)
-                rep["records"] = proj.rename_page_record(old, new)
-                if rows:
-                    rep["tables"] = pgregister.delete_page_rows(project_dir, old)
-                    moved = {
-                        t: [dict({k: v for k, v in r.items() if k != "_record"}, PAGE=new) for r in rs]
-                        for t, rs in rows.items()
-                    }
-                    pgregister.restore_page_rows(project_dir, new, moved)
-                if links:
-                    rep["links"] = proj.rename_page_links(old, new)
-                    here = os.path.normcase(os.path.abspath(project_dir))
-                    for d in link_dirs:
-                        if os.path.normcase(os.path.abspath(d)) == here:
-                            continue
-                        with projectlock.project(d):
-                            got = Project(d).rename_page_links(old, new)
-                        if got:
-                            pgregister.mark_uncompiled(d)
-                        rep["links"] += [
-                            (os.path.basename(os.path.normpath(d)) + "\\" + n, c) for n, c in got
-                        ]
-                if rep["records"] or rep["tables"] or rep["links"]:
+            step(0)
+            for src, spare, _dst in moves:
+                if os.path.exists(spare):
+                    raise FileExistsError(spare)
+                os.rename(src, spare)
+                done.append((src, spare))
+            for _src, spare, dst in moves:
+                os.rename(spare, dst)
+                done.append((spare, dst))
+            with journal.transaction("rename pages of %s" % project):
+                step(1)
+                rep["records"] = proj.rename_page_records(renames)
+                step(2)
+                rep["tables"] = pgregister.rename_page_rows(project_dir, renames)
+                for k, d in enumerate([project_dir] + others):
+                    step(3 + k)
+                    other = d is not project_dir
+                    with projectlock.project(d) if other else contextlib.nullcontext():
+                        p = Project(d) if other else proj
+                        got = p.rename_page_links(renames) if links else []
+                        named = p.rename_page_names(renames) if names else []
+                    tag = os.path.basename(os.path.normpath(d)) + "\\" if other else ""
+                    rep["links"] += [(tag + n, c) for n, c in got]
+                    rep["names"] += [(tag + t, c) for t, c in named]
+                    if other and (got or named):
+                        pgregister.mark_uncompiled(d)
+                if rep["records"] and rep["tables"]:
+                    pgregister.log_changes(
+                        project_dir,
+                        [
+                            {"NAME": "pages", "KEY": n, "RECORD_NO": str(recs[-1])}
+                            for n, recs in rep["records"].items()
+                        ],
+                    )
+                if rep["records"] or rep["tables"] or rep["links"] or rep["names"]:
                     rep["compstate"] = pgregister.mark_uncompiled(project_dir)
         except BaseException:
-            for src, dst in reversed(done):
+            for a, b in reversed(done):
                 with contextlib.suppress(OSError):  # swallow-ok: put back as far as it goes
-                    os.rename(dst, src)
+                    os.rename(b, a)
             raise
-        rep["files"] = [dst for _src, dst in done]
-        # a pending-rows marker moves with the page
-        if pendingrows.marked(old_ctg) is not None:
-            pendingrows.clear(old_ctg)
-            pendingrows.mark(new_ctg)
-        rdb = pgregister.find_file(project_dir, old + ".rdb")
-        if rdb is not None:
-            try:
-                os.remove(rdb)
-            except OSError as e:
-                rep["errors"].append("%s: %s" % (os.path.basename(rdb), e.strerror or e))
+        rep["renamed"] = spelt
+        for o, n in spelt:
+            old_ctg, new_ctg = os.path.join(project_dir, o + ".ctg"), os.path.join(project_dir, n + ".ctg")
+            # a pending-rows marker moves with the page
+            if pendingrows.marked(old_ctg) is not None:
+                pendingrows.clear(old_ctg)
+                pendingrows.mark(new_ctg)
+            rdb = pgregister.find_file(project_dir, o + ".rdb")
+            if rdb is not None:
+                try:
+                    os.remove(rdb)
+                except OSError as e:
+                    rep["errors"].append("%s: %s" % (os.path.basename(rdb), e.strerror or e))
     return rep
 
 

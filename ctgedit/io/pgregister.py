@@ -8,7 +8,7 @@ import re
 import struct
 import time
 import uuid
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from ..format.textcodec import CODEC
 from ..format import codes as _codes
@@ -1032,24 +1032,86 @@ def page_tables(project_dir: str) -> List[Tuple[str, str]]:
 
 
 @_journaled("delete page rows")
-def pack_page_tables(project_dir: str, tables: Sequence[str] = ()) -> Dict[str, int]:
-    """Pack the project's page tables."""
+def pack_project_tables(project_dir: str, progress=None) -> dict:
+    """Remove the deleted rows of every table of the project and build their indexes again,
+    as Studio's Pack does. A table the change log (changes.DBF) names keeps its record
+    numbers until the next compile. ``progress(i, n, table)`` returning False stops between
+    tables. Returns {"packed": {table: rows removed}, "saved": bytes, "kept": [tables],
+    "failed": [(table, why)]}."""
     from ..format import projectlock
     from ..format.dbf import pack_table
+    from ..format.projects import read_dbf_rows
 
-    names = list(tables) or (list(PAGE_TABLES) + ["activex"])
-    out: Dict[str, int] = {}
+    rep: dict = {"packed": {}, "saved": 0, "kept": [], "failed": []}
+    try:
+        names = sorted(f for f in os.listdir(project_dir) if f.lower().endswith(".dbf"))
+    except OSError as e:
+        rep["failed"].append(("", e.strerror or str(e)))
+        return rep
+    ch = _find_file(project_dir, "changes.DBF")
+    logged = {str(r.get("NAME") or "").strip().lower() for r in (read_dbf_rows(ch) if ch else ())}
     with projectlock.project(project_dir):
-        for t in names:
-            path = _find_file(project_dir, t + ".DBF")
-            if path is None:
+        for i, fn in enumerate(names):
+            table = os.path.splitext(fn)[0]
+            if progress is not None and progress(i, len(names), table) is False:
+                break
+            if table.lower() in logged:
+                rep["kept"].append(table)
                 continue
-            ndx = _find_file(project_dir, t + ".NDX")
+            path = os.path.join(project_dir, fn)
+            ndx = _find_file(project_dir, table + ".NDX")
             idx = [ndx] if ndx is not None and os.path.getsize(ndx) >= 1024 else []
-            n = pack_table(path, idx, case=t.lower() == "pglang" and lang_case_sensitive())
+            case = False
+            if idx:
+                with open(idx[0], "rb") as fh:
+                    key = fh.read(244)[24:244].split(b"\0")[0].strip().upper()
+                case = key == b"NATIVE" and lang_case_sensitive()
+            before = os.path.getsize(path) + sum(os.path.getsize(x) for x in idx)
+            try:
+                n = pack_table(path, idx, case=case)
+            except (OSError, ValueError) as e:
+                rep["failed"].append((table, getattr(e, "strerror", None) or str(e)))
+                continue
             if n:
-                out[t] = n
-    return out
+                rep["packed"][table] = n
+                rep["saved"] += before - os.path.getsize(path) - sum(os.path.getsize(x) for x in idx)
+    return rep
+
+
+def rename_page_rows(project_dir: str, renames: Dict[str, str], *, when: Optional[_dt.date] = None) -> dict:
+    """Give the rows of pages ``renames`` ({old lower case: new}) in every page table and
+    activex their new names in place, each table opened once and its index built again;
+    {table: rows renamed}."""
+    from ..format.dbf import Dbf, rebuild_ndx
+
+    rep: dict = {}
+    for table in PAGE_TABLES + ("activex",):
+        path = _find_file(project_dir, table + ".DBF")
+        if path is None:
+            continue
+        with Dbf(path) as dbf:
+            if "PAGE" not in dbf.fmap:
+                continue
+            ndx = _open_ndx(project_dir, table, writable=False)
+            try:
+                hits = [
+                    (i, new)
+                    for old, new in renames.items()
+                    for i, r in _page_records(dbf, ndx, "PAGE", old)
+                    if r[:1] != b"*"
+                ]
+            finally:
+                if ndx is not None:
+                    ndx.close()
+            if not hits:
+                continue
+            for i, new in hits:
+                dbf.set_field(i, "PAGE", new)
+            dbf.touch(when)
+            if ndx is not None:
+                rebuild_ndx(dbf, ndx.path, case=table == "pglang" and lang_case_sensitive())
+            rep[table] = len(hits)
+    return rep
 
 
 def delete_page_rows(

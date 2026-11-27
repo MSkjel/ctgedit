@@ -74,10 +74,45 @@ def test_a_table_without_deleted_records_is_left_alone(ex, tmp_path):
     assert (open(p, "rb").read(), open(n, "rb").read()) == before
 
 
-def test_pack_page_tables_of_a_project(ex, tmp_path):
+def test_pack_project_tables_of_a_project(ex, tmp_path):
     for t in ("pgtouch", "pgkey"):
         _copy(ex, tmp_path, t)
         _flag(str(tmp_path / (t + ".DBF")), every=2)
-    got = PR.pack_page_tables(str(tmp_path))
-    assert set(got) == {"pgtouch", "pgkey"} and all(v > 0 for v in got.values())
-    assert PR.pack_page_tables(str(tmp_path)) == {}
+    got = PR.pack_project_tables(str(tmp_path))
+    assert set(got["packed"]) == {"pgtouch", "pgkey"} and all(v > 0 for v in got["packed"].values())
+    assert got["saved"] > 0 and not got["kept"] and not got["failed"]
+    assert PR.pack_project_tables(str(tmp_path))["packed"] == {}
+
+
+def test_a_table_the_change_log_names_keeps_its_record_numbers(ex, tmp_path):
+    from ctgedit.format.dbf import create_table
+
+    p, _n = _copy(ex, tmp_path, "pgtouch")
+    _flag(p, every=2)
+    before = open(p, "rb").read()
+    create_table(
+        str(tmp_path / "changes.DBF"),
+        [("NAME", 16), ("KEY", 64), ("RECORD_NO", 10)],
+        [{"NAME": "pgtouch", "KEY": "X", "RECORD_NO": "3"}],
+    )
+    got = PR.pack_project_tables(str(tmp_path))
+    assert got["kept"] == ["pgtouch"] and "pgtouch" not in got["packed"]
+    assert open(p, "rb").read() == before
+
+
+def test_pack_database_in_a_helper_process_and_its_result(ex, tmp_path):
+    from ctgedit.ui.window.library import LibraryCommands
+    from ctgedit.workers import pack_worker as PW
+
+    for t in ("pgtouch", "pgkey"):
+        _copy(ex, tmp_path, t)
+        _flag(str(tmp_path / (t + ".DBF")), every=2)
+    ans = PW.pack({"dirs": [str(tmp_path)]})
+    (proj,) = ans["projects"]
+    assert set(proj["packed"]) == {"pgtouch", "pgkey"}
+    lines = LibraryCommands._pack_database_lines(ans)
+    assert lines[0].startswith("2 tables packed,") and any("pgtouch" in x for x in lines)
+    assert (
+        LibraryCommands._pack_database_lines(PW.pack({"dirs": [str(tmp_path)]}))[0]
+        == "No deleted rows: nothing to pack."
+    )

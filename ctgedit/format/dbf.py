@@ -193,6 +193,13 @@ class Dbf:
         self.fh.seek(self._off(i))
         self.fh.write(rec)
 
+    def set_field(self, i: int, name: str, value: str) -> None:
+        """Write field ``name`` of record ``i``, its other bytes as they are."""
+        o, ln = self.fmap[name.upper()]
+        raw = encode_field(value, "the %s field of %s" % (name, os.path.basename(self.path)))
+        self.fh.seek(self._off(i) + o)
+        self.fh.write(truncate(raw, ln).ljust(ln))
+
     def delete(self, i: int) -> None:
         self.fh.seek(self._off(i))
         self.fh.write(b"*")
@@ -565,6 +572,39 @@ def pack_table(
     for nt, ndx_path in built:
         os.replace(nt, ndx_path)
     return dropped
+
+
+def rebuild_ndx(dbf: "Dbf", ndx_path: str, case: bool = False) -> None:
+    """Build index ``ndx_path`` again from every record of the open table ``dbf`` (deleted
+    ones too, as an index holds them) and write it over the old one through the journal. A
+    new index with fewer pages than the old keeps the old page count, the pages after its
+    last unused."""
+    from . import journal
+
+    with open(ndx_path, "rb") as fh:
+        h = fh.read(PAGE_SIZE)
+    old_pages = os.path.getsize(ndx_path) // PAGE_SIZE
+    klen = struct.unpack_from("<H", h, 12)[0]
+    expr = h[24 : 24 + 220].split(b"\0")[0].decode(CODEC).strip()
+    tmp = ndx_path + ".rebuild"
+    try:
+        create_ndx(tmp, expr, klen)
+        with open(tmp, "r+b") as fh:  # keep the original's unique flag
+            fh.seek(23)
+            fh.write(h[23:24])
+        _fill_index(tmp, [(dbf.field(dbf.read(r), expr), r + 1) for r in range(dbf.nrec)], case)
+        with open(tmp, "rb") as fh:
+            data = bytearray(fh.read())
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+    pages = len(data) // PAGE_SIZE
+    if pages < old_pages:
+        data += bytes((old_pages - pages) * PAGE_SIZE)
+        struct.pack_into("<I", data, 4, old_pages)
+    with journal.open_patch(ndx_path) as fh:
+        fh.seek(0)
+        fh.write(bytes(data))
 
 
 def _fill_index(path: str, items, case: bool = False) -> None:
