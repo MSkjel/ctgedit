@@ -1,6 +1,10 @@
 """Quick Open (Ctrl+Shift+O): search pages, library items, tags, functions and objects."""
 
 from __future__ import annotations
+
+from ...infra.paths import path_key
+
+from ..names import plural
 from ...format.cnum import is_digits
 from ..style.theme import sp as _sp
 
@@ -70,14 +74,10 @@ OBJECT_ICON = {
 }
 #: the library extension of each element kind
 ELEMENT_EXT = {"symbol": "ctl", "genie": "ctm", "supergenie": "ctm", "template": "ctt"}
-#: the prefixes that hand the text to the command palette
-PALETTE_PREFIXES = (">", "?", "set:")
 #: the rows shown, the tags and the objects a search looks at: the defaults of Settings >
 #: Ribbon > Search > Quick Open shows at most (ui/prefs/timing_options.quick_open_limits: the tags
 #: and objects follow the rows)
 MAX_ROWS = 40
-MAX_TAGS = 200
-MAX_OBJECTS = 60
 #: the two scopes Tab switches between
 SCOPES = ("project", "install")
 SCOPE_LABEL = {"project": "This project", "install": "All projects"}
@@ -223,7 +223,7 @@ def function_hits(project_dir: str) -> list:
     from ...io import cicode_catalog as CC
     from ...io.tagscope import scope
 
-    key = os.path.normcase(os.path.abspath(project_dir))
+    key = path_key(project_dir)
     try:
         stamps = CC.ci_stamps(project_dir)
     except Exception:  # noqa: BLE001
@@ -572,7 +572,7 @@ def select_objects(window, indices) -> None:
     if box is not None:
         l, t, r, b = box
         window.view.frame_rect(QtCore.QRectF(l, t, max(1, r - l), max(1, b - t)))
-    window.statusBar().showMessage("%d object%s selected." % (len(idx), "" if len(idx) == 1 else "s"), 4000)
+    window.statusBar().showMessage("%s selected." % (plural(len(idx), "object")), 4000)
 
 
 def make_page_from_template(window, style: str, element: str) -> None:
@@ -613,7 +613,7 @@ def open_cicode_file(window, path: str) -> None:
     """The .ci file in the program Windows opens it with (Plant SCADA Studio when it is
     set up for .ci files)."""
     if not path or not os.path.isfile(path):
-        window.statusBar().showMessage("The Cicode file was not found", 6000)
+        window.statusBar().showMessage("The Cicode file was not found.", 6000)
         return
     QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(path))
     window.statusBar().showMessage("Opened %s" % os.path.basename(path), 4000)
@@ -872,16 +872,16 @@ class QuickOpen(QtWidgets.QFrame):
             out.append(("Open tabs", h))
             p = getattr(h.data, "path", "")
             if p:
-                seen.add(os.path.normcase(os.path.abspath(p)))
+                seen.add(path_key(p))
         cur = getattr(getattr(self._window, "doc", None), "path", "") or ""
-        cur_key = os.path.normcase(os.path.abspath(cur)) if cur else ""
+        cur_key = path_key(cur) if cur else ""
         recent = []
         try:
-            recent = [os.path.normcase(os.path.abspath(p)) for p in self._window.recent_pages()]
+            recent = [path_key(p) for p in self._window.recent_pages()]
         except Exception:  # noqa: BLE001  # swallow-ok: no recent list, the pages as they are
             pass
         pages = self._sources.pages
-        by_path = {os.path.normcase(os.path.abspath(h.data)): h for h in pages}
+        by_path = {path_key(h.data): h for h in pages}
         for p in recent:
             h = by_path.get(p)
             if h is not None and p not in seen and p != cur_key:
@@ -889,7 +889,7 @@ class QuickOpen(QtWidgets.QFrame):
                 seen.add(p)
         most = _limits()[0] * 4
         for h in sorted(pages, key=lambda h: h.name.lower()):
-            p = os.path.normcase(os.path.abspath(h.data))
+            p = path_key(h.data)
             if p in seen:
                 continue
             seen.add(p)

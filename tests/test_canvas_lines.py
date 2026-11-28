@@ -38,8 +38,8 @@ def host(fx_page):
     C_look.set_canvas_lines()
     for e in getattr(w, "_docs", []):
         e["doc"].dirty = False
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.hide()
     w.deleteLater()
 
@@ -91,8 +91,8 @@ def test_the_window_reads_them_and_a_wide_guideline_is_grabbed_anywhere_on_it():
         assert C_look.guide_reach() >= C_look.guide_width() / 2.0  # (all of a wide one grabs)
     finally:
         C_look.set_canvas_lines()
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.deleteLater()
 
 

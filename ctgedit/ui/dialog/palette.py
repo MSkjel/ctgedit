@@ -137,6 +137,8 @@ KEYWORDS = {
     "act_obj_props": ("animation", "fill level", "level", "dynamics", "colour"),
     "act_page_props": ("page settings", "title", "template"),
     "act_simulate": ("test", "preview", "simulator"),
+    "act_preview_states": ("debug", "test", "hidden when", "colour state", "what if"),
+    "act_click_map": ("debug", "touch", "button", "hit test", "click"),
     "act_run": ("start runtime",),
     "act_compile": ("build",),
     "act_goto": ("an", "animation number", "jump"),
@@ -251,7 +253,7 @@ def command_rank(query: str, label: str, crumb: str) -> int:
     m = SR.match(q, label, substring_min=4)
     if m is not None:
         return m[0]
-    c = SR.match(q, crumb, substring_min=99) if crumb else None
+    c = SR.match(q, crumb, substring_min=99, loose=False) if crumb else None
     if c is not None and c[0] < 100:
         return 300 + c[0]
     return -1
@@ -1190,7 +1192,7 @@ class CommandPalette(QtWidgets.QFrame):
                     m = SR.match(q, c.name, substring_min=4)
                     s, hits = (m[0] + 40, m[1]) if m is not None else (-1, ())
                 if s < 0 and c.crumb:
-                    cm = SR.match(q, c.crumb, substring_min=99)
+                    cm = SR.match(q, c.crumb, substring_min=99, loose=False)
                     if cm is not None and cm[0] < 100:
                         s = 300 + cm[0]
                 a_r = _alias_rank(q, c.bare)
@@ -1305,9 +1307,9 @@ class CommandPalette(QtWidgets.QFrame):
                 s, hits = 0, ()
             elif q:
                 # (no loose letters: 'rot' is not 'Ask before closing ... recording or tags')
-                m = SR.match(q, e.label, substring_min=3)
+                m = SR.match(q, e.label, substring_min=3, loose=False)
                 if m is None or m[0] >= 100:
-                    w = SR.match(q, e.words.replace("\n", " "), substring_min=99)
+                    w = SR.match(q, e.words.replace("\n", " "), substring_min=99, loose=False)
                     if w is None or w[0] >= 100:
                         continue
                     s, hits = 200 + w[0], ()

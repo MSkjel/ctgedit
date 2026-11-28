@@ -137,7 +137,7 @@ def _buttons_down() -> bool:
         from PySide6 import QtGui
 
         return QtGui.QGuiApplication.mouseButtons() != QtGui.Qt.MouseButton.NoButton
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- swallow-ok: no Qt application
         return False
 
 

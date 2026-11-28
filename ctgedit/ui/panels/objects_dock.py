@@ -1,6 +1,8 @@
 """The Objects panel: a filterable tree of the page's objects."""
 
 from __future__ import annotations
+
+from ..names import plural
 from ..style.theme import sp as _sp  # (the spacing scale)
 
 import bisect
@@ -24,6 +26,9 @@ from ..names import (
     composite_binding,
     first_tag,
     binding_text,
+    chain_lines,
+    values_text,
+    copy_bindings,
 )
 
 try:
@@ -129,6 +134,7 @@ COLUMNS = (
     ("an", "AN"),
     ("element", "Element"),
     ("tag", "Tag"),
+    ("parameters", "Parameters"),
     ("position", "Position"),
 )
 _COLUMN_KEYS = tuple(k for k, _h in COLUMNS)
@@ -191,7 +197,7 @@ def _setting(key: str, default):
 
 def _row_text(index: int, obj: GraphicObject, page: Page | None = None) -> str:
     """The classic row text (Settings > Appearance > Objects panel > Row labels > Kind and
-    AN first): 'Genie (1)  AN 588 · example.pump_b'."""
+    AN first): 'Genie (1)  AN 588 Â· example.pump_b'."""
     suffix = obj.cls or obj.style.text[:20] or obj.genie_template
     suffix = " ".join(suffix.split())
     if suffix.lower().endswith((".<ctt", ".<ctm", ".<ctl")):
@@ -214,7 +220,7 @@ def _row_text(index: int, obj: GraphicObject, page: Page | None = None) -> str:
     pic = picture_text(obj)
     if pic:
         base += "  " + pic
-    return "%s · %s" % (base, suffix) if suffix else base
+    return "%s Â· %s" % (base, suffix) if suffix else base
 
 
 def picture_text(obj: GraphicObject) -> str:
@@ -410,7 +416,7 @@ class _RowDelegate(QtWidgets.QStyledItemDelegate):
         h = rect.height()
         x = self._draw_runs(painter, x, y, h, min(pw, avail), p_runs, font, bold, fm, fmb, fg)
         rest = rect.right() - x - gap
-        if s_runs and rest > fm.horizontalAdvance("x…"):
+        if s_runs and rest > fm.horizontalAdvance("xâ€¦"):
             self._draw_runs(painter, x + gap, y, h, rest, s_runs, font, bold, fm, fmb, dim)
 
     @staticmethod
@@ -434,7 +440,7 @@ class _RowDelegate(QtWidgets.QStyledItemDelegate):
     @staticmethod
     def _draw_runs(painter, x, y, h, width, runs, font, bold, fm, fmb, colour) -> int:
         """Draw ``runs`` from ``x`` in ``width`` (the last one that does not fit is cut with
-        '…'); the x after them."""
+        'â€¦'); the x after them."""
         painter.setPen(colour)
         end = x + width
         for text, b in runs:
@@ -885,7 +891,7 @@ class ObjectsDock(QtWidgets.QWidget):
         self._tree.setUniformRowHeights(True)
         self._tree.setMouseTracking(True)
         self._tree.viewport().setAttribute(QtCore.Qt.WA_Hover, True)
-        # (a rename starts with F2, the slow second click or Rename…: no double-click edit)
+        # (a rename starts with F2, the slow second click or Renameâ€¦: no double-click edit)
         self._tree.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self._delegate = _RowDelegate(self)
         self._tree.setItemDelegate(self._delegate)
@@ -1550,7 +1556,7 @@ class ObjectsDock(QtWidgets.QWidget):
             flags |= F_PART
         elif not flags & F_TEMPLATE:
             flags |= F_RENAME
-        info = row_info(page, index, obj)
+        info = row_info(page, index, obj, self._genie_values)
         if info.name:
             flags |= F_NAMED
         if info.commands:
@@ -1570,7 +1576,9 @@ class ObjectsDock(QtWidgets.QWidget):
             text = "  ".join(x for x in (primary, secondary, an) if x)
         cols = ()
         if len(self.columns) > 1:
-            cols = tuple(self._column_value(page, index, obj, c) for c in self.columns[1:])
+            cols = tuple(
+                self._column_value(page, index, obj, c, self._genie_values) for c in self.columns[1:]
+            )
         key = _kind_key(obj)
         ic = "symbol" if key == "symbol" else _KIND_ICON.get(obj.kind, "unknown")
         return RowLook(text, ic, tone, primary, secondary, an, flags, key, keywords, tags, lib, cols)
@@ -1586,8 +1594,26 @@ class ObjectsDock(QtWidgets.QWidget):
                 return True
         return False
 
+    #: the window's genie_values(index) of the page shown (EditableDocument.genie_values: the
+    #: values a genie gets as the Graphics Builder composes the page); None: the stored ones
+    genie_values = None
+
+    def _genie_values(self, index: int) -> list:
+        fn = self.genie_values
+        if fn is None:
+            return []
+        try:
+            return list(fn(index))
+        except Exception:  # noqa: BLE001
+            from ...infra.logsetup import note_exception
+
+            note_exception("objects_dock._genie_values", index=index)
+            return []
+
     @staticmethod
-    def _column_value(page: Page, index: int, obj: GraphicObject, key: str) -> str:
+    def _column_value(page: Page, index: int, obj: GraphicObject, key: str, values=None) -> str:
+        """Column ``key`` of the row of ``obj``; ``values``: the genie values of the page's
+        genies (_genie_values), None for their stored bindings."""
         if key == "name":
             return object_name_of(obj)
         if key == "kind":
@@ -1600,9 +1626,13 @@ class ObjectsDock(QtWidgets.QWidget):
             # (an equipment path by its last part, as the row shows it: the tool tip has
             # the whole path)
             k, v = (
-                composite_binding(page, index) if obj.kind.value == "composite_genie" else main_binding(obj)
+                composite_binding(page, index)
+                if obj.kind.value == "composite_genie"
+                else main_binding(obj, copy_bindings(values, index, obj))
             )
             return binding_text(k, v) if v else first_tag(obj)
+        if key == "parameters":
+            return values_text(page, index, values)
         if key == "position":
             g = obj.geometry
             return "%d, %d" % (g.x, g.y) if g is not None else ""
@@ -1613,7 +1643,7 @@ class ObjectsDock(QtWidgets.QWidget):
         if old is None or old.text != look.text:
             item.setText(0, look.text)
         if old is None or old.icon != look.icon:
-            item.setIcon(0, icon(look.icon, 16))
+            item.setIcon(0, icon(look.icon))
         if old is None or old.keywords != look.keywords:
             item.setData(0, KEYWORDS_ROLE, look.keywords)
         if old is None or old.columns != look.columns:
@@ -1644,7 +1674,7 @@ class ObjectsDock(QtWidgets.QWidget):
                 look = row_look(page, i, obj)
                 # (_show_look of a new row)
                 item.setText(0, look.text)
-                item.setIcon(0, icon(look.icon, 16))
+                item.setIcon(0, icon(look.icon))
                 item.setData(0, KEYWORDS_ROLE, look.keywords)
                 for k, v in enumerate(look.columns, 1):
                     item.setText(k, v)
@@ -2098,7 +2128,7 @@ class ObjectsDock(QtWidgets.QWidget):
             self._guard = False
         self.selectionChanged.emit(sorted(want))
         if want:
-            self.statusMessage.emit("%d object%s selected." % (len(want), "" if len(want) == 1 else "s"))
+            self.statusMessage.emit("%s selected." % (plural(len(want), "object")))
 
     @_rows_complete
     def _select_from_search(self) -> None:
@@ -2292,12 +2322,26 @@ class ObjectsDock(QtWidgets.QWidget):
             return "Lock it, saved with the page: it cannot be selected or moved until it is unlocked"
         lines = [look.primary + (("  " + look.secondary) if look.secondary else "")]
         page = getattr(self, "_shown_page", None)
-        k, v = composite_binding(page, idx) if obj.kind.value == "composite_genie" else main_binding(obj)
+        k, v = (
+            composite_binding(page, idx)
+            if obj.kind.value == "composite_genie"
+            else main_binding(obj, copy_bindings(self._genie_values, idx, obj))
+        )
         if v and k.lower() in ("equipment", "equip", "equipmentref"):
             lines.append("%s: %s" % (k, v))
-        el = element_label(obj, page, short=False)
-        if el:
-            lines.append("Element: %s" % el)
+        # (a nested genie tree: each level's element and the values it gets, the outermost
+        # first; this object's own last when it is one)
+        chain = chain_lines(page, idx, values=self._genie_values)
+        if len(chain) > 1:
+            lines.append("Placed by, the outermost first:")
+            lines.extend("  " + c for c in chain)
+        else:
+            el = element_label(obj, page, short=False)
+            if el:
+                lines.append("Element: %s" % el)
+            params = values_text(page, idx, self._genie_values)
+            if params:
+                lines.append("Values: %s" % params)
         where = ("AN %d. " % obj.an if obj.an > 0 else "") + (
             "Position %d in the page's stacking order"
         ) % idx

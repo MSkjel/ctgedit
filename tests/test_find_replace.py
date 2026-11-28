@@ -601,8 +601,8 @@ def test_window_find_survives_tab_switch_and_goes_to_hits(fx_install):
     finally:
         for e in w._docs:
             e["doc"].dirty = False
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.close()
 
 
@@ -657,9 +657,10 @@ def test_the_dialog_comes_back_with_what_was_searched_last(fx_install):
     again.done(0)
 
 
-def test_a_changed_query_drops_the_old_matches(fx_install):
-    """A new query or scope clears the last search's matches: no count, no Go To on an object
-    the box no longer stands for, until the next search."""
+def test_a_changed_query_lists_its_own_matches(fx_install):
+    """After a search, a new query or scope lists its matches a moment later (no Go To on a
+    row of the old one meanwhile); a filter that does not compile clears the list until
+    the next search."""
     _app()
     from ctgedit.ui.dialog.find_dialog import FindReplaceDialog
 
@@ -671,10 +672,28 @@ def test_a_changed_query_drops_the_old_matches(fx_install):
     dlg._list.setCurrentItem(dlg._list.topLevelItem(0))
     assert dlg._b_goto.isEnabled()
     dlg._ed_find.setText("zznomatch99")
-    assert dlg._list.topLevelItemCount() == 0 and not dlg._b_goto.isEnabled()
-    assert dlg._status.text() == "Search again to update the results."
-    dlg.find_all()
-    assert dlg.hits() == []
+    assert not dlg._b_goto.isEnabled() and dlg._refresh.isActive()
+    dlg._refresh_now()
+    assert dlg._list.topLevelItemCount() == 0 and dlg.hits() == []
+    assert dlg._status.text() == "'zznomatch99' was not found."
+    dlg._ed_find.setText("FX_")
+    dlg._refresh_now()
+    n = len(dlg.hits())
+    assert n and dlg._list.topLevelItemCount() == n
+    dlg._filter_list.set_state([{"kind": "fields", "text": "(", "exclude": False, "regex": True}])
+    assert dlg._filter_problem()
+    assert dlg._list.topLevelItemCount() == 0 and not dlg._following and not dlg._refresh.isActive()
+    dlg.done(0)
+
+
+def test_before_a_search_a_change_lists_nothing(fx_install):
+    _app()
+    from ctgedit.ui.dialog.find_dialog import FindReplaceDialog
+
+    doc = _doc(fx_install, "FxParts")
+    dlg = FindReplaceDialog(doc)
+    dlg._ed_find.setText("FX_")
+    assert not dlg._refresh.isActive() and dlg.hits() == []
     dlg.done(0)
 
 

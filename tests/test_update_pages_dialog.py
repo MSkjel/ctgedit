@@ -1,5 +1,6 @@
 """The Update Pages dialog."""
 
+from ctgedit.ui.main_window import MainWindow
 import json
 import os
 import sys
@@ -157,8 +158,8 @@ def test_the_settings_row_writes_the_key(app):
         assert int(str(app_settings().value("opt/update_processes"))) == 5
         assert SettingsDialog(w)._update_procs.value() == 5
     finally:
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.close()
         w.deleteLater()
 
@@ -390,7 +391,6 @@ def test_the_project_names_are_never_cut_while_there_is_room(app, tmp_path):
 
 def test_the_summary_names_the_pages_closed_during_the_run():
     import types
-    from ctgedit.ui.window.library import LibraryCommands
 
     rep = types.SimpleNamespace(
         pages=3,
@@ -419,7 +419,7 @@ def test_the_summary_names_the_pages_closed_during_the_run():
         records=[],
         closed_meanwhile=["Mixer"],
     )
-    lines = LibraryCommands._update_pages_summary(rep, None, (0, 0, 0, 0))
+    lines = MainWindow._update_pages_summary(rep, None, (0, 0, 0, 0))
     assert any("closed before it ended" in x and "Mixer" in x for x in lines)
 
 
@@ -429,7 +429,7 @@ def test_the_summary_explains_every_out_of_date_page_in_plain_lines():
     '<project>\\<file>' (the log keeps the full path); a list past 10 ends 'and N more';
     every line ends in one full stop."""
     import types
-    from ctgedit.ui.window.library import LibraryCommands, OpenTabsUpdate
+    from ctgedit.ui.window.open_tabs import OpenTabsUpdate
 
     root = r"C:\Install\User"
     many = ["p%02d" % i for i in range(12)]
@@ -467,7 +467,7 @@ def test_the_summary_explains_every_out_of_date_page_in_plain_lines():
         failed=[os.path.join(root, "A", "t2.ctg")],
         nothing=[os.path.join(root, "A", "t3.ctg")],
     )
-    lines = LibraryCommands._update_pages_summary(rep, None, tabs)
+    lines = MainWindow._update_pages_summary(rep, None, tabs)
     assert (
         lines[0] == "17 pages checked in 1 project, 16 out of date, 13 updated (1 in its tab, not saved yet)."
     )
@@ -498,7 +498,7 @@ def test_the_summary_counts_a_project_once_whatever_its_case():
     one project, the names stay plain. A tab out of
     date with nothing changed has its own line and counts out of date, as a closed one."""
     import types
-    from ctgedit.ui.window.library import LibraryCommands, OpenTabsUpdate
+    from ctgedit.ui.window.open_tabs import OpenTabsUpdate
 
     root = r"C:\Install\User"
     rep = types.SimpleNamespace(
@@ -533,7 +533,7 @@ def test_the_summary_counts_a_project_once_whatever_its_case():
         updated=[os.path.join(root, "fxmain", "T3.ctg")], unchanged=[os.path.join(root, "FXMAIN", "T4.ctg")]
     )
     assert tabs.projects() == ["fxmain"] and tabs.stale == 2
-    lines = LibraryCommands._update_pages_summary(rep, None, tabs)
+    lines = MainWindow._update_pages_summary(rep, None, tabs)
     assert (
         lines[0] == "3 pages checked in 1 project, 2 out of date, 1 updated (1 in its tab, not saved yet)."
     ), lines

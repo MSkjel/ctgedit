@@ -221,6 +221,7 @@ def assign_command_ids(win) -> None:
         "dock_changes",
         "dock_sa_checks",
         "dock_page_checks",
+        "dock_preview_states",
         "dock_navigator",
     ):
         dock = getattr(win, attr, None)
@@ -479,15 +480,14 @@ def preset_name() -> str:
     return v if v in presets() else DEFAULT_PRESET
 
 
-def set_preset(name: str, apply_settings: bool = True) -> None:
-    """Choose keymap preset ``name`` (with ``apply_settings``: the settings it sets, and
-    back to their defaults the ones only the preset before set: :func:`preset_switch_settings`)."""
+def set_preset(name: str) -> None:
+    """Choose keymap preset ``name``, with the settings it sets (and back to their defaults
+    the ones only the preset before set: :func:`preset_switch_settings`)."""
     old = preset_name()
     st = app_settings()
     st.setValue(KEYMAP_SETTING, name if name in presets() else DEFAULT_PRESET)
-    if apply_settings:
-        for k, v in preset_switch_settings(old, name).items():
-            st.setValue(k, v)
+    for k, v in preset_switch_settings(old, name).items():
+        st.setValue(k, v)
 
 
 # ----------------------------------------------------------------------------- user keys
@@ -1059,8 +1059,8 @@ def read_keys_file(path: str) -> Tuple[str, Dict[str, List[str]]]:
     ):
         raise KeysFileError("%s is not a keyboard file exported from ctgedit." % os.path.basename(path))
     try:
-        fmt = int(data.get("format") or 0)
-    except (TypeError, ValueError) as e:  # (a hand-edited or foreign file)
+        fmt = int(data["format"])
+    except (KeyError, TypeError, ValueError) as e:  # (a hand-edited or foreign file)
         raise KeysFileError(
             "%s is not a keyboard file exported from ctgedit." % os.path.basename(path)
         ) from e

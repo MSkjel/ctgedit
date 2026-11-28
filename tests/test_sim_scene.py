@@ -652,7 +652,7 @@ def test_composite_genie_members_draw_their_states_in_the_genies_picture(fx_page
         res = r.apply({an: ObjectState(an, move=(5, 0), fill_colour=0xFF00FF)})
         assert res["undrawn"] == 0 and res["touched"] == 1
         assert abs(item.sceneBoundingRect().left() - b0.left() - 5) < 0.01
-        ch = layer._channel(drawn[j][0], item)
+        ch = layer.channel(drawn[j][0], item)
         if ch == "fill":
             assert item.brush().color().name() == "#ff00ff"
         elif ch == "pen":

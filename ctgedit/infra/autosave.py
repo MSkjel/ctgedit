@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .paths import data_dir, is_this_process, path_key, pid_alive, process_started
+
 import contextlib
 import glob
 import hashlib
@@ -11,7 +13,7 @@ import time
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
-from .paths import data_dir, is_this_process, pid_alive, process_started
+from .logsetup import note_exception as _note_exc
 
 DATA_EXT = ".ctgrec"
 META_EXT = ".json"
@@ -65,9 +67,7 @@ def key_for(path: str, element: str = "", pid: Optional[int] = None, started: Op
     if started is None:
         started = process_started() if pid == os.getpid() else 0
     h = hashlib.sha1(
-        ("%s|%s|%d" % (os.path.normcase(os.path.abspath(path)), element.lower(), started or 0)).encode(
-            "utf-8", "replace"
-        )
+        ("%s|%s|%d" % (path_key(path), element.lower(), started or 0)).encode("utf-8", "replace")
     ).hexdigest()
     return "%d-%s" % (pid, h[:16])
 
@@ -230,6 +230,7 @@ def restore_document(snap: Snapshot):
             try:
                 doc = ElementDocument.open_element(snap.path, snap.element)
             except Exception:  # noqa: BLE001 -- the element is gone: a new one
+                _note_exc("autosave.restore_document", path=snap.path, element=snap.element)
                 doc = None
         if doc is None:
             size = tuple(snap.extra.get("page_size") or ()) or None

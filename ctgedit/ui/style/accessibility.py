@@ -44,7 +44,7 @@ def _qt_name(w: QtWidgets.QWidget) -> str:
     try:
         iface = QtGui.QAccessible.queryAccessibleInterface(w)
         return iface.text(QtGui.QAccessible.Name) if iface is not None else ""
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # swallow-ok: a probe: no name
         return ""
 
 

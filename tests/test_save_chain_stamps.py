@@ -167,7 +167,7 @@ def test_a_pasted_out_of_date_copy_keeps_the_page_out_of_date(fx_install):
     assert got == stale  # one entry, the older stamp
     p2.save()
     libraries_changed()
-    cur = updatepages._Current(SymbolResolver.for_page(p2.path))
+    cur = updatepages.Current(SymbolResolver.for_page(p2.path))
     assert KEY in updatepages.stale_elements(p2.path, cur)
     p2.update_genie_instances({KEY})
     assert all(_count(p2, i, b"EDITED") == 1 for i, k in p2.genie_instances() if k == KEY)
@@ -344,7 +344,7 @@ def test_a_ctm_entry_whose_element_only_a_ctl_holds_is_not_out_of_date(fx_instal
         for n in _names(pd.parsed.page.link_table_raw)
         if links.strip_stamp(n).lower() == "fxgenie.fx_value.<ctm"
     )
-    cur = updatepages._Current(SymbolResolver.for_page(page))
+    cur = updatepages.Current(SymbolResolver.for_page(page))
     assert cur.stamp_name(entry) is None
     assert KEY not in pd.genie_changes()
 
@@ -449,8 +449,8 @@ def test_the_genie_saved_note_counts_the_copies_left(fx_install, monkeypatch):
             if hasattr(ent["doc"], "dirty"):
                 ent["doc"].dirty = False
         w.doc = None
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.close()
 
 

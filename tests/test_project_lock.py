@@ -1,5 +1,6 @@
 """Locks between ctgedit processes."""
 
+from ctgedit.format.fileio import find_ci
 import contextlib
 import glob
 import json
@@ -522,12 +523,12 @@ def test_two_processes_register_into_one_project_at_once(fx_project, tmp_path):
     _mini_project(EX, proj, pages)
     for t in ("pglang",):
         for ext in (".DBF", ".NDX"):
-            src = PR._find_file(EX, t + ext)
+            src = find_ci(EX, t + ext)
             if src:
                 shutil.copy(src, os.path.join(proj, t + ext))
 
     def page_entries():
-        with Dbf(PR._find_file(proj, "changes.DBF"), writable=False) as d:
+        with Dbf(find_ci(proj, "changes.DBF"), writable=False) as d:
             return sum(
                 1
                 for i in range(d.nrec)
@@ -560,9 +561,9 @@ def test_two_processes_register_into_one_project_at_once(fx_project, tmp_path):
         ), rep["tables"]
     for fn in os.listdir(proj):
         if fn.lower().endswith(".ndx"):
-            dbf = PR._find_file(proj, fn[:-4] + ".DBF")
+            dbf = find_ci(proj, fn[:-4] + ".DBF")
             assert dbf and _index_matches_scan(dbf, os.path.join(proj, fn)), fn
-    lp = PR._find_file(proj, "pglang.DBF")
+    lp = find_ci(proj, "pglang.DBF")
     if lp:
         with Dbf(lp, writable=False) as d:
             natives = [d.field(d.read(i), "NATIVE") for i in range(d.nrec) if d.read(i)[:1] != b"*"]

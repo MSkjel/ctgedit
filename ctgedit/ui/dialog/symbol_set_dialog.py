@@ -8,6 +8,7 @@ from typing import Callable, List, Optional, Tuple
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from ...format import symbolset as S
+from ...infra.logsetup import note_exception as _note_exc
 from ..style import theme
 
 _THUMB = QtCore.QSize(44, 34)
@@ -125,6 +126,7 @@ class SymbolSetDialog(QtWidgets.QDialog):
         try:
             self._context = ExpressionContext.for_document(doc)
         except Exception:  # noqa: BLE001 -- completion is an aid
+            _note_exc("symbol_set_dialog.expression_context")
             self._context = ExpressionContext(None, [])
         self._load()
         self._set_title()
@@ -192,6 +194,28 @@ class SymbolSetDialog(QtWidgets.QDialog):
 
         body = QtWidgets.QHBoxLayout()
         lay.addLayout(body, 1)
+        self._build_type_box(body)
+
+        right = QtWidgets.QVBoxLayout()
+        body.addLayout(right, 1)
+        self._build_expression_row(right)
+        self._build_conditions(right)
+        self._build_states(right)
+
+        self._hint = theme.note_label("")
+        right.addWidget(self._hint)
+        self._status = theme.note_label("", "warn")
+        right.addWidget(self._status)
+
+        buttons = self._build_buttons(lay)
+        self._btn_definition = None
+        if not self._editable:
+            for w in (self._type_box, self._expr_row, self._cond_box, self._states_box):
+                w.setEnabled(False)
+            self._read_only_buttons(buttons)
+
+    def _build_type_box(self, body: QtWidgets.QHBoxLayout) -> None:
+        """The Type group: On / Off, Multi-state, Array, Animated (none for a V3/V4 set)."""
         self._type_box = QtWidgets.QGroupBox("Type")
         tl = QtWidgets.QVBoxLayout(self._type_box)
         self._type_buttons = {}
@@ -208,8 +232,9 @@ class SymbolSetDialog(QtWidgets.QDialog):
         self._type_box.setVisible(not self._legacy)
         body.addWidget(self._type_box)
 
-        right = QtWidgets.QVBoxLayout()
-        body.addLayout(right, 1)
+    def _build_expression_row(self, right: QtWidgets.QVBoxLayout) -> None:
+        """The single expression field (On / Off, Array, Animated, V3/V4), with a V3/V4
+        set's mode."""
         # the single-expression field (On / Off, Array, Animated, V3/V4)
         self._expr_row = QtWidgets.QWidget()
         er = QtWidgets.QFormLayout(self._expr_row)
@@ -236,6 +261,8 @@ class SymbolSetDialog(QtWidgets.QDialog):
             er.addRow("Mode:", self._ed_mode)
         right.addWidget(self._expr_row)
 
+    def _build_conditions(self, right: QtWidgets.QVBoxLayout) -> None:
+        """The Conditions group of a Multi-state set: the list with Add, Edit and Remove."""
         # the Multi-state condition list
         self._cond_box = QtWidgets.QGroupBox("Conditions")
         cl = QtWidgets.QHBoxLayout(self._cond_box)
@@ -265,6 +292,11 @@ class SymbolSetDialog(QtWidgets.QDialog):
         cb.addStretch(1)
         cl.addLayout(cb)
         right.addWidget(self._cond_box)
+
+    def _build_states(self, right: QtWidgets.QVBoxLayout) -> None:
+        """The Symbols group: the states and their symbols, with Add, Edit, Remove and
+        Clear."""
+        from ..tables import make_resizable
 
         # the state symbols
         self._states_box = QtWidgets.QGroupBox("Symbols")
@@ -301,11 +333,9 @@ class SymbolSetDialog(QtWidgets.QDialog):
         sl.addLayout(sb)
         right.addWidget(self._states_box, 1)
 
-        self._hint = theme.note_label("")
-        right.addWidget(self._hint)
-        self._status = theme.note_label("", "warn")
-        right.addWidget(self._status)
-
+    def _build_buttons(self, lay: QtWidgets.QVBoxLayout) -> QtWidgets.QDialogButtonBox:
+        """OK, Cancel, Apply, Clear Property and Other Properties (none when the object has
+        no property sheet)."""
         buttons = QtWidgets.QDialogButtonBox(
             QtWidgets.QDialogButtonBox.Ok
             | QtWidgets.QDialogButtonBox.Cancel
@@ -314,7 +344,9 @@ class SymbolSetDialog(QtWidgets.QDialog):
         self._btn_clear_prop = buttons.addButton("Clear Property", QtWidgets.QDialogButtonBox.ResetRole)
         self._btn_clear_prop.setToolTip("Blank the expression(s) and clear every symbol")
         self._btn_clear_prop.clicked.connect(self._clear_property)
-        self._btn_other = buttons.addButton("Other Properties…", QtWidgets.QDialogButtonBox.ActionRole)
+        self._btn_other = buttons.addButton(
+            "Other Properties…", QtWidgets.QDialogButtonBox.ResetRole
+        )  # (left, beside Clear Property)
         self._btn_other.setToolTip(
             "Open Object Properties of this object (movement, scaling, fill, input, access)"
         )
@@ -327,6 +359,7 @@ class SymbolSetDialog(QtWidgets.QDialog):
 
             has_sheet = SheetContext.for_object(self._doc, self._index).has_sheet()
         except Exception:  # noqa: BLE001 -- keep the button when unsure
+            _note_exc("symbol_set_dialog._build_buttons/has_sheet")
             has_sheet = True
         if not has_sheet:
             buttons.removeButton(self._btn_other)
@@ -337,11 +370,7 @@ class SymbolSetDialog(QtWidgets.QDialog):
         buttons.button(QtWidgets.QDialogButtonBox.Apply).clicked.connect(self.apply)
         self._buttons = buttons
         lay.addWidget(buttons)
-        self._btn_definition = None
-        if not self._editable:
-            for w in (self._type_box, self._expr_row, self._cond_box, self._states_box):
-                w.setEnabled(False)
-            self._read_only_buttons(buttons)
+        return buttons
 
     def _read_only_buttons(self, buttons: QtWidgets.QDialogButtonBox) -> None:
         """A set taken from a template / genie / library definition: Close,
@@ -362,6 +391,7 @@ class SymbolSetDialog(QtWidgets.QDialog):
             try:
                 target = finder(self._index)
             except Exception:  # noqa: BLE001 -- no button then
+                _note_exc("symbol_set_dialog._read_only_buttons")
                 target = None
         if target is None:
             return
@@ -471,6 +501,7 @@ class SymbolSetDialog(QtWidgets.QDialog):
                     )
                     icon = QtGui.QIcon(pm)
         except Exception:  # noqa: BLE001 -- a missing thumbnail is not an error
+            _note_exc("symbol_set_dialog._thumbnail", element=spec)
             icon = None
         self._thumbs[key] = icon
         return icon
@@ -660,7 +691,7 @@ class SymbolSetDialog(QtWidgets.QDialog):
         )
         try:
             self._load()
-        except Exception:  # noqa: BLE001 -- not a set any more: keep what is shown
+        except Exception:  # noqa: BLE001  # swallow-ok: not a set any more: keep what is shown
             return
         if typed[0]:
             self._kind = keep[0]

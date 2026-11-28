@@ -516,8 +516,8 @@ def test_custom_offset_from_the_panel_opens_the_sheet_page(MOTION, tmp_path):
         assert dlg.motion_editor.axis_picker("rot").state() == (True, 168, -3)
         dlg.reject()
     finally:
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.close()
 
 

@@ -3,7 +3,6 @@ leaves them unchanged."""
 
 from __future__ import annotations
 
-import re
 import struct
 from typing import Dict, List, Optional, Sequence, Tuple
 
@@ -20,7 +19,6 @@ GROUP_TC, SYMSET_TC, TEXT_TC = 0x08, 0x0C, 0x05
 #: the style block CtDraw writes for a synthesised element root group
 DEFAULT_GROUP_STYLE = _records.DEFAULT_STYLE.pack()
 DEFAULT_GROUP_CS = _records.colour_state()
-_NATIVE = re.compile(r"@\(([^)]*)\)")
 
 
 def class_ov(tc: int) -> int:
@@ -126,36 +124,11 @@ def _bound_top(ents, recs, parents, k: int, root_index: int) -> bool:
     return len(ents) - 1 <= roots
 
 
-def normalise_records(
-    recs: List[PageObject],
-    *,
-    root_index: int = 0,
-    ext: str = "ctm",
-    convert: bool = False,
-    resolver=None,
-    lib_path: str = "",
-    edited: Optional[set] = None,
-    e=(0, 0),
-    page_like: bool = False,
-    nested_only=None,
-    stored_payloads=None,
-    report: Optional[dict] = None,
-    fonts_path: Optional[str] = None,
-) -> List[PageObject]:
-    """The CtDraw-normal form of an element's records."""
-    recs = list(recs)
-    base = list(recs)
-    n = len(recs)
-    parents = parents_of(recs)
-    genie = convert or is_genie_element(recs)
-    # 1. in a genie element, instances still in their PAGE form (pasted from a page) take
-    # the element form first (GP.convert_page_form): the re-composition below rebuilds a
-    # nested copy from its binding level, which a page-form copy placed without bindings
-    # does not have (its slots and geometry then stayed as stored)
-    keeps_page_form = not (genie and not page_like and ext != "ctt")
-    if not keeps_page_form:
-        recs = GP.convert_page_form(recs, genie=True)
-    edited_objs = [recs[k] for k in (edited or ()) if 0 <= k < len(recs)]
+def _compose_nested(
+    recs, *, ext: str, convert: bool, resolver, lib_path: str, e, keeps_page_form: bool, nested_only, report
+) -> tuple:
+    """The element's template copies and nested genie copies composed again from their
+    current definitions: (the records, the nested records' element twins by index)."""
     # 1a, first: a TEMPLATE's copy the element holds (a template made from a page linked to
     # another) composed again from the current template when its import entry changed
     # (``nested_only`` names it; None = every copy), as CtDraw's element load does (LIVE,
@@ -190,17 +163,13 @@ def normalise_records(
                 report["cycles"] = frozenset(el.cycles)
     else:
         twins = {}
-    # a nested copy composed again with more or fewer records (an object added to or
-    # removed from its genie), or with as many in another order (Bring to Front of a
-    # genie's text over its nested genie): the forest and the edited records follow. The
-    # forest is the records' child counts in order
-    grown = len(recs) != n or any(a.class_flag != b.class_flag for a, b in zip(recs, base))
-    if grown:
-        n = len(recs)
-        parents = parents_of(recs)
-        at = {id(po): k for k, po in enumerate(recs)}
-        edited = {at[id(po)] for po in edited_objs if id(po) in at}
-    depth = nested_roots(recs, parents)
+    return recs, twins
+
+
+def _touched_records(recs, base, grown: bool, stored_payloads, edited) -> set:
+    """The indexes of the records the normal form derives again (``base``: the records
+    before the copies were composed again)."""
+    n = len(recs)
     # a record of a nested genie copy that nothing above changed (not converted from the
     # page form, not re-composed, not edited) is kept as stored: CtDraw's load + save
     # re-derives no level of such a copy
@@ -221,6 +190,263 @@ def normalise_records(
             if recs[k] is not base[k] or writer.object_payload(base[k]) not in stored_payloads
         }
     touched |= set(edited or ())
+    return touched
+
+
+def _substitute_values(ents, vals, decls, nested: bool) -> str:
+    """e0's values substituted from its templates with ``vals``; the TXT_OFF caption
+    before its left trim ('' when there is none), for a record of a ``nested`` copy."""
+    caption = ""
+    for key, tmpl in ents[0][2].pairs:
+        # (no trim of a DIRECT member: the element keeps ' @(..)', LIVE
+        # example.face1, and ' ' for n0's own ' %Label%', LIVE chain7/label_blank)
+        v = substitute(tmpl, vals, decls, key)
+        ents[0][1].set(key, v)
+        if nested and v[:1].isspace():
+            # a record of a nested copy: the left trim after the value is set,
+            # so one of only blanks stays as '' (GP.build_instance_records,
+            # LIVE), in the page form, in the element form (LIVE, the fixture
+            # oracle's chain7/label_blank) and a record a host gained while the
+            # genie between was out of date (chain5/stale_host); the string
+            # section keeps the caption as substituted
+            low = key.lower()
+            if low == "txt_off":
+                caption = v
+            ents[0][1].pairs = [(kk, vv.lstrip() if kk.lower() == low else vv) for kk, vv in ents[0][1].pairs]
+    return caption
+
+
+def _level_ovs(ents, N: int, r, po, root: bool, depth_k: int, twin) -> None:
+    """The size words of each level's bags (``twin``: the record's element twin)."""
+    ents[0][1].ov = class_ov(r.tc)
+    if depth_k == 0:
+        ents[0][2].ov = class_ov(r.tc)
+    else:
+        # a nested member: 0, except a LINKED symbol (tc 7 whose
+        # current twin has dwFlags 0x1) keeps 10 (LIVE list_cluster. A
+        # Graphics Builder that composed a nested
+        # copy from an element OPENED IN A WINDOW writes the class pair
+        # instead: its in-memory form, not the file's)
+        linked = r.tc == 0x07 and ((twin is not None and twin.subtype_size & 0x1) or po.subtype_size & 0x1)
+        ents[0][2].ov = 10 if linked else 0
+    for lvl in range(1, N + 1):
+        for b in ents[lvl]:
+            b.ov = 0
+    if root:
+        ents[N][1].ov = 11
+    elif po.class_flag and (po.subtype_size & 0x200):
+        # a nested genie root's OWN level is always level 1 (a copy nested
+        # deeper, without the linked bit, too: LIVE n0 .. n4)
+        ents[1][1].ov = 11
+        ents[1][2].ov = 11 if ents[1][2].pairs else 0
+
+
+def _normal_entries(
+    r,
+    po,
+    k: int,
+    genie: bool,
+    depth,
+    root: bool,
+    recs,
+    parents,
+    root_index: int,
+    keeps_page_form: bool,
+    twins,
+) -> tuple:
+    """Record ``k``'s entries in the normal form: its declarations, its binding levels
+    derived again top down, its values substituted; (the entries, the TXT_OFF caption
+    before its left trim)."""
+    caption = ""  # a page-form member's TXT_OFF before its left trim
+    ents = [[b.copy() for b in ent] for ent in r.entries]
+    if genie and len(ents) == 1 and depth[k] == 0:
+        # the genie form: the user-entered values are the templates
+        ents[0][2] = Bag(list(ents[0][1].pairs), 0)
+        ents.append([Bag([], 0), Bag([], 0), Bag([], 0)])
+    N = len(ents) - 1
+    if N >= 1:
+        # (a symbol set declares its own template's tokens too, a member or
+        # the element's root; only a GROUP's come from its members)
+        # (built on EVERY save, edited or not, as CtDraw's save does)
+        if (
+            genie
+            and depth[k] == 0
+            and N == 1
+            and not (root and r.tc == GROUP_TC)
+            and not (po.class_flag and r.tc == GROUP_TC)
+        ):
+            # declarations = the template's distinct %tokens%, first-
+            # appearance order: a token's own '%name=default%' is the
+            # default (the last one written wins), else
+            # a known default is kept, else '\n'
+            # (a default the previous declaration held is NOT kept: the level is
+            # built anew: '%X=5%' edited to
+            # '%X%' saves X = '\n' and drops the substituted value)
+            ents[1][0] = Bag(
+                [(t, d if d is not None else "\n") for t, d in GP.template_decls(ents[0][2]).items()],
+                0,
+            )
+        # the binding levels of a nested genie: each level's values
+        # re-derived from its templates with the level above
+        # (element level unbound -> defaults)
+        # (any genie root inside the element: one nested deeper has no link bit,
+        # 0x208 / 0x218)
+        nested_root = bool(po.class_flag and (po.subtype_size & 0x200)) and not root
+        # a nested MEMBER: the binding level under the element's own level is
+        # effective as its templates, each lower level as its re-derived values
+        # (GP.top_level_templates); a nested root takes the values only
+        # (LIVE n0 .. n4)
+        member_rule = depth[k] >= 1 and not nested_root and N >= 2
+        # a member of a copy kept in the PAGE form (step 1 converts none in a
+        # template, a super genie page or an element without parameters): its top
+        # level is the placed level, BOUND, so every level under it takes the
+        # values above, as a page derives them (template_place._rederive_levels,
+        # the page composition)
+        page_form = member_rule and keeps_page_form and _bound_top(ents, recs, parents, k, root_index)
+        eff = None
+        for lvl in range(N - 1, 0, -1):
+            # (a nested ROOT's own level takes the outer level's VALUES only, no
+            # declared default: LIVE, P bound to '%Q=5%' under an
+            # unbound Q gives the root b1 {} and its member b1 P = 5)
+            GP.subst_level(
+                ents[lvl], ents[lvl + 1], outer_vals=eff, decls=None if member_rule else GP.Bag([], 0)
+            )
+            if member_rule:
+                eff = GP.top_level_templates(ents[lvl]) if lvl == N - 1 and not page_form else ents[lvl][1]
+        if depth[k] == 0:
+            # a direct member: substituted with the element's own
+            # (unbound) level = the declared defaults
+            vals, decls = ents[1][1], ents[1][0]
+        else:
+            # a member of a genie NESTED in the element: its level-1
+            # parameter values are the (unresolved) BINDING templates
+            # e1.b2 -- '%DPSStateType%' -> '%DPS_StateType%' (LIVE
+            # dpsalarm); e1.b1 itself resolves to the (empty) defaults
+            # per parameter: its binding TEMPLATE (e1.b2) when it has
+            # one, else its bound constant (e1.b1: list_cluster's
+            # index = 18)
+            vals = eff if eff is not None else Bag(list(ents[1][1].pairs), 0)
+            decls = ents[1][0]
+        caption = _substitute_values(ents, vals, decls, depth[k] >= 1)
+        _level_ovs(ents, N, r, po, root, depth[k], twins.get(k))
+    else:
+        ents[0][1].ov = class_ov(r.tc)
+        ents[0][2].ov = 0
+    return ents, caption
+
+
+def _normal_geometry(out, parents, root_index: int, lib_path: str, fonts_path, resolver, in_tpl) -> list:
+    """The legacy records' save extents, then the containers refit bottom-up."""
+    from . import legacy as _legacy
+
+    fonts = None
+    fpath = lib_path if fonts_path is None else fonts_path
+    if fpath and any(po.type_code in (_legacy.NUMBER_TC, _legacy.STRING_TC) for po in out):
+        fonts = _legacy.named_fonts(fpath)
+    out, _moved = _legacy.save_extents(out, fonts or None)
+    out = list(out)
+    out = _refit(out, parents, root_index, grow=_alarm_grow(lib_path, resolver), skip=in_tpl)
+    return out
+
+
+def _root_handle(out, root_index: int, e, stored_payloads) -> None:
+    """The root's handle: a group root takes the lowest one its members leave free, a
+    stored element's root keeps its own when no member took it."""
+    root = out[root_index]
+    if not (root.type_code == GROUP_TC and root.class_flag):
+        _single_root(root, e)
+    if root.type_code == GROUP_TC and root.class_flag:
+        used = {G.get_handle(o) for i, o in enumerate(out) if i != root_index}
+        h0 = G.get_handle(root)
+        if stored_payloads is not None and h0 is not None and h0 not in used:
+            # a stored element's root keeps its handle (a root whose handle a member
+            # took moves to the lowest free)
+            return
+        lf = next(h for h in range(0, 0x8000) if h not in used)
+        G.set_handle(root, lf)
+
+
+def _normal_sections(r, po, root: bool, depth_k: int, caption: str, twin) -> None:
+    """Record ``r``'s string section, button state, colour state and a group root's
+    style, from its normal entries (``twin``: its element twin)."""
+    # text: string section from the substituted values, tail caption =
+    # the template, extent re-measured from the template caption
+    if r.tc == TEXT_TC and (r.dw & 2) and r.entries is not None:
+        _text(r, po)
+    elif r.tc == TEXT_TC and r.entries is not None and depth_k >= 1:
+        # an art-stripped member of a nested genie: its string
+        # section follows the re-derived values (LIVE block_element
+        # '%Element%')
+        try:
+            r.cls = GP.strip_class_section(r, r.entries[0][1], caption, 0)
+        except Exception:  # noqa: BLE001
+            _note_exc("genie_norm._normal_sections")
+            pass
+    if r.tc == GP.BUTTON_TC and r.entries is not None and depth_k == 0:
+        _button(r)
+    if r.entries is not None and r.cs and CS.layout(po) is not None:
+        cs = GP.rebuild_colour_state(po, r.entries[0][1], twin)
+        if cs is not None and not root:
+            r.cs = cs
+    if root and r.tc == GROUP_TC and r.cf:
+        r.cs = DEFAULT_GROUP_CS
+        if r.dw & 2:
+            r.style = DEFAULT_GROUP_STYLE
+
+
+def normalise_records(
+    recs: List[PageObject],
+    *,
+    root_index: int = 0,
+    ext: str = "ctm",
+    convert: bool = False,
+    resolver=None,
+    lib_path: str = "",
+    edited: Optional[set] = None,
+    e=(0, 0),
+    page_like: bool = False,
+    nested_only=None,
+    stored_payloads=None,
+    report: Optional[dict] = None,
+    fonts_path: Optional[str] = None,
+) -> List[PageObject]:
+    """The CtDraw-normal form of an element's records."""
+    recs = list(recs)
+    base = list(recs)
+    n = len(recs)
+    parents = parents_of(recs)
+    genie = convert or is_genie_element(recs)
+    # 1. in a genie element, instances still in their PAGE form (pasted from a page) take
+    # the element form first (GP.convert_page_form): the re-composition below rebuilds a
+    # nested copy from its binding level, which a page-form copy placed without bindings
+    # does not have (its slots and geometry then stayed as stored)
+    keeps_page_form = not (genie and not page_like and ext != "ctt")
+    if not keeps_page_form:
+        recs = GP.convert_page_form(recs, genie=True)
+    edited_objs = [recs[k] for k in (edited or ()) if 0 <= k < len(recs)]
+    recs, twins = _compose_nested(
+        recs,
+        ext=ext,
+        convert=convert,
+        resolver=resolver,
+        lib_path=lib_path,
+        e=e,
+        keeps_page_form=keeps_page_form,
+        nested_only=nested_only,
+        report=report,
+    )
+    # a nested copy composed again with more or fewer records (an object added to or
+    # removed from its genie), or with as many in another order (Bring to Front of a
+    # genie's text over its nested genie): the forest and the edited records follow. The
+    # forest is the records' child counts in order
+    grown = len(recs) != n or any(a.class_flag != b.class_flag for a, b in zip(recs, base))
+    if grown:
+        n = len(recs)
+        parents = parents_of(recs)
+        at = {id(po): k for k, po in enumerate(recs)}
+        edited = {at[id(po)] for po in edited_objs if id(po) in at}
+    depth = nested_roots(recs, parents)
+    touched = _touched_records(recs, base, grown, stored_payloads, edited)
     # (a template's copy: the records step 1a gave it, as they are)
     in_tpl = _template_copy_records(recs, root_index)
     out: List[Optional[PageObject]] = [None] * n
@@ -236,148 +462,10 @@ def normalise_records(
         root = k == root_index
         caption = ""  # a page-form member's TXT_OFF before its left trim
         if r.entries is not None:
-            ents = [[b.copy() for b in ent] for ent in r.entries]
-            if genie and len(ents) == 1 and depth[k] == 0:
-                # the genie form: the user-entered values are the templates
-                ents[0][2] = Bag(list(ents[0][1].pairs), 0)
-                ents.append([Bag([], 0), Bag([], 0), Bag([], 0)])
-            N = len(ents) - 1
-            if N >= 1:
-                # (a symbol set declares its own template's tokens too, a member or
-                # the element's root; only a GROUP's come from its members)
-                # (built on EVERY save, edited or not, as CtDraw's save does)
-                if (
-                    genie
-                    and depth[k] == 0
-                    and N == 1
-                    and not (root and r.tc == GROUP_TC)
-                    and not (po.class_flag and r.tc == GROUP_TC)
-                ):
-                    # declarations = the template's distinct %tokens%, first-
-                    # appearance order: a token's own '%name=default%' is the
-                    # default (the last one written wins), else
-                    # a known default is kept, else '\n'
-                    # (a default the previous declaration held is NOT kept: the level is
-                    # built anew: '%X=5%' edited to
-                    # '%X%' saves X = '\n' and drops the substituted value)
-                    ents[1][0] = Bag(
-                        [(t, d if d is not None else "\n") for t, d in GP.template_decls(ents[0][2]).items()],
-                        0,
-                    )
-                # the binding levels of a nested genie: each level's values
-                # re-derived from its templates with the level above
-                # (element level unbound -> defaults)
-                # (any genie root inside the element: one nested deeper has no link bit,
-                # 0x208 / 0x218)
-                nested_root = bool(po.class_flag and (po.subtype_size & 0x200)) and not root
-                # a nested MEMBER: the binding level under the element's own level is
-                # effective as its templates, each lower level as its re-derived values
-                # (GP.top_level_templates); a nested root takes the values only
-                # (LIVE n0 .. n4)
-                member_rule = depth[k] >= 1 and not nested_root and N >= 2
-                # a member of a copy kept in the PAGE form (step 1 converts none in a
-                # template, a super genie page or an element without parameters): its top
-                # level is the placed level, BOUND, so every level under it takes the
-                # values above, as a page derives them (template_place._rederive_levels,
-                # the page composition)
-                page_form = member_rule and keeps_page_form and _bound_top(ents, recs, parents, k, root_index)
-                eff = None
-                for lvl in range(N - 1, 0, -1):
-                    # (a nested ROOT's own level takes the outer level's VALUES only, no
-                    # declared default: LIVE, P bound to '%Q=5%' under an
-                    # unbound Q gives the root b1 {} and its member b1 P = 5)
-                    GP.subst_level(
-                        ents[lvl], ents[lvl + 1], outer_vals=eff, decls=None if member_rule else GP.Bag([], 0)
-                    )
-                    if member_rule:
-                        eff = (
-                            GP.top_level_templates(ents[lvl])
-                            if lvl == N - 1 and not page_form
-                            else ents[lvl][1]
-                        )
-                if depth[k] == 0:
-                    # a direct member: substituted with the element's own
-                    # (unbound) level = the declared defaults
-                    vals, decls = ents[1][1], ents[1][0]
-                else:
-                    # a member of a genie NESTED in the element: its level-1
-                    # parameter values are the (unresolved) BINDING templates
-                    # e1.b2 -- '%DPSStateType%' -> '%DPS_StateType%' (LIVE
-                    # dpsalarm); e1.b1 itself resolves to the (empty) defaults
-                    # per parameter: its binding TEMPLATE (e1.b2) when it has
-                    # one, else its bound constant (e1.b1: list_cluster's
-                    # index = 18)
-                    vals = eff if eff is not None else Bag(list(ents[1][1].pairs), 0)
-                    decls = ents[1][0]
-                for key, tmpl in ents[0][2].pairs:
-                    # (no trim of a DIRECT member: the element keeps ' @(..)', LIVE
-                    # example.face1, and ' ' for n0's own ' %Label%', LIVE chain7/label_blank)
-                    v = substitute(tmpl, vals, decls, key)
-                    ents[0][1].set(key, v)
-                    if depth[k] >= 1 and v[:1].isspace():
-                        # a record of a nested copy: the left trim after the value is set,
-                        # so one of only blanks stays as '' (GP.build_instance_records,
-                        # LIVE), in the page form, in the element form (LIVE, the fixture
-                        # oracle's chain7/label_blank) and a record a host gained while the
-                        # genie between was out of date (chain5/stale_host); the string
-                        # section keeps the caption as substituted
-                        low = key.lower()
-                        if low == "txt_off":
-                            caption = v
-                        ents[0][1].pairs = [
-                            (kk, vv.lstrip() if kk.lower() == low else vv) for kk, vv in ents[0][1].pairs
-                        ]
-                ents[0][1].ov = class_ov(r.tc)
-                if depth[k] == 0:
-                    ents[0][2].ov = class_ov(r.tc)
-                else:
-                    # a nested member: 0, except a LINKED symbol (tc 7 whose
-                    # current twin has dwFlags 0x1) keeps 10 (LIVE list_cluster. A
-                    # Graphics Builder that composed a nested
-                    # copy from an element OPENED IN A WINDOW writes the class pair
-                    # instead: its in-memory form, not the file's)
-                    tw = twins.get(k)
-                    linked = r.tc == 0x07 and (
-                        (tw is not None and tw.subtype_size & 0x1) or po.subtype_size & 0x1
-                    )
-                    ents[0][2].ov = 10 if linked else 0
-                for lvl in range(1, N + 1):
-                    for b in ents[lvl]:
-                        b.ov = 0
-                if root:
-                    ents[N][1].ov = 11
-                elif po.class_flag and (po.subtype_size & 0x200):
-                    # a nested genie root's OWN level is always level 1 (a copy nested
-                    # deeper, without the linked bit, too: LIVE n0 .. n4)
-                    ents[1][1].ov = 11
-                    ents[1][2].ov = 11 if ents[1][2].pairs else 0
-            else:
-                ents[0][1].ov = class_ov(r.tc)
-                ents[0][2].ov = 0
-            r.entries = ents
-        # text: string section from the substituted values, tail caption =
-        # the template, extent re-measured from the template caption
-        if r.tc == TEXT_TC and (r.dw & 2) and r.entries is not None:
-            _text(r, po)
-        elif r.tc == TEXT_TC and r.entries is not None and depth[k] >= 1:
-            # an art-stripped member of a nested genie: its string
-            # section follows the re-derived values (LIVE block_element
-            # '%Element%')
-            try:
-                r.cls = GP.strip_class_section(r, r.entries[0][1], caption, 0)
-            except Exception:  # noqa: BLE001
-                _note_exc("genie_norm.normalise_records")
-                pass
-        if r.tc == GP.BUTTON_TC and r.entries is not None and depth[k] == 0:
-            _button(r)
-        if r.entries is not None and r.cs and CS.layout(po) is not None:
-            cs = GP.rebuild_colour_state(po, r.entries[0][1], twins.get(k))
-            if cs is not None and not root:
-                r.cs = cs
-        if root and r.tc == GROUP_TC and r.cf:
-            r.cs = DEFAULT_GROUP_CS
-            if r.dw & 2:
-                r.style = DEFAULT_GROUP_STYLE
+            r.entries, caption = _normal_entries(
+                r, po, k, genie, depth, root, recs, parents, root_index, keeps_page_form, twins
+            )
+        _normal_sections(r, po, root, depth[k], caption, twins.get(k))
         out[k] = to_po(encode(r))
     # 1b. a CONTAINER's outermost declarations are built anew from its subtree: every
     # default a member declares in its outermost level (not a '\n' one) is declared on
@@ -394,28 +482,9 @@ def normalise_records(
     # CtDraw's load derives in its project's named font and every legacy Trend in the form
     # it writes, inside a nested copy or a template copy too (legacy.save_extents);
     # containers refit bottom-up
-    from . import legacy as _legacy
-
-    fonts = None
-    fpath = lib_path if fonts_path is None else fonts_path
-    if fpath and any(po.type_code in (_legacy.NUMBER_TC, _legacy.STRING_TC) for po in out):
-        fonts = _legacy.named_fonts(fpath)
-    out, _moved = _legacy.save_extents(out, fonts or None)
-    out = list(out)
-    out = _refit(out, parents, root_index, grow=_alarm_grow(lib_path, resolver), skip=in_tpl)
+    out = _normal_geometry(out, parents, root_index, lib_path, fonts_path, resolver, in_tpl)
     # 3. root handle = lowest handle unused by the members
-    root = out[root_index]
-    if not (root.type_code == GROUP_TC and root.class_flag):
-        _single_root(root, e)
-    if root.type_code == GROUP_TC and root.class_flag:
-        used = {G.get_handle(o) for i, o in enumerate(out) if i != root_index}
-        h0 = G.get_handle(root)
-        if stored_payloads is not None and h0 is not None and h0 not in used:
-            # a stored element's root keeps its handle (a root whose handle a member
-            # took moves to the lowest free)
-            return out
-        lf = next(h for h in range(0, 0x8000) if h not in used)
-        G.set_handle(root, lf)
+    _root_handle(out, root_index, e, stored_payloads)
     return out
 
 
@@ -542,7 +611,7 @@ def _button(r) -> None:
     b1, b2 = r.entries[0][1], r.entries[0][2] if len(r.entries[0]) > 2 else Bag([])
     cap = b2.get("TEXT") if b2.get("TEXT") is not None else (b1.get("TEXT") or "")
     if r.dw & 0x80 and r.s80 is not None:
-        r.s80 = GP._enc_lp(cap)
+        r.s80 = GP.enc_lp(cap)
     if b1.get("WIDTH") is None:
         ex = TM.extent(cap or " ", "Arial", 11, 0, 1, 0, (0, 0))
         w = max(21, (ex[2] - ex[0]) + 11)
@@ -589,7 +658,7 @@ def _text(r, po) -> None:
     r.cls = new
     # extent: props = the SUBSTITUTED bag, caption = the tail (template)
     # text (GP.engine_root_extent rule; LIVE mm_monitor TXTMODE 4)
-    s = TM.measured_string(GP._Props(b1), tail_text)
+    s = TM.measured_string(GP.Props(b1), tail_text)
     if s is not None:
         attribs = body[L["style_at"] + 3] if L and "style_at" in L else 0
         flags = body[L["style_at"] : L["style_at"] + 6] if L and "style_at" in L else None

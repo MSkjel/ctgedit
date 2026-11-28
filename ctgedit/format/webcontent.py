@@ -9,6 +9,7 @@ from typing import Optional, Tuple
 from .cnum import c_atoi
 from .page import PageObject
 from .textcodec import CODEC
+from ..infra.logsetup import note_exception as _note_exc
 
 WEB_TC = 0x13
 URL_KEY = "URL.NonGenie"
@@ -32,6 +33,7 @@ def string_section_offset(po: PageObject) -> Optional[int]:
     try:
         o = class_section_offset(po)
     except Exception:  # noqa: BLE001
+        _note_exc("webcontent.string_section_offset")
         return None
     b = po.body_raw
     if o is None or o + 2 > len(b):
@@ -93,7 +95,7 @@ def is_valid_url(url: str) -> bool:
         fn.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_ulong]
         fn.restype = ctypes.c_long
         return fn(None, url, 0) == 0
-    except Exception:  # noqa: BLE001 -- not Windows / no urlmon
+    except Exception:  # noqa: BLE001 -- swallow-ok: not Windows / no urlmon
         return bool(_SCHEME.match(url or ""))
 
 

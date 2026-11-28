@@ -5,6 +5,7 @@ from __future__ import annotations
 import dataclasses
 import os
 import struct
+import threading
 import zlib
 from typing import Dict, List, Optional, Sequence, Tuple
 
@@ -31,7 +32,7 @@ subtree_end = _forest.subtree_end
 
 
 # --------------------------------------------------------------------------- appearance owners
-class _Owners:
+class Owners:
     """The record owning each record's in-memory appearance (CtDraw's load:
     a linked record -- dwFlags 0x1 -- takes its library element's; a linked
     CONTAINER's members name their element record by AN (= its handle),
@@ -240,7 +241,7 @@ def _linked_leaf(po: PageObject) -> bool:
 def appearance_owners(objs: Sequence[PageObject], resolver) -> List[Optional[PageObject]]:
     """Per page record: the record that owns its in-memory appearance (the
     record itself when it is its own)."""
-    return _Owners(resolver).resolve(objs)
+    return Owners(resolver).resolve(objs)
 
 
 # --------------------------------------------------------------------------- per record
@@ -300,7 +301,7 @@ def appearance_part(t) -> bytes:
     return cls
 
 
-def _own_caption(cls: bytes, dw: int) -> Optional[bytes]:
+def own_caption(cls: bytes, dw: int) -> Optional[bytes]:
     """The first lpstr of an instance text's string section (its caption)."""
     o = _metadata_len(cls) if dw & 0x100 else 0
     if len(cls) < o + 6:
@@ -338,7 +339,7 @@ def ctf_rec(r0, t, memo: Optional[dict] = None) -> "GP.Rec":
                 r.style = bytes(st)
             part = appearance_part(t)
             if r.tc == TEXT_TC and part:
-                cap = _own_caption(r.cls, r.dw)
+                cap = own_caption(r.cls, r.dw)
                 if cap is not None:
                     part = _with_caption(part, cap)
             r.cls = r.cls + part
@@ -357,7 +358,7 @@ def ctf_rec(r0, t, memo: Optional[dict] = None) -> "GP.Rec":
 
 
 def _redeflate(stream: bytes, size: int) -> Optional[bytes]:
-    """``stream`` inflated (it must give ``size`` bytes) and deflated by :func:`_compress`;
+    """``stream`` inflated (it must give ``size`` bytes) and deflated by :func:`compress`;
     None when it is no such stream."""
     try:
         raw = inflate(stream, size)
@@ -366,7 +367,7 @@ def _redeflate(stream: bytes, size: int) -> Optional[bytes]:
         return None
     if len(raw) != size:
         return None
-    return _compress(raw)
+    return compress(raw)
 
 
 def bitmap_redeflated(cls: bytes, dw: int) -> bytes:
@@ -2171,9 +2172,17 @@ _BG_HEAD, _BG_MID = _bg_parts()
 _ZLIB_LOADED: dict = {}
 
 
+#: this thread's build_ctf: the zlib it found at its start (its deflates look it up once)
+_ZLIB_RUN = threading.local()
+
+
 def _zlib_lib():
-    """The install's classic zlib.dll (infra/install.zlib_dll, read at each call: a
-    CTG_SCADA_ROOT set later counts), loaded once per path; False without one."""
+    """The install's classic zlib.dll (infra/install.zlib_dll, read at each call outside a
+    build_ctf, once per build inside one: a CTG_SCADA_ROOT set later counts), loaded once
+    per path; False without one."""
+    run = getattr(_ZLIB_RUN, "lib", None)
+    if run is not None:
+        return run
     from ..infra import install
 
     path = install.zlib_dll() or ""
@@ -2190,7 +2199,7 @@ def _zlib_lib():
     return lib
 
 
-def _compress(raw: bytes) -> bytes:
+def compress(raw: bytes) -> bytes:
     """CtDraw's deflate: classic zlib 1.2.13 compress2 level 5 (the AVEVA
     zlib.dll when present -- Python's zlib-ng output differs byte-wise)."""
     try:
@@ -2203,7 +2212,7 @@ def _compress(raw: bytes) -> bytes:
             if lib.compress2(out, ctypes.byref(n), raw, ctypes.c_ulong(len(raw)), 5) == 0:
                 return out.raw[: n.value]
     except Exception:  # noqa: BLE001
-        _note_exc("ctf._compress")
+        _note_exc("ctf.compress")
         pass
     return zlib.compress(raw, 5)
 
@@ -2258,7 +2267,7 @@ def background_record(width: int, height: int, pixels: bytes) -> bytes:
     zlib(BITMAPINFOHEADER(w, -h, 32bpp) + top-down pixels)."""
     geom = struct.pack("<2h", 0, height - 1) + struct.pack("<4h", 0, 0, width, height) * 2
     dib = struct.pack("<IiiHHIIiiII", 40, width, -height, 1, 32, 0, 0, 0, 0, 0, 0) + pixels
-    z = _compress(dib)
+    z = compress(dib)
     return (
         _BG_HEAD
         + geom
@@ -2273,6 +2282,15 @@ def build_ctf(
     ctg_bytes: bytes, page_path: str, resolver=None, bake: bool = True, page=None, owners=None
 ) -> bytes:
     """Build the .ctF CtDraw's save would write for this .ctg."""
+    before = getattr(_ZLIB_RUN, "lib", None)
+    _ZLIB_RUN.lib = _zlib_lib()
+    try:
+        return _build_ctf(ctg_bytes, page_path, resolver, bake, page, owners)
+    finally:
+        _ZLIB_RUN.lib = before
+
+
+def _build_ctf(ctg_bytes: bytes, page_path: str, resolver, bake: bool, page, owners) -> bytes:
     from .attributes import parse_attributes
 
     c = Container.parse(ctg_bytes)

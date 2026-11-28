@@ -30,7 +30,7 @@ class Builders:
     def install(self, monkeypatch):
         import win32gui
 
-        monkeypatch.setattr(GB, "_ctdraw_pids", lambda: list(self.procs))
+        monkeypatch.setattr(GB, "ctdraw_pids", lambda: list(self.procs))
         monkeypatch.setattr(GB, "builder_windows", lambda pid: list(self.procs.get(pid, ())))
         monkeypatch.setattr(GB, "open_windows", lambda: list(self.open))
         monkeypatch.setattr(win32gui, "PostMessage", lambda h, msg, w, lp: self.posted.append(h))

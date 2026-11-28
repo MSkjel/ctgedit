@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
+from .conditions import ConditionsEditing, property_table, resizable, table_item
+
 import functools
 from typing import List
 
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtWidgets
 
 from ...format import dspval as D
 from ...format.symbolset import combination_label, combination_text
-from .fields import _Field
+from .fields import Field
 from ..style.theme import set_note_role
+from ...infra.logsetup import note_exception as _note_exc
 
 #: the keys the page writes / removes (the sheet's key contract, objprops.sheet_keys)
-FIELDS = [_Field("", k) for k in D.KEYS]
+FIELDS = [Field("", k) for k in D.KEYS]
 #: (re-exported by objprops / dialogs)
 DISPLAY_FIELDS = FIELDS
 SUBS: list = []
@@ -46,9 +49,9 @@ def format_choices() -> tuple:
     try:
         import os
         from ...format.projects import read_dbf_rows
-        from ...io.cicode_catalog import _bin_dirs
+        from ...io.cicode_catalog import bin_dirs
 
-        for d in _bin_dirs():
+        for d in bin_dirs():
             p = os.path.join(d, "SCADAHELP.dbf")
             if os.path.exists(p):
                 for r in read_dbf_rows(p):
@@ -59,6 +62,7 @@ def format_choices() -> tuple:
                 if out:
                     break
     except Exception:  # noqa: BLE001 -- the list is an aid
+        _note_exc("objprops.display_value.format_choices")
         out = []
     if not out:
         out = list(D.SCADAHELP_FORMATS)
@@ -67,40 +71,7 @@ def format_choices() -> tuple:
     return tuple(out)
 
 
-def _item(text: str, editable: bool = True) -> QtWidgets.QTableWidgetItem:
-    it = QtWidgets.QTableWidgetItem(text)
-    flags = QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable
-    if editable:
-        flags |= QtCore.Qt.ItemIsEditable
-    it.setFlags(flags)
-    return it
-
-
-def _resizable(t, name: str) -> None:
-    """Resizable, remembered columns (ui/tables.py)."""
-    from ..tables import make_resizable
-
-    make_resizable(t, "ObjectPropertiesDialog/" + name)
-
-
-def _table(headers) -> QtWidgets.QTableWidget:
-    t = QtWidgets.QTableWidget(0, len(headers))
-    t.setHorizontalHeaderLabels(headers)
-    t.horizontalHeader().setStretchLastSection(True)
-    t.verticalHeader().setVisible(False)
-    t.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
-    t.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
-    t.setEditTriggers(
-        QtWidgets.QAbstractItemView.DoubleClicked
-        | QtWidgets.QAbstractItemView.EditKeyPressed
-        | QtWidgets.QAbstractItemView.AnyKeyPressed
-    )
-    t.setColumnWidth(0, 110)
-    t.verticalHeader().setDefaultSectionSize(t.fontMetrics().height() + 8)
-    return t
-
-
-class DisplayValueEditor:
+class DisplayValueEditor(ConditionsEditing):
     """Appearance > Display Value: builds the page and writes it (before the
     sheet's key edits, in the same undo step)."""
 
@@ -124,7 +95,7 @@ class DisplayValueEditor:
             from ..help import set_help
 
             set_help(self.widget, HELP_TOPIC)
-        except Exception:  # noqa: BLE001
+        except RuntimeError:
             pass
 
     # -- widgets ----------------------------------------------------------------------
@@ -202,41 +173,12 @@ class DisplayValueEditor:
         w = QtWidgets.QWidget()
         v = QtWidgets.QVBoxLayout(w)
         v.setContentsMargins(0, 0, 0, 0)
-        cbox = QtWidgets.QGroupBox("Conditions")
-        cl = QtWidgets.QGridLayout(cbox)
-        self._conds = _table(["", "Condition (TRUE / FALSE)"])
-        self._conds.setColumnWidth(0, 28)
-        _resizable(self._conds, "text_conditions")
-        self._conds.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
-        # room for the five conditions CtDraw allows
-        self._conds.setFixedHeight(
-            self._conds.horizontalHeader().sizeHint().height()
-            + D.MAX_CONDITIONS * self._conds.verticalHeader().defaultSectionSize()
-            + 4
-        )
-        self._conds.currentCellChanged.connect(lambda *_a: self._show_condition())
-        cl.addWidget(self._conds, 0, 0, 3, 1)
-        self._btn_add = QtWidgets.QPushButton("Add")
-        self._btn_add.setToolTip("Add a condition (at most 5)")
-        self._btn_add.clicked.connect(self._add_condition)
-        self._btn_del = QtWidgets.QPushButton("Remove")
-        self._btn_del.setToolTip("Remove the selected condition")
-        self._btn_del.clicked.connect(self._delete_condition)
-        cl.addWidget(self._btn_add, 0, 1)
-        cl.addWidget(self._btn_del, 1, 1)
-        self._cond_label = QtWidgets.QLabel("Condition A:")
-        self._cond_edit = self._expr_field(D.CONDITION_MAX)
-        self._cond_edit.setToolTip("The selected condition: a TRUE / FALSE expression")
-        self._cond_edit.valueChanged.connect(self._on_condition_edit)
-        ce = QtWidgets.QHBoxLayout()
-        ce.addWidget(self._cond_label)
-        ce.addWidget(self._cond_edit, 1)
-        cl.addLayout(ce, 3, 0, 1, 2)
+        cbox = self._conditions_group("text_conditions", D.CONDITION_MAX)
         v.addWidget(cbox)
         sbox = QtWidgets.QGroupBox("State text")
         sl = QtWidgets.QVBoxLayout(sbox)
-        self._states = _table(["Combination", "Text"])
-        _resizable(self._states, "text_states")
+        self._states = property_table(["Combination", "Text"], editable=True)
+        resizable(self._states, "text_states")
         self._states.itemChanged.connect(self._on_state_item)
         sl.addWidget(self._states)
         v.addWidget(sbox, 1)
@@ -253,8 +195,8 @@ class DisplayValueEditor:
         v.addLayout(f)
         abox = QtWidgets.QGroupBox("Array text")
         al = QtWidgets.QVBoxLayout(abox)
-        self._array = _table(["Value", "Text"])
-        _resizable(self._array, "text_array")
+        self._array = property_table(["Value", "Text"], editable=True)
+        resizable(self._array, "text_array")
         self._array.itemChanged.connect(self._on_array_item)
         al.addWidget(self._array)
         v.addWidget(abox, 1)
@@ -335,22 +277,6 @@ class DisplayValueEditor:
         self._format.lineEdit().setMaxLength(max(D.FORMAT_MAX, len(fmt or "")))
         self._format.setEditText(fmt if fmt else D.DEFAULT_FORMAT_LABEL)
 
-    def _fill_conditions(self, select: int = 0) -> None:
-        conds = self._td.conditions
-        self._syncing = True
-        try:
-            self._conds.setRowCount(len(conds))
-            for r, c in enumerate(conds):
-                self._conds.setItem(r, 0, _item("ABCDE"[r], False))
-                self._conds.setItem(r, 1, _item(c, False))
-        finally:
-            self._syncing = False
-        self._conds.setCurrentCell(max(0, min(select, len(conds) - 1)), 1)
-        self._show_condition()
-        ro = self._read_only
-        self._btn_add.setEnabled(not ro and len(conds) < D.MAX_CONDITIONS)
-        self._btn_del.setEnabled(not ro and len(conds) > 1)
-
     def _fill_states(self) -> None:
         n = len(self._td.conditions)
         self._td.states = D.resized_states(self._td.states, n)
@@ -359,10 +285,10 @@ class DisplayValueEditor:
         try:
             self._states.setRowCount(len(self._td.states))
             for r, s in enumerate(self._td.states):
-                lab = _item(combination_label(r, n), False)
+                lab = table_item(combination_label(r, n), False)
                 lab.setToolTip(combination_text(r, n) + ("  (the object's text)" if r == 0 else ""))
                 self._states.setItem(r, 0, lab)
-                self._states.setItem(r, 1, _item(D.to_caret(s), not self._read_only))
+                self._states.setItem(r, 1, table_item(D.to_caret(s), not self._read_only))
         finally:
             self._syncing = False
 
@@ -378,11 +304,11 @@ class DisplayValueEditor:
         try:
             self._array.setRowCount(rows)
             for r in range(rows):
-                lab = _item(str(r), False)
+                lab = table_item(str(r), False)
                 if r == 0:
                     lab.setToolTip("Value 0: the object's text")
                 self._array.setItem(r, 0, lab)
-                self._array.setItem(r, 1, _item(D.to_caret(self._td.array[r]), not self._read_only))
+                self._array.setItem(r, 1, table_item(D.to_caret(self._td.array[r]), not self._read_only))
         finally:
             self._syncing = False
 
@@ -409,6 +335,18 @@ class DisplayValueEditor:
                 it.setText(text)
         finally:
             self._syncing = False
+
+    # -- the Conditions group (objprops/conditions.ConditionsEditing) --------------------------
+    _MAX_CONDITIONS = D.MAX_CONDITIONS
+
+    def _conditions(self) -> list:
+        return self._td.conditions
+
+    def _condition_a_changed(self, text: str) -> None:
+        self._set_expression(text, self._cond_edit)
+
+    def _condition_a_removed(self, text: str) -> None:
+        self._set_expression(text, None)
 
     def _set_static(self, text: str, src) -> None:
         """The object's text (CtDraw's DspVal_StaticText): OFF text, state 0,
@@ -476,56 +414,6 @@ class DisplayValueEditor:
         t = text.strip()
         self._td.fmt = "" if t in ("", D.DEFAULT_FORMAT_LABEL) else t
 
-    def _show_condition(self) -> None:
-        r = self._conds.currentRow()
-        if not (0 <= r < len(self._td.conditions)):
-            r = 0
-        self._cond_label.setText("Condition %s:" % "ABCDE"[r])
-        self._syncing = True
-        try:
-            self._show_text(self._cond_edit, self._td.conditions[r])
-        finally:
-            self._syncing = False
-
-    def _on_condition_edit(self, text: str) -> None:
-        if self._syncing:
-            return
-        r = max(0, self._conds.currentRow())
-        if r >= len(self._td.conditions):
-            return
-        if r == 0:
-            self._set_expression(text, self._cond_edit)
-            return
-        self._td.conditions[r] = text
-        self._syncing = True
-        try:
-            it = self._conds.item(r, 1)
-            if it is not None:
-                it.setText(text)
-        finally:
-            self._syncing = False
-
-    def _add_condition(self) -> None:
-        if len(self._td.conditions) >= D.MAX_CONDITIONS or self._read_only:
-            return
-        self._td.conditions.append("")
-        self._fill_conditions(len(self._td.conditions) - 1)
-        self._fill_states()
-        self._cond_edit.setFocus()
-
-    def _delete_condition(self) -> None:
-        conds = self._td.conditions
-        if len(conds) <= 1 or self._read_only:
-            return
-        r = self._conds.currentRow()
-        if not (0 <= r < len(conds)):
-            r = len(conds) - 1
-        del conds[r]
-        if r == 0:
-            self._set_expression(conds[0], None)
-        self._fill_conditions(min(r, len(conds) - 1))
-        self._fill_states()
-
     def _on_state_item(self, item) -> None:
         if self._syncing or item.column() != 1:
             return
@@ -549,8 +437,8 @@ class DisplayValueEditor:
             self._syncing = True
             try:
                 self._array.insertRow(r + 1)
-                self._array.setItem(r + 1, 0, _item(str(r + 1), False))
-                self._array.setItem(r + 1, 1, _item("", not self._read_only))
+                self._array.setItem(r + 1, 0, table_item(str(r + 1), False))
+                self._array.setItem(r + 1, 1, table_item("", not self._read_only))
             finally:
                 self._syncing = False
 
@@ -621,6 +509,7 @@ class DisplayValueEditor:
         try:
             done = s._doc.apply_text_display(s._index, self._initial, after)
         except Exception as exc:  # noqa: BLE001 -- reported in the sheet
+            _note_exc("objprops.display_value.apply")
             s._fail("The display value could not be written: %s" % exc, self.widget)
             return False
         if done is False:

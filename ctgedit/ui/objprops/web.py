@@ -6,6 +6,7 @@ from PySide6 import QtCore, QtWidgets
 
 from ...format import webcontent as W
 from ..style.theme import set_note_role
+from ...infra.logsetup import note_exception as _note_exc
 
 HELP_TOPIC = "properties#web-content"
 
@@ -24,7 +25,7 @@ class WebContentEditor:
             from ..help import set_help
 
             set_help(self.widget, HELP_TOPIC)
-        except Exception:  # noqa: BLE001
+        except RuntimeError:
             pass
         self.reload()
 
@@ -108,6 +109,7 @@ class WebContentEditor:
         try:
             info = s._doc.web_content(s._index)
         except Exception:  # noqa: BLE001
+            _note_exc("objprops.web.reload")
             info = {"url": "", "enable_print": False}
         self.url.setPlainText(info["url"])
         self.enable_print.setChecked(bool(info["enable_print"]))

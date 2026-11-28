@@ -14,9 +14,6 @@ CONSISTENCY_KEYS = (
 )
 #: Settings > Keyboard > Other windows > "Text size 100 % in the manual" (help/zoom_reset_key)
 HELP_RESET_KEYS = (("ctrl0", "Ctrl+0 (as in a browser)"), ("ctrl1", "Ctrl+1 (as View > Zoom 100%)"))
-#: Settings > Pages and libraries > Library panel > "Ctrl + wheel sizes the cards by" (px a
-#: notch)
-CARD_WHEEL_STEP_DEFAULT = 8
 CARD_WHEEL_STEP_RANGE = (2, 40)
 
 

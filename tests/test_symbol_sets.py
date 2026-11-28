@@ -624,8 +624,8 @@ def test_window_double_click_ungroup_and_tool(doc, fx):
         for dlg in list(w._dialogs.values()):
             dlg.reject()
     finally:
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
 
 
 def test_template_set_sheet_shows_close_and_edit_template(fx_install):
@@ -763,10 +763,10 @@ def test_a_repaired_state_0_is_drawn_again(second):
             (ObjectKind.SYMBOL, 0x07, False, ()),
             (ObjectKind.GENIE, 0x08, False, [(ObjectKind.ELLIPSE, 0x11)]),
         )
-    RS._select_set_state([objs[m] for m in objs[0].members], objs)
+    RS.select_set_state([objs[m] for m in objs[0].members], objs)
     assert objs[1].raw.get("_state_hidden") and not objs[2].raw.get("_state_hidden")
     objs[1].raw["_embedded_bmp"] = (1, 1, b"\0\0\0\0", False)  # the repair's graft
-    RS._reselect_set_state(objs[0], objs, pobjs)
+    RS.reselect_set_state(objs[0], objs, pobjs)
     assert not objs[1].raw.get("_state_hidden")
     assert all(o.raw.get("_state_hidden") for o in objs[2:])
 
@@ -792,13 +792,13 @@ def test_a_set_in_the_state_drawn_again_is_chosen_again():
             objs[p].members.append(i)
     pobjs = [types.SimpleNamespace(type_code=tc) for _k, tc, _p in kinds]
     objs[5].raw["_embedded_bmp"] = bmp
-    RS._select_set_state([objs[1], objs[5]], objs)
+    RS.select_set_state([objs[1], objs[5]], objs)
     assert all(objs[i].raw.get("_state_hidden") for i in (1, 2, 3, 4))
     assert not objs[5].raw.get("_state_hidden")
     before = {i: dict(o.raw) for i, o in enumerate(objs)}
-    RS._reselect_set_state(objs[2], objs, pobjs)  # inside the hidden state: left alone
+    RS.reselect_set_state(objs[2], objs, pobjs)  # inside the hidden state: left alone
     assert {i: dict(o.raw) for i, o in enumerate(objs)} == before
     objs[3].raw["_embedded_bmp"] = objs[4].raw["_embedded_bmp"] = bmp  # the repair
     for j in (0, 2):  # (the callers' record order)
-        RS._reselect_set_state(objs[j], objs, pobjs)
+        RS.reselect_set_state(objs[j], objs, pobjs)
     assert [bool(o.raw.get("_state_hidden")) for o in objs] == [False, False, False, False, True, True]

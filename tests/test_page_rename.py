@@ -2,6 +2,7 @@
 and tables that name them (io/project.rename_pages), the dialog (ui/dialog/rename_pages) and
 the window's tabs."""
 
+from ctgedit.ui.window.open_tabs import SharedState
 import os
 
 import pytest
@@ -283,7 +284,7 @@ def test_the_dialog_renames_and_undoes_and_finds_references(fx_install):
         dlg.flush()
         assert dlg._pairs == [(pdir, "FxGenies", "PlantGenies"), (pdir, "FxParts", "PlantParts")]
         assert dlg.rename()
-        assert not dlg._ok.isEnabled() and not dlg._b_stop.isHidden() and not dlg.undo_rename()
+        assert not dlg._ok.isEnabled() and not dlg._helper.stop_button.isHidden() and not dlg.undo_rename()
         dlg.finish()
         olds = sorted(os.path.join(pdir, n + ".ctg") for n in ("FxGenies", "FxParts"))
         news = sorted(os.path.join(pdir, n + ".ctg") for n in ("PlantGenies", "PlantParts"))
@@ -321,7 +322,6 @@ def test_open_tabs_follow_their_renamed_page(fx_install):
     is being renamed it is not saved."""
     _app()
     from ctgedit.ui.main_window import MainWindow
-    from ctgedit.ui.window import files
 
     pdir = os.path.dirname(fx_install.page("FxGenies"))
     old, new = fx_install.page("FxGenies"), os.path.join(pdir, "FxPumps.ctg")
@@ -336,14 +336,14 @@ def test_open_tabs_follow_their_renamed_page(fx_install):
         rename_page(pdir, "FxGenies", "FxPumps")
         w.pages_moved([(old, new)], [old])
         assert w.doc is doc and doc.path == new and doc.dirty and len(w._docs) == 1
-        assert not files.RENAMING and new in w._watcher.files()
+        assert not SharedState.renaming and new in w._watcher.files()
         assert "FxPumps" in w._tab_title(doc)
         assert w._save_to() and os.path.isfile(new) and not os.path.exists(old)
     finally:
         for e in list(w._docs):
             e["doc"].dirty = False
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.close()
 
 

@@ -8,6 +8,7 @@ from typing import Optional
 from PySide6 import QtGui, QtWidgets
 
 from .expression import wizard_button
+from ...infra.logsetup import note_exception as _note_exc
 
 HELP_TOPIC = "properties#cicode-object"
 MAX_COMMAND = 254
@@ -23,12 +24,14 @@ def _thumbnail(doc, symbol: str) -> Optional[QtGui.QPixmap]:
             img = class_icon("ADVSHOW")
             return QtGui.QPixmap.fromImage(img) if img is not None else None
         except Exception:  # noqa: BLE001
+            _note_exc("objprops.cicode._thumbnail/icon")
             return None
     lib, _dot, elem = symbol.partition(".")
     try:
         res = doc._resolver()
         libs = res.libraries(lib, "ctl") if res is not None else []
     except Exception:  # noqa: BLE001
+        _note_exc("objprops.cicode._thumbnail")
         libs = []
     from ...format.pagesummary import read_element_summary
 
@@ -56,6 +59,7 @@ def symbol_problem(doc, symbol: str) -> Optional[str]:
         res = doc._resolver()
         info = placement.element_info(res, lib, elem, "ctl") if res is not None else None
     except Exception:  # noqa: BLE001
+        _note_exc("objprops.cicode.symbol_problem")
         info = None
     if info is None:
         return "The symbol %s is not in a library of this project or its include chain." % symbol
@@ -80,7 +84,7 @@ class CicodeEditor:
             from ..help import set_help
 
             set_help(self.widget, HELP_TOPIC)
-        except Exception:  # noqa: BLE001
+        except RuntimeError:
             pass
         self.reload()
 
@@ -171,6 +175,7 @@ class CicodeEditor:
                 if element.lower() in {n.lower() for n in lib.element_names()}:
                     return lib.path
         except Exception:  # noqa: BLE001 -- no thumbnail then
+            _note_exc("objprops.cicode._symbol_path")
             return None
         return None
 
@@ -180,10 +185,6 @@ class CicodeEditor:
     def _display_changed(self) -> None:
         v = self.display.value()
         self.set_symbol("%s.%s" % v if v else "")
-
-    def _pick_symbol(self) -> None:
-        if not self._ro:
-            self.display.browse()
 
     def clear(self) -> None:
         if self._ro:
@@ -250,6 +251,7 @@ class CicodeEditor:
         try:
             info = s._doc.cicode_object(s._index)
         except Exception:  # noqa: BLE001
+            _note_exc("objprops.cicode.reload")
             info = {"command": "", "symbol": ""}
         self._syncing = True
         try:

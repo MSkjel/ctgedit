@@ -638,7 +638,7 @@ class Soak:
                 parse_ctg_bytes(doc.serialize()),
                 doc.path,
                 records_fresh=True,
-                generation=editing._LIBRARY_GENERATION[0],
+                generation=editing.LIBRARY_GENERATION[0],
             )
             return {
                 "reload_matches_baseline": page_digest(full)["model"] == want["model"],

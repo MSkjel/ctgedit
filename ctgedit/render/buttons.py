@@ -210,7 +210,7 @@ def sys_colour(idx: int) -> QtGui.QColor:
 
             c = ctypes.windll.user32.GetSysColor(idx)
             rgb = ((c & 0xFF) << 16) | (c & 0xFF00) | ((c >> 16) & 0xFF)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 -- swallow-ok: not Windows: the default colour
             pass
     return QtGui.QColor((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF)
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..infra.paths import lib_path_dirs
+
 import copy
 import os
 from typing import Dict, List, Optional, Sequence, Tuple
@@ -13,6 +15,11 @@ from . import geometry as G
 from . import alarmind as AI
 from .genie_place import Bag, decode, encode, to_po
 from .page import PageObject
+from ..infra.logsetup import note_exception as _note_exc
+
+
+#: the records an instance built for its size encodes (its root)
+_ROOT_ONLY = frozenset((0,))
 
 
 class ComposeContext:
@@ -25,7 +32,7 @@ class ComposeContext:
         self.page_path = page_path
         self.project_dir = os.path.dirname(os.path.abspath(page_path))
         # a page copied out of its project: CTG_LIB_PATH names the real one
-        self.extra = [d for d in os.environ.get("CTG_LIB_PATH", "").split(os.pathsep) if d]
+        self.extra = lib_path_dirs()
         self.resolver = resolver if resolver is not None else SymbolResolver.for_page(page_path, self.extra)
         self._elements: Dict[tuple, Optional[GP.Element]] = {}
         self._flags: Optional[List[Tuple[int, int]]] = None
@@ -44,10 +51,13 @@ class ComposeContext:
             try:
                 el = GP.load_element(path, item.item, self.resolver)
             except Exception:  # noqa: BLE001 -- an unreadable element: no size
+                _note_exc("composer_build.ComposeContext.element", lib=path, element=item.item)
                 el = None
         if el is not None:
             el.library = item.library  # CtDraw writes the template's spelling
             el.records = [_with_an_name(po) for po in _loaded(el, self.resolver)]
+            # (every size and instance of the item builds from these records)
+            GP.own_memos(el)
         self._elements[key] = el
         return copy.copy(el) if el is not None else None
 
@@ -62,21 +72,19 @@ class ComposeContext:
                 if u not in users:
                     users.append(u)
         dirs = resolve_project_dirs(item.project, users) if item.project else []
+        from .fileio import find_ci
+
         for d in dirs:
-            try:
-                names = {n.lower(): n for n in os.listdir(d)}
-            except OSError:
+            path = find_ci(d, "%s.%s" % (item.library, item.ext))
+            if path is None:
                 continue
-            fn = names.get(("%s.%s" % (item.library, item.ext)).lower())
-            if fn is None:
-                continue
-            path = os.path.join(d, fn)
             try:
                 from .symbols import open_library
 
                 if open_library(path).element(item.item) is not None:
                     return path
             except Exception:  # noqa: BLE001
+                _note_exc("composer_build.ComposeContext._find", lib=path)
                 continue
         res = self.resolver.resolve(
             SymbolReference(item.library, item.item, item.ext, "genie" if item.ext == "ctm" else "symbol")
@@ -89,16 +97,19 @@ class ComposeContext:
         params: Sequence[Tuple[str, str]],
         xy: Tuple[int, int],
         handles: Sequence[int],
+        root_only: bool = False,
     ) -> Optional[List[PageObject]]:
         """The content genie pasted with its extent's top-left at ``xy``,
         its non-empty bound parameters set (CtDraw is called only for
-        a value with a length)."""
+        a value with a length). ``root_only``: only the root record is made (a shell
+        for its geometry; the others stand in for their place)."""
         el = self.element(item)
         if el is None:
             return None
         prm = {k: v for k, v in params if v != ""}
         local = GP.local_for_topleft(el, xy[0], xy[1])
-        recs = GP.build_instance_records(el, local, prm, handles=list(handles), resolver=self.resolver)
+        kw = {"shells": True, "keep": _ROOT_ONLY} if root_only else {}
+        recs = GP.build_instance_records(el, local, prm, handles=list(handles), resolver=self.resolver, **kw)
         # the parameters can change the extent (a right-aligned label's text):
         # GenieLayout then moves the genie so the top-left of its extent is at
         # the point again
@@ -108,7 +119,7 @@ class ComposeContext:
             if (l, t) != (xy[0], xy[1]):
                 local = (local[0] + xy[0] - l, local[1] + xy[1] - t)
                 recs = GP.build_instance_records(
-                    el, local, prm, handles=list(handles), resolver=self.resolver
+                    el, local, prm, handles=list(handles), resolver=self.resolver, **kw
                 )
         return recs
 
@@ -126,7 +137,7 @@ class ComposeContext:
         out = None
         if el is not None:
             n = GP.handle_count(el)
-            recs = self.instance(item, params, (0, 0), range(1, n + 1))
+            recs = self.instance(item, params, (0, 0), range(1, n + 1), root_only=True)
             gh = G.parse_geom_header(recs[0].body_raw) if recs else None
             if gh is not None:
                 l, t, r, b = gh.rect2
@@ -146,7 +157,7 @@ class ComposeContext:
             try:
                 out = AI.flag_sizes(self.page_path, self.resolver)
             except Exception:  # noqa: BLE001 -- the default flag box still applies
-                pass
+                _note_exc("composer_build.ComposeContext.flag_sizes", page=self.page_path)
             self._flags = out
         return list(self._flags)
 
@@ -203,6 +214,7 @@ def _loaded(el: GP.Element, resolver) -> List[PageObject]:
             list(el.records), ext="ctm", resolver=resolver, lib_path=el.lib_path, e=tuple(el.e)
         )
     except Exception:  # noqa: BLE001 -- the stored records then
+        _note_exc("composer_build._loaded")
         return list(el.records)
     # the element ROOT is not re-made by a load (its colour state stays the
     # stored one); the paste derives its geometry

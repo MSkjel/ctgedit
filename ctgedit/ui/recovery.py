@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from ..infra.logsetup import note_exception as _note_exc
+
+from ..infra.paths import path_key
+
 import os
 import time
 from typing import List, Optional
@@ -57,7 +61,7 @@ def _signature(doc) -> tuple:
         len(doc._undo),
         len(doc._redo),
         bool(doc.dirty),
-        os.path.normcase(os.path.abspath(doc.path)),
+        path_key(doc.path),
     )
 
 
@@ -87,7 +91,7 @@ class AutosaveController(QtCore.QObject):
         from .main_window import MainWindow
 
         out = []
-        for w in list(MainWindow._instances):
+        for w in list(MainWindow.instances):
             try:
                 out += [e["doc"] for e in w._docs]
             except RuntimeError:  # a window being destroyed
@@ -153,7 +157,7 @@ class AutosaveController(QtCore.QObject):
         try:
             # no editor window showing = starting or closing: the last
             # window's own save_prefs wrote the session, keep it
-            if not any(w.isVisible() for w in MainWindow._instances):
+            if not any(w.isVisible() for w in MainWindow.instances):
                 return
             st = app_settings()
             files = MainWindow.merged_session_files(st)
@@ -168,6 +172,7 @@ class AutosaveController(QtCore.QObject):
                 st.setValue("session/pinned", [r["path"] for r in tabs if r.get("pinned")])
                 self._session_key = (files, rows)
         except Exception:  # noqa: BLE001 -- best effort
+            _note_exc("recovery._write_session")
             pass
 
     @staticmethod
@@ -178,6 +183,7 @@ class AutosaveController(QtCore.QObject):
         try:
             autosave.forget_document(doc)
         except Exception:  # noqa: BLE001
+            _note_exc("recovery.forget")
             pass
         doc.ui.autosave_key = None
         doc.ui.as_saved_sig = None
@@ -245,15 +251,15 @@ class RecoveryDialog(QtWidgets.QDialog):
 
     def _done(self, choice: str) -> None:
         if choice == self.DISCARD and self.selected():
-            r = QtWidgets.QMessageBox.question(
+            from .messages import confirm
+
+            if not confirm(
                 self,
                 "Discard Recovered Changes",
                 "Delete the %d selected recovery cop%s? Those changes are then lost."
                 % (len(self.selected()), "y" if len(self.selected()) == 1 else "ies"),
-                QtWidgets.QMessageBox.Discard | QtWidgets.QMessageBox.Cancel,
-                QtWidgets.QMessageBox.Cancel,
-            )
-            if r != QtWidgets.QMessageBox.Discard:
+                "Discard",
+            ):
                 return
         self.choice = choice
         (self.accept if choice != self.LATER else self.reject)()
@@ -290,7 +296,9 @@ class RestoreBackupDialog(QtWidgets.QDialog):
         self.list.currentRowChanged.connect(self._show)
         bb = QtWidgets.QDialogButtonBox()
         self.btn_restore = bb.addButton("Restore", QtWidgets.QDialogButtonBox.AcceptRole)
-        self.btn_folder = bb.addButton("Open Folder", QtWidgets.QDialogButtonBox.ActionRole)
+        self.btn_folder = bb.addButton(
+            "Open Folder", QtWidgets.QDialogButtonBox.ResetRole
+        )  # (left of Restore and Close)
         bb.addButton(QtWidgets.QDialogButtonBox.Close)
         self.btn_restore.clicked.connect(self._restore)
         self.btn_folder.clicked.connect(self._open_folder)
@@ -312,19 +320,18 @@ class RestoreBackupDialog(QtWidgets.QDialog):
             return
         for e in b.entries:
             if e.get("page"):
-                text = "%s  (%s)" % (e.get("page", "?"), os.path.basename(e.get("project", "")))
-            elif e.get("library"):
-                text = os.path.basename(e["library"])
+                proj = os.path.basename(e.get("project", ""))
+                text = "%s  (%s)" % (e.get("page", "?"), proj) if proj else e.get("page", "?")
             else:
-                text = e.get("original", "?")
+                text = os.path.basename(e.get("original", "")) or "?"
             self.contents.addItem(text)
 
     def _open_folder(self) -> None:
-        from PySide6 import QtGui
+        from .messages import open_folder
 
         b = self.current()
         if b is not None:
-            QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(b.path))
+            open_folder(b.path)
 
     def _restore(self) -> None:
         b = self.current()
@@ -334,7 +341,9 @@ class RestoreBackupDialog(QtWidgets.QDialog):
         from ..infra.backups import KINDS
 
         what = b.noun
-        r = QtWidgets.QMessageBox.warning(
+        from .messages import confirm
+
+        if confirm(
             self,
             "Restore Backup",
             "Put the %d %s of this backup back as %s before %s ran? Changes made "
@@ -346,10 +355,8 @@ class RestoreBackupDialog(QtWidgets.QDialog):
                 KINDS.get(b.kind, b.kind),
                 "it" if n == 1 else "them",
             ),
-            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.Cancel,
-            QtWidgets.QMessageBox.Cancel,
-        )
-        if r == QtWidgets.QMessageBox.Yes:
+            "Restore",
+        ):
             self.chosen = b
             self.accept()
 

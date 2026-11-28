@@ -128,7 +128,7 @@ def _captions() -> List[str]:
         import win32gui
         import win32process
         from . import winui
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- swallow-ok: no pywin32: no captions
         return []
     pids = set(winui.pids_of("Citect32.exe")) | set(winui.pids_of("Citect.exe"))
     out = []
@@ -139,7 +139,7 @@ def _captions() -> List[str]:
                 _t, pid = win32process.GetWindowThreadProcessId(h)
                 if pid in pids:
                     out.append(win32gui.GetWindowText(h))
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 -- swallow-ok: a window that closed meanwhile
             pass
         return True
 
@@ -155,7 +155,7 @@ def displayed_pages() -> List[str]:
         return []
     try:
         return list(window_pages().values())
-    except Exception:  # noqa: BLE001 -- no CtAPI: the captions
+    except Exception:  # noqa: BLE001 -- swallow-ok: no CtAPI: the captions
         return _captions()
 
 

@@ -10,7 +10,7 @@ import threading
 import time
 from typing import Optional
 
-from ...infra import gcguard, workers
+from ...infra import gcguard, logsetup, workers
 
 #: the internal command line option of the helper (app.main)
 OPTION = "--sim-page-model"
@@ -65,6 +65,7 @@ class ModelJob:
             self._proc.kill()
             self.error = "the page model helper took longer than %d s" % WAIT_S
         except Exception as e:  # noqa: BLE001 -- the job then gives no model
+            logsetup.note_exception("sim.modeljob._pump")
             self.error = "the page model helper failed (%s: %s)" % (type(e).__name__, e)
         finally:
             self.seconds = time.monotonic() - self._t0
@@ -97,7 +98,7 @@ def unsaved(doc) -> bool:
     path = getattr(doc, "path", "") or ""
     try:
         moved = bool(doc.changed_on_disk())
-    except Exception:  # noqa: BLE001 -- no stamp: as export_document
+    except Exception:  # noqa: BLE001  # swallow-ok: no stamp: as export_document
         moved = False
     return bool(getattr(doc, "dirty", False)) or moved or not (path and os.path.exists(path))
 

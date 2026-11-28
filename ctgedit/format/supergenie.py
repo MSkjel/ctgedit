@@ -15,6 +15,7 @@ from . import geometry as G
 from . import links
 from . import template_place as TP
 from .page import PageObject
+from ..infra.logsetup import note_exception as _note_exc
 
 SUPER = "@SUPER"
 ROOT_FLAGS = 0x1 | 0x4  # LINK + NOSELECT (a locked, linked root)
@@ -89,6 +90,7 @@ def page_roots(objs: Sequence[PageObject]) -> List[Tuple[int, int, object]]:
             try:
                 ref = reference_from_object(po)
             except Exception:  # noqa: BLE001
+                _note_exc("supergenie.page_roots")
                 ref = None
             if ref is not None and ref.ext == "ctm" and is_super_element(ref.element):
                 out.append((i, end, ref))
@@ -134,7 +136,7 @@ def compose(sg: TP.Template, link: str, **kw) -> List[PageObject]:
 
 def link_entries(sg: TP.Template, link: str, records) -> List[Tuple[bytes, str]]:
     entries = [TP.link_entry(sg, link)]
-    TP._add_entries(entries, GP.label_entries(records))
+    TP.add_entries(entries, GP.label_entries(records))
     return entries
 
 
@@ -306,14 +308,9 @@ def page_exists(project_dir: str, name: str) -> bool:
     .ctg (the record, then _access on the file)."""
     if not os.path.exists(os.path.join(project_dir, name + ".ctg")):
         return False
-    from .projects import read_dbf_rows
+    from .projects import PAGE_NAME_LEN, registered_names
 
-    for n in ("pages.DBF", "pages.dbf"):
-        p = os.path.join(project_dir, n)
-        if os.path.exists(p):
-            low = name.strip().lower()[:64]
-            return any((r.get("NAME") or "").strip().lower() == low for r in read_dbf_rows(p))
-    return False
+    return name.strip().lower()[:PAGE_NAME_LEN] in (registered_names(project_dir) or ())
 
 
 def page_in_chain(project_dir: str, name: str) -> Optional[str]:
@@ -325,7 +322,7 @@ def page_in_chain(project_dir: str, name: str) -> Optional[str]:
     try:
         dirs += include_search_dirs(project_dir)
     except Exception:  # noqa: BLE001 -- an unreadable include.dbf: the project only
-        pass
+        _note_exc("supergenie.page_in_chain", project=project_dir)
     for d in dirs:
         if page_exists(d, name):
             return d

@@ -281,13 +281,13 @@ def windows_high_contrast() -> bool:
             hc.cbSize = ctypes.sizeof(HIGHCONTRASTW)
             if ctypes.windll.user32.SystemParametersInfoW(0x42, hc.cbSize, ctypes.byref(hc), 0):
                 return bool(hc.dwFlags & 0x1)
-        except Exception:  # noqa: BLE001 -- no high contrast then
+        except Exception:  # noqa: BLE001  # swallow-ok: no high contrast then
             return False
         return False
     try:
         hints = QtGui.QGuiApplication.styleHints().accessibility()
         return hints.contrastPreference() == QtCore.Qt.ContrastPreference.HighContrast
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # swallow-ok: feature detection
         return False
 
 
@@ -324,7 +324,7 @@ def windows_light_apps() -> bool:
         cs = QtGui.QGuiApplication.styleHints().colorScheme()
         if cs == QtCore.Qt.ColorScheme.Dark:
             return False
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # swallow-ok: feature detection
         pass
     return True
 
@@ -352,7 +352,7 @@ def contrast_colours() -> Dict[str, str]:
             ):
                 c = int(get(idx)) & 0xFFFFFF  # COLORREF 0x00BBGGRR
                 sys_col[name] = "#%02x%02x%02x" % (c & 0xFF, (c >> 8) & 0xFF, c >> 16)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001  # swallow-ok: no system colours: the defaults
             sys_col = {}
     if not sys_col:
         pal = QtGui.QGuiApplication.palette()
@@ -418,7 +418,7 @@ def appearance() -> dict:
     for k, d in APPEARANCE_DEFAULTS.items():
         try:
             out[k] = st.value(k, d, type=type(d))
-        except Exception:  # noqa: BLE001 -- a garbled value reads as the default
+        except Exception:  # noqa: BLE001  # swallow-ok: a garbled value reads as the default
             out[k] = d
     lo, hi = TEXT_SIZE_RANGE
     out["ui/text_size"] = max(lo, min(hi, int(out["ui/text_size"] or 100)))
@@ -794,9 +794,13 @@ def _uninstall_stylesheet_hook() -> None:
 
 def _retheme_widgets(app) -> None:
     """Re-apply every widget's own stylesheet (as it was written) in the
-    active scheme; a widget styled before the hook existed is adopted."""
+    active scheme; a widget styled before the hook existed is adopted. A widget's own
+    ``_theme_changed`` runs first: a sheet it sets is current, and is not set again."""
     for w in app.allWidgets():
         try:
+            hook = getattr(w, "_theme_changed", None)
+            if callable(hook):
+                hook()
             tmpl = w.property(_QSS_PROP)
             if tmpl is None:
                 tmpl = w.styleSheet()
@@ -806,9 +810,6 @@ def _retheme_widgets(app) -> None:
                 new = qss(tmpl)
                 if new != w.styleSheet():
                     _orig_set_style_sheet(w, new)
-            hook = getattr(w, "_theme_changed", None)
-            if callable(hook):
-                hook()
         except RuntimeError:  # deleted while we walked
             continue
 
@@ -1062,6 +1063,8 @@ class AppStyle(QtWidgets.QProxyStyle):
     _S = QtWidgets.QStyle
     #: the indicator's side at 100 %
     INDICATOR_PX = 14
+    #: small icons (a search box's '.*', item views, menus) at 100 %: they grow with the text
+    SMALL_ICON_PX = 16
 
     def styleHint(self, hint, option=None, widget=None, returnData=None):  # noqa: N802
         if hint == self._GROWTH_HINT:
@@ -1071,6 +1074,8 @@ class AppStyle(QtWidgets.QProxyStyle):
     def pixelMetric(self, metric, option=None, widget=None):  # noqa: N802
         if metric in self._INDICATOR_METRICS:
             return px(self.INDICATOR_PX)
+        if metric == QtWidgets.QStyle.PM_SmallIconSize:
+            return px(self.SMALL_ICON_PX)
         return QtWidgets.QProxyStyle.pixelMetric(self, metric, option, _alive_or_none(widget))
 
     def drawPrimitive(self, element, option, painter, widget=None):  # noqa: N802
@@ -1282,7 +1287,7 @@ def apply_theme(
 
         _scene.PageScene._MARGIN_COLOUR = QtGui.QColor(c["desk"])
     except Exception:  # noqa: BLE001 -- the canvas keeps its margin colour
-        pass
+        _note_exc("theme.apply_theme/margin")
     _retheme_widgets(app)
     _watch_windows(app)
     _state["signature"] = (scheme, scale)
@@ -1309,11 +1314,11 @@ def _watch_windows(app) -> None:
     later = lambda *_a: QtCore.QTimer.singleShot(0, refresh_from_windows)  # noqa: E731
     try:
         hints.colorSchemeChanged.connect(later)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # swallow-ok: feature detection
         pass
     try:
         hints.accessibility().contrastPreferenceChanged.connect(later)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # swallow-ok: feature detection
         pass
 
 
@@ -1454,6 +1459,17 @@ def arrow_image(role: str = "text", w: int = 8, h: int = 4, up: bool = False) ->
 # --------------------------------------------------------------------------- notes, search
 #: the colour roles of note labels
 NOTE_ROLES = ("text_dim", "warn", "danger")
+
+
+def enable(widget: QtWidgets.QWidget, on: bool, why: str = "") -> None:
+    """Turn ``widget`` on or off; while off its tooltip says ``why`` (after its own tip: Qt
+    shows the tooltips of controls that are off)."""
+    tip = widget.property("ownTip")
+    if tip is None:
+        tip = widget.toolTip()
+        widget.setProperty("ownTip", tip)
+    widget.setEnabled(on)
+    widget.setToolTip(tip if on or not why else ("%s\n%s" % (tip, why) if tip else why))
 
 
 def set_note_role(label: QtWidgets.QWidget, role: str = "text_dim", extra: str = "") -> None:
@@ -1745,7 +1761,9 @@ def show_regex_problem(edit: QtWidgets.QLineEdit, error: str, tip: str = "") -> 
 
 
 class SearchField(QtWidgets.QLineEdit):
-    """The standard search box."""
+    """The standard search box. ``enter_filters``: Enter applies the filter and goes no
+    further (a dialog whose default button starts work); otherwise it reaches the default
+    button too (a picker's Enter picks)."""
 
     #: the text after typing paused for the delay
     searchChanged = QtCore.Signal(str)
@@ -1757,8 +1775,10 @@ class SearchField(QtWidgets.QLineEdit):
         delay_ms: int = SEARCH_DELAY_MS,
         tip: str = "",
         regex_key: str = "",
+        enter_filters: bool = False,
     ):
         super().__init__(parent)
+        self._enter_filters = enter_filters
         self.setPlaceholderText(placeholder)
         if placeholder:
             self.setAccessibleName(placeholder)
@@ -1835,6 +1855,11 @@ class SearchField(QtWidgets.QLineEdit):
         if e.key() == QtCore.Qt.Key_Escape and self.text():
             self.clear()
             self.flush()
+            e.accept()
+            return
+        if self._enter_filters and e.key() in (QtCore.Qt.Key_Return, QtCore.Qt.Key_Enter):
+            self.flush()
+            self.returnPressed.emit()
             e.accept()
             return
         if self._list is not None and e.key() in self._NAV_KEYS:
@@ -2478,7 +2503,7 @@ def _paint_glyph(name: str, w: int, h: int, dpr: float, fg: QtGui.QColor) -> QtG
     draw = _GLYPHS.get(name, _g_unknown)
     try:
         draw(painter, fg)
-    except Exception:  # noqa: BLE001 -- an icon must never raise
+    except Exception:  # noqa: BLE001  # swallow-ok: an icon must never raise
         pass
     finally:
         painter.end()
@@ -2561,10 +2586,9 @@ class _GlyphEngine(QtGui.QIconEngine):
         return "ctgglyph"
 
 
-def icon(name: str, size: int = 20) -> QtGui.QIcon:
-    """Programmatically painted icon (cached per name; ``size`` is kept for
-    the callers -- the engine paints whatever size a widget asks for).
-    Unknown names fall back to '?'."""
+def icon(name: str) -> QtGui.QIcon:
+    """Programmatically painted icon, cached per name: the engine paints whatever size a
+    widget asks for. Unknown names fall back to '?'."""
     cached = _ICON_CACHE.get(name)
     if cached is not None:
         return cached

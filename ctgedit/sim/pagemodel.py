@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..infra.paths import path_key
+
 import collections
 import json
 import math
@@ -105,6 +107,12 @@ def _axis_lengths(mode: int, m6) -> Tuple[float, float]:
     if mode in (0, 1):
         return 1.0, 1.0
     return math.hypot(a, b), math.hypot(c, d)
+
+
+def move_magnitude(po) -> Optional[List[float]]:
+    """The factors a Move class's offsets are drawn at for record ``po`` (:func:`_magnitude` of
+    its transform slots); None = (1, 1)."""
+    return _magnitude(_slots(po))
 
 
 def _magnitude(slots) -> Optional[List[float]]:
@@ -277,7 +285,7 @@ def _value_props(po, memo=None) -> Dict[str, str]:
     ``memo`` = pgregister._value_bag's (the bags the page's rows read, this call's)."""
     from ..io import pgregister as PR
 
-    return {k.upper(): v for k, v in PR._value_bag(po, memo)}
+    return {k.upper(): v for k, v in PR.value_bag(po, memo)}
 
 
 def _text_font(po, tail, anchor=None) -> Optional[dict]:
@@ -324,7 +332,7 @@ def _link(po) -> Optional[dict]:
 
 
 class _OwnerInfo:
-    """The appearance owner of each record (format/ctf._Owners, CtDraw's load linkage): an
+    """The appearance owner of each record (format/ctf.Owners, CtDraw's load linkage): an
     art-stripped genie member takes its element twin's appearance. Used for what a stripped
     record lacks: a symbol-set state's 'library.element' and a polygon's vertex count."""
 
@@ -336,7 +344,7 @@ class _OwnerInfo:
         try:
             from ..format import ctf
 
-            o = ctf._Owners(resolver)
+            o = ctf.Owners(resolver)
             self.owners = o.resolve(objs)
             self.where = o._where
         except Exception:  # noqa: BLE001 -- no owners: the stripped details stay unknown
@@ -544,16 +552,10 @@ def _rdb_info(path: str) -> dict:
     (export_document adds 'rowsMatch' and 'current')."""
     if not path:
         return {"rdb": False}
+    from ..format.fileio import find_ci
+
     folder, base = os.path.split(os.path.abspath(path))
-    stem = os.path.splitext(base)[0].lower()
-    rdb = None
-    try:
-        for f in os.listdir(folder):
-            if f.lower() == stem + ".rdb":
-                rdb = os.path.join(folder, f)
-                break
-    except OSError:
-        return {"rdb": False}
+    rdb = find_ci(folder, os.path.splitext(base)[0] + ".rdb")
     if rdb is None:
         return {"rdb": False}
     out = {"rdb": True}
@@ -570,18 +572,19 @@ _WIDTHS: Dict[str, Tuple[tuple, Dict[str, int]]] = {}
 def field_widths(project_dir: str, table: str) -> Optional[Dict[str, int]]:
     """{FIELD: width} of the project's <table>.DBF header (None without the table); cached
     by the file's size + mtime."""
-    from ..io import pgregister as PR
+    from ..format.fileio import find_ci
 
     if not project_dir:
         return None
-    path = PR._find_file(project_dir, table + ".DBF")
+
+    path = find_ci(project_dir, table + ".DBF")
     if path is None:
         return None
     try:
         st = os.stat(path)
     except OSError:
         return None
-    key = os.path.normcase(os.path.abspath(path))
+    key = path_key(path)
     stamp = (st.st_size, st.st_mtime_ns)
     got = _WIDTHS.get(key)
     if got is not None and got[0] == stamp:
@@ -666,19 +669,20 @@ def compare_rows(
 ) -> Dict[str, Tuple[int, int, int]]:
     """Compare exported rows with the project's stored rows."""
     from ..format.dbf import Dbf
+    from ..format.fileio import find_ci
     from ..io import pgregister as PR
 
     out: Dict[str, Tuple[int, int, int]] = {}
     for table, rows in tables.items():
-        path = PR._find_file(project_dir, table + ".DBF")
+        path = find_ci(project_dir, table + ".DBF")
         if path is None:
             continue
         with Dbf(path, writable=False) as d:
             if "PAGE" not in d.fmap:
                 continue
-            ndx = PR._open_ndx(project_dir, table, writable=False)
+            ndx = PR.open_ndx(project_dir, table, writable=False)
             try:
-                have = [r for _i, r in sorted(PR._page_records(d, ndx, "PAGE", page)) if r[:1] != b"*"]
+                have = [r for _i, r in sorted(PR.page_records(d, ndx, "PAGE", page)) if r[:1] != b"*"]
             finally:
                 if ndx is not None:
                     ndx.close()
@@ -956,7 +960,7 @@ def check_model(model: dict, doc) -> List[str]:
         # metadata: the runtime section = the value bag's METADATA_n (saver rule)
         md = o.get("metadata") or []
         if po.subtype_size & METADATA_FLAG:
-            vals = PR._value_bag(po)
+            vals = PR.value_bag(po)
             bag = {k: v for k, v in vals}
             want = []
             k = 0

@@ -180,11 +180,11 @@ def test_memo_follows_the_tag_formats():
         try:
             f = GP._frame_push(op, None, None)
             for name in ask:
-                assert TM._tag_format(name) == lookup(name)  # a text measure's lookup
+                assert TM.installed_tag_format()(name) == lookup(name)  # a text measure's lookup
             GP._frame_pop(op, f)
         finally:
             GP._op_leave(op)
-        assert TM._tag_format is lookup  # restored after the operation
+        assert TM.installed_tag_format() is lookup  # restored after the operation
         return f.deps
 
     def valid(deps, lookup):
@@ -195,7 +195,7 @@ def test_memo_follows_the_tag_formats():
         finally:
             GP._op_leave(op)
 
-    old = TM._tag_format
+    old = TM.installed_tag_format()
     try:
         a = recorded(lambda n: "#.#" if n == "TAG_A" else None, ["TAG_A", "TAG_B"])
         assert a.calls == {"TAG_A": "#.#", "TAG_B": None} and not a.none_ctx
@@ -407,14 +407,14 @@ def test_genie_dialog_installs_the_page_tag_formats():
     doc = EditableDocument.open(P.LARGE)
     TM.use_tag_formats(None)
     doc.genie_declared_params(_genies_of(doc)[0])
-    assert TM._tag_format == doc.tag_format
+    assert TM.installed_tag_format() == doc.tag_format
 
 
 def test_element_window_open_equals_the_reparsed_derive():
     from ctgedit.editing import ElementDocument
     from ctgedit.format import element_session as ES
     from ctgedit.format import writer
-    from ctgedit.format.page import _parse_object
+    from ctgedit.format.page import parse_object
     from ctgedit.io.reader import derive_options, derive_page, model_difference
 
     for name in _genie_elements(P.FXGENIE, 4):
@@ -428,7 +428,7 @@ def test_element_window_open_equals_the_reparsed_derive():
         assert not model_difference(doc.page, full), name
         # the session wrapper = the one built from clones of the element records
         pe = ES.open_element(P.FXGENIE, name)
-        clones = [_parse_object(0, 0, 0, 0, writer.object_payload(o)) for o in pe.tree]
+        clones = [parse_object(0, 0, 0, 0, writer.object_payload(o)) for o in pe.tree]
         assert [writer.object_payload(o) for o in clones] == [writer.object_payload(o) for o in pe.tree]
 
 
@@ -470,7 +470,7 @@ def test_update_pages_stamp_check_matches_the_load():
     t = links.parse_link_table(doc.parsed.page.link_table_raw)
     names = [n for _g, n in t[1] if not n.startswith("\\")]
     assert names
-    cur = UP._Current(res)
+    cur = UP.Current(res)
     for n in names:
         base = links.strip_stamp(n)
         lib, _, rest = base.partition(".")
@@ -497,7 +497,7 @@ def test_update_pages_checks_share_one_parse(tmp_path):
 
     page = str(tmp_path / "FxLarge.ctg")
     shutil.copyfile(P.LARGE, page)
-    cur = UP._Current(SymbolResolver.for_page(P.LARGE))
+    cur = UP.Current(SymbolResolver.for_page(P.LARGE))
     want = (UP.stale_elements(page, cur), UP.stale_template(page, cur), UP.stale_supergenie(page, cur))
     UP._SHARE_PARSE[0] = True
     try:
@@ -529,7 +529,7 @@ def test_value_bag_walk_equals_decode():
                 want = list(r.entries[0][1].pairs) if r.entries else []
             except Exception:  # noqa: BLE001
                 want = []
-            assert PR._value_bag(po) == want
+            assert PR.value_bag(po) == want
 
 
 def test_page_rows_twice_are_the_same_rows():
@@ -565,7 +565,7 @@ def test_an_element_nesting_itself_ends_its_operation(tmp_path, monkeypatch):
     shutil.copyfile(os.path.join(fxlib, "fxnest.ctm"), p2 / "fxnest.ctm")
     lib = str(p1 / "fxparts.ctm")
     base = _fp(GP.load_element(lib, "fx_row"))
-    tf = TM._tag_format
+    tf = TM.installed_tag_format()
 
     def nested(extra):  # where the limit falls varies
         if extra:
@@ -574,7 +574,7 @@ def test_an_element_nesting_itself_ends_its_operation(tmp_path, monkeypatch):
 
     for extra in range(12):
         nested(extra)
-        assert GP._OP[0] is None and TM._tag_format is tf, extra
+        assert GP._OP[0] is None and TM.installed_tag_format() is tf, extra
     src = bytearray((p2 / "fxnest.ctm").read_bytes())
     j = src.find(b"%Name% L1")
     assert j > 0
@@ -592,18 +592,18 @@ def test_tag_lookups_of_other_threads_are_not_recorded():
     from ctgedit.format import genie_place as GP
     from ctgedit.format import textmetrics as TM
 
-    old = TM._tag_format
+    old = TM.installed_tag_format()
     try:
         TM.use_tag_formats(lambda n: "#.#")
         op = GP._op_enter()
         try:
             f = GP._frame_push(op, None, None)
             got = []
-            t = threading.Thread(target=lambda: got.append(TM._tag_format("OTHER")))
+            t = threading.Thread(target=lambda: got.append(TM.installed_tag_format()("OTHER")))
             t.start()
             t.join()
             assert got == ["#.#"]
-            TM._tag_format("MINE")
+            TM.installed_tag_format()("MINE")
             GP._frame_pop(op, f)
         finally:
             GP._op_leave(op)

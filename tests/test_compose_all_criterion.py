@@ -1,5 +1,6 @@
 """When a nested genie copy needs composing again."""
 
+from ctgedit.ui.main_window import MainWindow
 import os
 import struct
 
@@ -445,14 +446,13 @@ def test_a_genie_compose_all_could_not_compare_is_in_the_plan(fx_install, monkey
 
 def test_the_chain_box_names_what_compose_all_left():
     from ctgedit.io import genieusage as GU
-    from ctgedit.ui.window.library import LibraryCommands
 
     chain = GU.UpdateUsersReport(
         elements_saved=["mylib.hh"],
         not_composed=[("mylib.hh", ["fxnest.n0"]), ("mylib.h3", ["fxnest.n0", "fxa.b"])],
         not_compared=["fxnest.n2: boom"],
     )
-    lines = LibraryCommands._chain_summary(chain)
+    lines = MainWindow._chain_summary(chain)
     assert lines == [
         "1 library genie saved again first: mylib.hh.",
         "Nested copies that could not be composed again and stay as stored: mylib.hh (its "

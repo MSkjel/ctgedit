@@ -1,5 +1,6 @@
 """The update after a genie save, and how it treats its own writes."""
 
+from ctgedit.ui.main_window import MainWindow
 import hashlib
 import json
 import os
@@ -134,14 +135,13 @@ def test_a_tab_the_update_saved_takes_the_next_save_while_it_runs(fx_install, wi
     _res, prog = _helper_run(fx_install, tmp_path, [tab])
     assert tab.changed_on_disk()
     _set_n0(fx_install, "SECOND")
-    from ctgedit.ui.window.library import LibraryCommands as LC
 
     try:
         UpdatePagesRun.users_busy = "fxnest.n0"
-        LC._chain_progress = prog
+        UpdatePagesRun.chain_progress = prog
         names = win._update_stale_genies(tab)
     finally:
-        LC._chain_progress = ""
+        UpdatePagesRun.chain_progress = ""
         UpdatePagesRun.users_busy = ""
     assert names, "composed at once"
     assert not tab.changed_on_disk() and _marks(tab, "SECOND")
@@ -165,27 +165,25 @@ def test_a_tab_changed_by_the_running_update_it_has_not_named_waits_for_its_end(
 
 # -- clean for the update: the steps since the last save ------------------------------------
 def test_a_tab_is_clean_when_its_steps_since_the_save_are_automatic(fx_install, win):
-    from ctgedit.ui.window.library import LibraryCommands as LC
-
     tab = _tab(win, fx_install, "n2")
     _move(tab)
     tab.save()  # (a saved step of the user's)
     _set_n0(fx_install, "FIRST")
     win._queue_open_genie_updates()
     assert tab.dirty and _marks(tab, "FIRST")
-    assert LC._tab_clean(tab), "a saved move and an automatic update: clean"
-    assert "clean\t" in LC._element_tab_states()
+    assert MainWindow._tab_clean(tab), "a saved move and an automatic update: clean"
+    assert "clean\t" in MainWindow._element_tab_states()
     tab.ui.auto_changes = []  # (an earlier run's end settled the bar)
-    assert LC._tab_clean(tab)
+    assert MainWindow._tab_clean(tab)
     _move(tab)
-    assert not LC._tab_clean(tab), "a step of the user's since the save"
+    assert not MainWindow._tab_clean(tab), "a step of the user's since the save"
     tab.undo()
-    assert LC._tab_clean(tab)
+    assert MainWindow._tab_clean(tab)
     tab.save()
     tab.undo()  # (the automatic step, below the save)
-    assert tab.dirty and LC._tab_clean(tab), "an automatic step undone: no change of theirs"
+    assert tab.dirty and MainWindow._tab_clean(tab), "an automatic step undone: no change of theirs"
     tab.undo()  # (the user's saved move undone)
-    assert tab.dirty and not LC._tab_clean(tab)
+    assert tab.dirty and not MainWindow._tab_clean(tab)
 
 
 # -- a tab with the user's changes takes what the helper stored as its own ------------------
@@ -229,14 +227,13 @@ def test_the_disk_check_during_the_update_takes_its_write_as_the_tabs_own(fx_ins
     _set_n0(fx_install, "FIRST")
     _res, prog = _helper_run(fx_install, tmp_path, [tab])
     _move(tab)
-    from ctgedit.ui.window.library import LibraryCommands as LC
 
     try:
         UpdatePagesRun.users_busy = "fxnest.n0"
-        LC._chain_progress = prog
+        UpdatePagesRun.chain_progress = prog
         win._check_disk_changes([tab.path])
     finally:
-        LC._chain_progress = ""
+        UpdatePagesRun.chain_progress = ""
         UpdatePagesRun.users_busy = ""
     assert not _disk_notices(tab), "ctgedit's own update is no other program"
     assert not tab.changed_on_disk() and tab._undo[-1].label == "move"
@@ -415,7 +412,6 @@ def test_a_tab_the_running_chain_names_later_composes_before_its_end(fx_install,
     from ctgedit.workers import genie_worker as GW
     from ctgedit.ui.jobs import genie_jobs
     from ctgedit.ui.jobs.update_run import UpdatePagesRun
-    from ctgedit.ui.window.library import LibraryCommands as LC
 
     # (the job composes at once when it is made: the timer is what is looked at)
     monkeypatch.setattr(genie_jobs, "_in_event_loop", lambda: False)
@@ -434,7 +430,7 @@ def test_a_tab_the_running_chain_names_later_composes_before_its_end(fx_install,
     assert tab.changed_on_disk()
     _set_n0(fx_install, "SECOND")
     UpdatePagesRun.users_busy = "fxnest.n0"
-    LC._chain_progress = prog
+    UpdatePagesRun.chain_progress = prog
     assert win._update_stale_genies(tab) == [] and not _marks(tab, "SECOND")
     seen = {}
     loop = QtCore.QEventLoop()
@@ -464,7 +460,6 @@ def test_automatic_steps_made_one_stay_automatic(fx_install, win):
     step and the link-table step after it) are still no step of the user's: the tab stays
     clean for the update after a genie save, and undone it is nothing to redo that holds
     the next automatic update."""
-    from ctgedit.ui.window.library import LibraryCommands as LC
 
     tab = _tab(win, fx_install, "n2")
     _set_n0(fx_install, "FIRST")
@@ -474,7 +469,7 @@ def test_automatic_steps_made_one_stay_automatic(fx_install, win):
     assert len(tab._undo) == 2 and all(c.automatic for c in tab._undo)
     one = tab.merge_last_steps(2)
     assert one is not None and one.automatic, "still automatic"
-    assert LC._tab_clean(tab)
+    assert MainWindow._tab_clean(tab)
     tab.undo()
     assert not win._user_can_redo(tab), "an automatic update undone: nothing of the user's"
 
@@ -513,7 +508,7 @@ def test_a_page_reload_that_waits_lets_a_closed_window_go(fx_install, win2, monk
     tab.dirty = False
     tab = None
     win2.close()
-    assert win2 not in MainWindow._instances
+    assert win2 not in MainWindow.instances
     gc.collect()
     assert ref() is None, "the closed window let its document go"
 
@@ -525,18 +520,17 @@ def test_a_window_closed_while_its_tab_waits_for_the_chain_lets_it_go(fx_install
     (shell._release_closed_window)."""
     from ctgedit.ui.main_window import MainWindow
     from ctgedit.ui.jobs.update_run import UpdatePagesRun
-    from ctgedit.ui.window.library import LibraryCommands as LC
 
     win2.show()
     tab = _tab(win2, fx_install, "n2")
     UpdatePagesRun.users_busy = "fxnest.n0"
-    LC._chain_progress = str(tmp_path / "run.progress")
+    UpdatePagesRun.chain_progress = str(tmp_path / "run.progress")
     win2._when_chain_names(tab)
     win2._chain_writes_waiting()[id(tab)] = (lambda: tab, {})
     timer = win2.__dict__.get("_chain_named_timer")
     assert timer is not None and timer.isActive()
     win2.close()
-    assert win2 not in MainWindow._instances
+    assert win2 not in MainWindow.instances
     assert not timer.isActive(), "its timer stops with the window"
     assert not win2.__dict__.get("_chain_named_docs"), "nothing of its tabs is kept"
     assert not win2.__dict__.get("_chain_waits")
@@ -550,7 +544,6 @@ def test_an_update_the_worker_refused_for_the_chains_write_lands_at_once(
     from ctgedit.workers import genie_worker as GW
     from ctgedit.ui.jobs import genie_jobs
     from ctgedit.ui.jobs.update_run import UpdatePagesRun
-    from ctgedit.ui.window.library import LibraryCommands as LC
 
     tab = _tab(win, fx_install, "n2")
     _set_n0(fx_install, "FIRST")
@@ -567,7 +560,7 @@ def test_an_update_the_worker_refused_for_the_chains_write_lands_at_once(
     _res, prog = _helper_run(fx_install, tmp_path, [tab])  # (stores n2: FIRST and SECOND)
     assert tab.changed_on_disk()
     UpdatePagesRun.users_busy = "fxnest.n0"
-    LC._chain_progress = prog
+    UpdatePagesRun.chain_progress = prog
     jobs._queue.remove(job)
     jobs._ready.append(
         (job, {"format": GW.FORMAT, "updated": 0, "ops": [], "changed_on_disk": True}, time.monotonic())

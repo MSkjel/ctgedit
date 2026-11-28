@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 
 from PySide6 import QtCore, QtWidgets
+from ...infra.logsetup import note_exception as _note_exc
 
 HELP_TOPIC = "library-elements#symbol-linkage"
 _THUMB = QtCore.QSize(64, 64)
@@ -26,7 +27,7 @@ class LinkageEditor:
             from ..help import set_help
 
             set_help(self.widget, HELP_TOPIC)
-        except Exception:  # noqa: BLE001
+        except RuntimeError:
             pass
         self.reload()
 
@@ -71,6 +72,7 @@ class LinkageEditor:
         try:
             self._link = s._doc.symbol_link(s._index)
         except Exception:  # noqa: BLE001
+            _note_exc("objprops.linkage.reload")
             self._link = None
         self._pending = None
         link = self._link
@@ -142,10 +144,6 @@ class LinkageEditor:
         s = self.sheet
         if hasattr(s, "_refresh_marks"):
             s._refresh_marks(s._pending_props())
-
-    def _choose(self) -> None:
-        """Browse... (the field's picker; kept for callers)."""
-        self.field.browse()
 
     def _edit(self) -> None:
         link = self._link

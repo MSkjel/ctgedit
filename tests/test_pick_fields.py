@@ -23,7 +23,7 @@ def test_template_picker_lists_the_include_chains_styles_and_preselects(fx_insta
     assert NO_TITLE in styles  # FxStyle
     assert not p.cb_style.isEditable() and not p.cb_res.isEditable()
     p.set_current(NO_TITLE, "pagecontent@-HD1080")
-    assert p.style() == NO_TITLE
+    assert p.style_name() == NO_TITLE
     res = [p.cb_res.itemData(i) for i in range(p.cb_res.count())]
     assert res[0] == "" and p.cb_res.itemText(0) == "All resolutions"
     assert {"HD1080", "UHD4K"} <= set(res)

@@ -73,12 +73,6 @@ def colours() -> Dict[str, str]:
     return dict(LIGHT if scheme == "light" else DARK)
 
 
-def token_format(kind: str, table: Optional[Dict[str, str]] = None) -> Optional[QtGui.QTextCharFormat]:
-    """The format of a token kind (None: the field's own text)."""
-    role = ROLE.get(kind)
-    return role_format(role, table) if role is not None else None
-
-
 def role_format(role: str, table: Optional[Dict[str, str]] = None) -> QtGui.QTextCharFormat:
     """The format of a colour role."""
     table = colours() if table is None else table

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..infra.paths import path_key
+
 import contextlib
 import glob
 import hashlib
@@ -71,23 +73,20 @@ def clear(page: str) -> None:
 
 def marked(page: str) -> Optional[dict]:
     """The page's marker, or None."""
-    try:
-        with open(_path(page), encoding="utf-8") as fh:
-            m = json.load(fh)
-        return m if isinstance(m, dict) else None
-    except OSError, ValueError:
-        return None
+    from ..format.fileio import read_json_dict
+
+    return read_json_dict(_path(page)) or None
 
 
 def registered(page: str) -> Optional[bool]:
     """The page has a live pages.DBF row in its folder's project: False when the page file
     or the row is gone (or the folder is no project any more), None when the table cannot
     be read now."""
-    from . import pgregister
-
     if not os.path.exists(page):
         return False
-    pp = pgregister.find_file(os.path.dirname(os.path.abspath(page)), "pages.DBF")
+    from ..format.fileio import find_ci
+
+    pp = find_ci(os.path.dirname(os.path.abspath(page)), "pages.DBF")
     if pp is None:
         return False
     try:
@@ -107,7 +106,7 @@ def listing(dirs: Optional[Iterable[str]] = None) -> List[dict]:
     project: no Update Pages run visits it, and it has no rows to write) is removed."""
     from ..infra.paths import is_this_process, pid_alive
 
-    want = None if dirs is None else {os.path.normcase(os.path.abspath(d)) for d in dirs}
+    want = None if dirs is None else {path_key(d) for d in dirs}
     out = []
     for p in sorted(glob.glob(os.path.join(folder(), "*.json"))):
         try:
@@ -120,10 +119,7 @@ def listing(dirs: Optional[Iterable[str]] = None) -> List[dict]:
         pid, started = int(m.get("pid") or 0), int(m.get("started") or 0)
         if pid and pid_alive(pid, started) and not is_this_process(pid, started):
             continue
-        if (
-            want is not None
-            and os.path.normcase(os.path.abspath(m.get("project") or os.path.dirname(m["page"]))) not in want
-        ):
+        if want is not None and path_key(m.get("project") or os.path.dirname(m["page"])) not in want:
             continue
         if registered(str(m["page"])) is False:
             with contextlib.suppress(OSError):
@@ -145,7 +141,7 @@ def _remove_stale_ctf(page: str) -> None:
     seen = set()
     for ext in (".ctF", ".ctf"):
         p = stem + ext
-        key = os.path.normcase(os.path.abspath(p))
+        key = path_key(p)
         if key in seen or not os.path.exists(p):
             continue
         seen.add(key)

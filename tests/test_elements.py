@@ -422,8 +422,8 @@ def test_main_window_opens_and_saves_an_element(libdir, genies_page):
         assert not isinstance(w.doc, ElementDocument)
         assert not w._docs[0].get("stale")
     finally:
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
 
 
 def test_an_embedded_symbol_has_identity_slots_and_its_native_rect(genies_page):

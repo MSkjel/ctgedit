@@ -7,13 +7,14 @@ import os
 from PySide6 import QtGui, QtWidgets
 
 from .colour_field import ColourPairField
-from .fields import _L_COND, _LINE_STYLES, _Field, _Sub
+from .fields import L_COND, LINE_STYLES, Field, Sub
+from ...infra.logsetup import note_exception as _note_exc
 
-VISIBILITY_SUB = _Sub("Visibility", [_Field("Hidden when:", "VISIBLE", limit=_L_COND)], family=("VISIBLE",))
+VISIBILITY_SUB = Sub("Visibility", [Field("Hidden when:", "VISIBLE", limit=L_COND)], family=("VISIBLE",))
 SUBS = [VISIBILITY_SUB]
 #: the bag keys the button page writes (EditableDocument.set_button_face): the
 #: draw style and the caption / '#lib.element' symbol face
-FIELDS = [_Field("Mode:", "VIS_MODE", "text"), _Field("Text:", "TEXT", "text")]
+FIELDS = [Field("Mode:", "VIS_MODE", "text"), Field("Text:", "TEXT", "text")]
 
 #: the gradient directions (0 = no gradient), help 1172124
 GRADIENTS = [
@@ -79,7 +80,7 @@ def script_supported(family: str, charset: int) -> bool:
         return True
     try:
         return ws in QtGui.QFontDatabase.writingSystems(family)
-    except Exception:  # noqa: BLE001 -- font database unavailable
+    except Exception:  # noqa: BLE001  # swallow-ok: no font database, every script allowed
         return True
 
 
@@ -151,7 +152,7 @@ class _LineSection(_Section):
             f.addRow("Lowlight colour:", s._col_lolight)
         else:
             s._cb_lstyle = self.add(QtWidgets.QComboBox())
-            s._cb_lstyle.addItems(_LINE_STYLES)
+            s._cb_lstyle.addItems(LINE_STYLES)
             f.addRow("Style:", s._cb_lstyle)
             # (Transparent = no line: CtDraw's shape pages keep their selectors'
             # Transparent -- only the text / button pages turn it off)
@@ -770,16 +771,9 @@ class _ButtonSection(_Section):
         try:
             path = self.sheet._doc.library_path(library, element, "ctl")
         except Exception:  # noqa: BLE001 -- no thumbnail then
+            _note_exc("objprops.appearance._symbol_path")
             return None
         return path or None
-
-    def _pick_symbol(self):
-        try:
-            self.sheet._ed_symbol.browse()
-        except Exception as exc:  # noqa: BLE001
-            QtWidgets.QMessageBox.warning(
-                self.sheet, "Select Symbol", "The symbol libraries could not be listed: %s" % exc
-            )
 
     def problem(self):
         s = self.sheet

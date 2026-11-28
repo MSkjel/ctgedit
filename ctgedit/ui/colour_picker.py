@@ -1,6 +1,8 @@
 """The colour picker every colour field opens."""
 
 from __future__ import annotations
+
+from ..infra.paths import path_key
 from .style.theme import sp as _sp
 
 import os
@@ -12,6 +14,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from ..format import colourpalette as CP
 from ..format import colourtools as T
 from .prefs.settings import app_settings
+from .messages import warn
 
 TRANSPARENT = T.TRANSPARENT
 Pair = Tuple[int, int]
@@ -121,7 +124,7 @@ _NAMES: dict = {}
 
 def _named(folder: Optional[str]) -> dict:
     key = (
-        os.path.normcase(os.path.abspath(folder)) if folder else None,
+        path_key(folder) if folder else None,
         CP.palette_stamp(folder),
         CP.GENERATION,
     )
@@ -268,7 +271,7 @@ def palette_for(folder: Optional[str]) -> CP.Palette:
     """The palette of the project ``folder`` (a COPY: edit it freely),
     cached per palette file version."""
     key = (
-        os.path.normcase(os.path.abspath(folder)) if folder else None,
+        path_key(folder) if folder else None,
         CP.palette_stamp(folder),
         CP.GENERATION,
     )
@@ -906,12 +909,12 @@ def edit_favourites(
         try:
             note = save_palette(dlg.palette_())
         except CP.PaletteError as exc:
-            QtWidgets.QMessageBox.warning(parent, "Edit Favourite Colours", str(exc))
+            warn(parent, "Edit Favourite Colours", str(exc))
             return None
         if parent is not None and hasattr(parent, "statusBar"):
             try:
                 parent.statusBar().showMessage(note, 6000)
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001  # swallow-ok: the parent may have no status bar
                 pass
     return dlg.result_pair()
 

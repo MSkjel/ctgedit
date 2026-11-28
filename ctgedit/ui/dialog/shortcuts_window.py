@@ -10,6 +10,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 from ..prefs import keymap
 from ..prefs.keymap_page import ID_ROLE, KEYS_ROLE, KeyCapDelegate, KeySearchBar
+from ..messages import warn
 
 #: the menus of the list at the left ('' = every command)
 CATEGORIES = (
@@ -563,14 +564,18 @@ class ShortcutsWindow(QtWidgets.QDialog):
                 os.remove(tmp)
 
     def _export(self) -> None:
-        start = os.path.join(os.path.expanduser("~"), "ctgedit-keys.pdf")
-        path, _f = QtWidgets.QFileDialog.getSaveFileName(
-            self, "Export Keyboard Shortcuts", start, "PDF files (*.pdf)"
+        from ..remember import file_path
+
+        path = file_path(
+            self,
+            "Export Keyboard Shortcuts",
+            "keys pdf",
+            "PDF files (*.pdf)",
+            save=True,
+            file_name="ctgedit-keys.pdf",
         )
         if path and not self.export_pdf(path):
-            QtWidgets.QMessageBox.warning(
-                self, "Export Keyboard Shortcuts", "%s could not be written." % path
-            )
+            warn(self, "Export Keyboard Shortcuts", "%s could not be written." % path)
 
     def _print(self) -> None:
         P = _print_support()

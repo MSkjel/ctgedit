@@ -30,8 +30,8 @@ def win(fx_page):
     yield w
     for e in getattr(w, "_docs", []):
         e["doc"].dirty = False
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.hide()
 
 

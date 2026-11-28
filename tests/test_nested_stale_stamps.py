@@ -1,5 +1,6 @@
 """Nested genies that stayed old while their stamps said current."""
 
+from ctgedit.ui.main_window import MainWindow
 import os
 import shutil
 
@@ -256,7 +257,7 @@ def test_a_stamp_written_again_by_another_save_is_told_by_its_guid(fx_install, s
     if not same_guid:
         ents = [(bytes(reversed(g)) if "outer" in n.lower() else g, n) for g, n in ents]
     raw, _cnt = links.serialize_link_table(head, ents)
-    cur = updatepages._Current(SymbolResolver.for_page(page))
+    cur = updatepages.Current(SymbolResolver.for_page(page))
     got = updatepages.genie_changes(raw, cur)
     assert (("fxdeep", "outer") in got) is (not same_guid)
 
@@ -271,10 +272,10 @@ def test_a_nested_entry_with_a_reused_stamp_is_told_by_its_guid(fx_install, monk
 
     lib = _chain(fx_install)
     proj, page = _page(fx_install, [("fxdeep", "outer", {"Line": "P1"})])
-    cur = updatepages._Current(SymbolResolver.for_page(page))
+    cur = updatepages.Current(SymbolResolver.for_page(page))
     assert not updatepages.nested_changes("fxdeep.outer.<ctm", cur)
-    monkeypatch.setattr(updatepages._Current, "guid", lambda self, name: b"\x01" * 16)
-    cur = updatepages._Current(SymbolResolver.for_page(page))
+    monkeypatch.setattr(updatepages.Current, "guid", lambda self, name: b"\x01" * 16)
+    cur = updatepages.Current(SymbolResolver.for_page(page))
     assert ("fxdeep", "mid") in updatepages.nested_changes("fxdeep.outer.<ctm", cur)
     t = GU.library_tables(lib)["outer"]
     assert len(t.guids) == len(t.names) and len(t.guid) == 16
@@ -371,7 +372,6 @@ def test_an_unfinished_answer_lets_the_tab_try_again(fx_install):
     """The window's handler of a landed genie job: an unfinished one empties the tab's
     'composed with these files' record, as a failed one does."""
     from types import SimpleNamespace
-    from ctgedit.ui.window import files
     from ctgedit.editing_base import DocumentUiState
 
     doc = SimpleNamespace(ui=DocumentUiState(), path="x.ctg")
@@ -386,7 +386,7 @@ def test_an_unfinished_answer_lets_the_tab_try_again(fx_install):
         unfinished=True, bindings=None, template=False, stepped=False, why="", quiet=True, below=None
     )
     try:
-        files.PageFiles._genie_job_finished(win, doc, ["a.b"], 0, job)
+        MainWindow._genie_job_finished(win, doc, ["a.b"], 0, job)
     except Exception:  # noqa: BLE001 -- the rest of the handler needs a real window
         pass
     assert doc.ui.genie_sources_done == {}

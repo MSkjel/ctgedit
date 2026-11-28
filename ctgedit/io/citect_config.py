@@ -136,7 +136,7 @@ def set_ini_value(section: str, key: str, value: str, ini: str | None = None) ->
             [ini + BACKUP_SUFFIX, ini],
             "the old citect.ini is kept as the .ctgedit-bak copy",
         )
-    except Exception:  # noqa: BLE001 -- the log is an aid only
+    except Exception:  # noqa: BLE001 -- swallow-ok: the log is an aid only
         pass
     return True
 

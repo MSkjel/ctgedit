@@ -12,9 +12,9 @@ import corpus
 
 def _stored_rows(pdir):
     from ctgedit.format.projects import read_dbf_rows
-    from ctgedit.io import pgregister as PR
+    from ctgedit.format.fileio import find_ci
 
-    f = PR.find_file(pdir, "pgdynobj.DBF")
+    f = find_ci(pdir, "pgdynobj.DBF")
     out = collections.defaultdict(list)
     for r in read_dbf_rows(f) if f else []:
         out[(r.get("PAGE", "").strip().lower(), r.get("AN", "").strip())].append(r.get("TXTMODE", ""))

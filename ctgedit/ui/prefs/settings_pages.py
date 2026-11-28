@@ -445,7 +445,7 @@ class SettingsPages(QtWidgets.QWidget):
         outer.setSpacing(_sp(1))
         top = QtWidgets.QHBoxLayout()
         top.addStretch(1)
-        self.search = theme.SearchField(search_placeholder, regex_key="settings")
+        self.search = theme.SearchField(search_placeholder, regex_key="settings", enter_filters=True)
         self.search.setMinimumWidth(260)
         self.search.setToolTip(
             "Shows the settings whose name, choices or description "

@@ -1,5 +1,6 @@
 """Settings > Canvas."""
 
+from ctgedit.ui.main_window import MainWindow
 import os
 from qtkit import app as _app
 
@@ -62,8 +63,6 @@ def test_the_paste_offset_setting_is_clamped(monkeypatch, tmp_path):
 
 
 def test_duplicate_and_paste_use_the_offset():
-    from ctgedit.ui.window.canvas_edits import CanvasEdits
-
     class Doc:
         def duplicate_objects(self, sel, offset=10):
             self.offset = offset
@@ -79,7 +78,7 @@ def test_duplicate_and_paste_use_the_offset():
         _remember_duplicate = lambda self, *a, **k: None  # noqa: E731
 
     w = W()
-    CanvasEdits.duplicate_selected(w)
+    MainWindow.duplicate_selected(w)
     assert w.doc.offset == 0
 
 

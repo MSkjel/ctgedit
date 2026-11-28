@@ -31,23 +31,23 @@ def _norm_colorref(value: int | None) -> int | None:
     return value & 0x00FFFFFF
 
 
-def _design_colour(pair) -> int | None:
+def design_colour(pair) -> int | None:
     """The half of a colour pair CtDraw's editor paints."""
     return _norm_colorref(pair[0])
 
 
-def _pair_on(dv) -> int | None:
+def pair_on(dv) -> int | None:
     """The static ('on') COLORREF from a decoded color_pair DecodedValue."""
     if dv is None or getattr(dv, "kind", "") != "color_pair":
         return None
     try:
         return _norm_colorref(dv.value.get("on"))
     except Exception:  # noqa: BLE001
-        _note_exc("reader._pair_on")
+        _note_exc("reader.pair_on")
         return None
 
 
-def _pair_static(dv) -> int | None:
+def pair_static(dv) -> int | None:
     """The colour a static render shows for a colour pair."""
     if dv is None or getattr(dv, "kind", "") != "color_pair":
         return None
@@ -57,7 +57,7 @@ def _pair_static(dv) -> int | None:
             return off
         return _norm_colorref(dv.value.get("on"))
     except Exception:  # noqa: BLE001
-        _note_exc("reader._pair_static")
+        _note_exc("reader.pair_static")
         return None
 
 
@@ -99,12 +99,12 @@ def _colour_block(po, once=None):
     return once.get() if once is not None and once.po is po else _geom.find_colour_block(po)
 
 
-def _style_block_exact(po, geom_end: int, once=None):
+def style_block_exact(po, geom_end: int, once=None):
     """The record's style block, located the way the write path does."""
     try:
         cb = _colour_block(po, once)
     except Exception:  # noqa: BLE001
-        _note_exc("reader._style_block_exact")
+        _note_exc("reader.style_block_exact")
         cb = None
     if cb is None:
         return None
@@ -195,147 +195,106 @@ def _is_widget_container(props: dict) -> bool:
     )
 
 
-def _decode_style(po, kind: ObjectKind, geom_end: int | None, props: dict | None = None, once=None) -> Style:
-    """Fill a Style from the on-disk colour data."""
-    st = Style()
-    if props is None:
-        try:
-            props = po.properties()
-        except Exception:  # noqa: BLE001
-            _note_exc("reader._decode_style")
-            props = {}
-    raw_props = {}
-    try:
-        raw_props = po.raw_properties()
-    except Exception:  # noqa: BLE001
-        _note_exc("reader._decode_style")
-        raw_props = {}
+def _style_flags(st: Style, po, f6) -> bool:
+    """``st``'s line style and width, 3D effect and per-kind attribs from the style block's
+    flag bytes ``f6``; whether the shape is hollow."""
+    st.style_flags = bytes(f6[:6])
+    st.line_style = f6[1] & 0x0F  # GDI PS_*: 0 solid 1 dash 2 dot ...
+    if f6[4]:
+        st.line_width = f6[4]  # pen width byte, never 0 on disk
+    hollow = f6[2] == 0  # fill style: 0 hollow / 1 solid
+    # 3D border effect + per-kind 'attribs' (CtDraw's classes: rect -> RectangleStyle<<4,
+    # ellipse -> 0 ellipse/1 pie/2 arc, polygon -> 1 open/0 closed)
+    st.three_d = f6[0] & 0x0F
+    # effect_depth is stored (int)(char) by CtDraw, so 0xFF = -1
+    # (a 1px inward bevel), not 0: sign-extend.
+    st.three_d_depth = (f6[5] - 256) if f6[5] >= 0x80 else f6[5]
+    if po.type_code == 0x0F:
+        st.rectangle_style = (f6[3] >> 4) & 0x3
+    elif po.type_code == 0x11:
+        st.ellipse_style = f6[3] & 0x0F if (f6[3] & 0x0F) <= 2 else 0
+    elif po.type_code in (0x0A, 0x10):
+        st.polygon_open = bool(f6[3] & 0x01)
+    elif po.type_code == _geom.FREEHAND_TC:
+        # a free-hand stroke is never closed: CtDraw draws no closing segment
+        # although its attribs bit 0 is 0; a filled one still fills its region
+        # (the open-polygon fill rule)
+        st.polygon_open = True
+    return hollow
 
-    static = _pair_static(props.get("COL_MAXON")) or _pair_static(props.get("!COL_STATIC"))
-    fill_level = _pair_on(props.get("FILCOL"))
-    # first state-array colour as a further fallback
-    state0 = _pair_static(props.get("COL_STA_0")) or _pair_static(props.get("COL_ARR_0"))
 
-    # a LITERAL gate COL_A='FALSE' is statically OFF: the bag pair never paints
-    if str(raw_props.get("COL_A", "")).strip().upper() == "FALSE":
-        static = None
-    fill_level_animated = any(k.startswith(("FILMODE", "FILMINPC", "FILMAXPC", "FILCOL")) for k in raw_props)
-
-    _slot_static = _design_colour
-
+def _style_block_colours(st: Style, po, geom_end: int, once) -> tuple:
+    """The colours of the record's style block (or an SA panel rectangle's layout), its
+    flags into ``st``: (hilight, shadow, lolight, line, fill, hollow, the line says 'no
+    colour')."""
+    _slot_static = design_colour
     hi = sh = lo = line_blk = None
     blk_static = None
     hollow = False
     line_null = False
-    # closed shapes ALWAYS consult the runtime colour sources (their static face never comes
-    # from the bag -- see below)
-    need_block = (
-        (kind in _pc._CLOSED_KINDS)
-        or (static is None and fill_level is None and state0 is None)
-        or fill_level_animated
-    )
-    # an OPEN shape's stroke, pen width / style and 3D effect are its own style block's too
-    # (fill rule: the stroke is the LINE slot, COL_MAXON only the runtime one)
-    if kind in _pc._OPEN_KINDS and po.subtype_size & 0x2:
-        need_block = True
-    if need_block and geom_end is not None:
-        # locator (dwFlags bit 0x2 + the forward walk). Slot order, in
-        # CtDraw's own words:
-        # [0]=line, [1]=fill, [2]=background, [3]=hilight, [4]=lolight, [5]=shadow.
-        exact = _style_block_exact(po, geom_end, once)
-        slots = exact[1] if exact is not None else None
-        if exact is not None:
-            f6 = exact[0]
-            st.style_flags = bytes(f6[:6])
-            st.line_style = f6[1] & 0x0F  # GDI PS_*: 0 solid 1 dash 2 dot ...
-            if f6[4]:
-                st.line_width = f6[4]  # pen width byte, never 0 on disk
-            hollow = f6[2] == 0  # fill style: 0 hollow / 1 solid
-            # 3D border effect + per-kind 'attribs' (CtDraw's classes: rect -> RectangleStyle<<4,
-            # ellipse -> 0 ellipse/1 pie/2 arc, polygon -> 1 open/0 closed)
-            st.three_d = f6[0] & 0x0F
-            # effect_depth is stored (int)(char) by CtDraw, so 0xFF = -1
-            # (a 1px inward bevel), not 0: sign-extend.
-            st.three_d_depth = (f6[5] - 256) if f6[5] >= 0x80 else f6[5]
-            if po.type_code == 0x0F:
-                st.rectangle_style = (f6[3] >> 4) & 0x3
-            elif po.type_code == 0x11:
-                st.ellipse_style = f6[3] & 0x0F if (f6[3] & 0x0F) <= 2 else 0
-            elif po.type_code in (0x0A, 0x10):
-                st.polygon_open = bool(f6[3] & 0x01)
-            elif po.type_code == _geom.FREEHAND_TC:
-                # a free-hand stroke is never closed: CtDraw draws no closing segment
-                # although its attribs bit 0 is 0; a filled one still fills its region
-                # (the open-polygon fill rule)
-                st.polygon_open = True
-        if slots:
-            line_blk = _slot_static(slots[0])
-            # the record's OWN style block says 'no colour' for the line (0xFF high byte):
-            # CtDraw draws no border, not a default pen
-            line_null = exact is not None and line_blk is None
-            blk_static = _slot_static(slots[1])
-            hi = _slot_static(slots[3])
-            lo = _slot_static(slots[4])
-            sh = _slot_static(slots[5])
-        elif po.type_code == 0x0F:
-            # SA-style panel RECTANGLES use a different colour layout (other shapes can alias
-            # the signature)
-            panel = _find_panel_colours(po.body_raw, geom_end)
-            if panel is not None:
-                line_blk = _slot_static(panel[1])
-                if panel[0] is not None:
-                    blk_static = _slot_static(panel[0])
+    # locator (dwFlags bit 0x2 + the forward walk). Slot order, in
+    # CtDraw's own words:
+    # [0]=line, [1]=fill, [2]=background, [3]=hilight, [4]=lolight, [5]=shadow.
+    exact = style_block_exact(po, geom_end, once)
+    slots = exact[1] if exact is not None else None
+    if exact is not None:
+        hollow = _style_flags(st, po, exact[0])
+    if slots:
+        line_blk = _slot_static(slots[0])
+        # the record's OWN style block says 'no colour' for the line (0xFF high byte):
+        # CtDraw draws no border, not a default pen
+        line_null = exact is not None and line_blk is None
+        blk_static = _slot_static(slots[1])
+        hi = _slot_static(slots[3])
+        lo = _slot_static(slots[4])
+        sh = _slot_static(slots[5])
+    elif po.type_code == 0x0F:
+        # SA-style panel RECTANGLES use a different colour layout (other shapes can alias
+        # the signature)
+        panel = _find_panel_colours(po.body_raw, geom_end)
+        if panel is not None:
+            line_blk = _slot_static(panel[1])
+            if panel[0] is not None:
+                blk_static = _slot_static(panel[0])
+    return hi, sh, lo, line_blk, blk_static, hollow, line_null
 
-    # trailing static-colour pair (minimal line / polygon / panel-rect layout;
-    # see format.geometry.find_trailing_colour_pair)
-    if blk_static is None and line_blk is None:
-        tp = _geom.find_trailing_colour_pair(po)
-        if tp is not None:
-            pair_on = _struct.unpack_from("<I", po.body_raw, tp)[0]
-            blk_static = _norm_colorref(pair_on)
-    # SxW chrome tail (flag + pair + 0xFFFFFFFF padding at body end)
-    if blk_static is None and line_blk is None and po.type_code in (0x0F, 0x10):
-        tc_col = _find_tail_colour(po.body_raw)
-        if tc_col is not None:
-            blk_static = _norm_colorref(tc_col)
 
+def _shape_tail_style(st: Style, po) -> None:
+    """``st``'s corner radius, pie / arc angles and gradient from the per-kind shape tail."""
     # per-kind shape variant tail: corner radius / pie-arc angles / gradient
     try:
         stail = _geom.parse_shape_tail(po)
     except Exception:  # noqa: BLE001
-        _note_exc("reader._decode_style")
+        _note_exc("reader._shape_tail_style")
         stail = None
     if stail is not None:
         if stail["grad_mode"] <= 8:
             st.gradient_mode = stail["grad_mode"]
-            st.gradient_colour = _design_colour((stail["grad_on"], stail["grad_off"]))
+            st.gradient_colour = design_colour((stail["grad_on"], stail["grad_off"]))
         if stail["kind"] == "rect" and stail["radius"] <= 32:
             st.corner_radius = stail["radius"]
         elif stail["kind"] == "ellipse":
             st.start_angle = float(stail["start"])
             st.end_angle = float(stail["end"])
 
-    # CLOSED-shape fill sources, in CtDraw's editor precedence:
-    #   1. a COL_MAXON/!COL_STATIC pair surviving the suppression rules (ungated, not
-    #      animation-driven);
-    #   2. else the runtime face (colour block / panel layout / trailing pair).
-    # COL_STA_*/COL_ARR_* state arrays and FILCOL fill levels NEVER fill: they are runtime state
-    # colours.
-    bag_primary = static if static is not None else (fill_level if fill_level is not None else state0)
+
+def _resting_fill(po, kind: ObjectKind, blk_static, state0, bag_primary) -> tuple:
+    """(the colour a shape draws with at rest, whether a closed shape fills with it, its
+    colour-state array's state 0 is Transparent)."""
     # A colour-animated shape's TRAILING colour-state array (0x23 marker + state colours): the EDITOR
     # draws state-0 (the resting/default) when dwFlags bit 0x10 is CLEAR; when bit 0x10 is SET the
     # colour is fully runtime-animated and the editor leaves the shape UNFILLED. Only used when
     # there is no explicit binary static face and the gate is not a literal COL_A.
     resting_run = None
     resting_none = False  # the array's state-0 IS the no-colour sentinel (Transparent)
-    if kind in _pc._CLOSED_KINDS and blk_static is None:
+    if kind in _pc.CLOSED_KINDS and blk_static is None:
         rr = _geom.trailing_colour_run(po)
         if rr is not None:
             resting_run = _norm_colorref(rr)
             resting_none = resting_run is None
 
     array_rest = False
-    if kind in _pc._CLOSED_KINDS:
+    if kind in _pc.CLOSED_KINDS:
         # closed-shape fill the way CtDraw's loader does it. BASE resting fill = style-block fill
         # slot when dwFlags&2 (the block overwrites the colour-state-array state-0 slot at load),
         # ELSE the colour-state-array STATE-0: resting_run (FLAG=0x23) / blk_static (FLAG=0x01
@@ -361,11 +320,26 @@ def _decode_style(po, kind: ObjectKind, geom_end: int | None, props: dict | None
                 else blk_static
             )
         array_rest = primary is not None
-        static_fill_ok = primary is not None
     else:
         primary = bag_primary if bag_primary is not None else blk_static
+    return primary, array_rest, resting_none
 
-    if kind in _pc._OPEN_KINDS:
+
+def _stroke_and_fill(
+    st: Style,
+    po,
+    kind: ObjectKind,
+    primary,
+    fill_ok: bool,
+    line_blk,
+    blk_static,
+    line_null: bool,
+    hollow: bool,
+    resting_none: bool,
+) -> None:
+    """``st``'s line and fill colours by kind: an open shape strokes its line slot, a
+    button keeps its face, a closed shape fills with its resting colour."""
+    if kind in _pc.OPEN_KINDS:
         # line / pipe: the stroke is the LINE slot (slot 0), not the FILL slot. Prefer a bag
         # colour (COL_MAXON = the line's animated stroke), then the runtime LINE slot, then the
         # fill slot as a last resort. A VISIBLE-gated line is hidden in the static render (caller skips it); keep the colour.
@@ -380,12 +354,12 @@ def _decode_style(po, kind: ObjectKind, geom_end: int | None, props: dict | None
         st.filled = False
     elif kind is ObjectKind.BUTTON:
         # a button's COL_MAXON pair is its CAPTION colour, not the face -- the face stays the
-        # default 3D control colour. _apply_text_style handles the caption colour.
+        # default 3D control colour. apply_text_style handles the caption colour.
         if line_blk is not None:
             st.line_colour = line_blk
         st.filled = False
-    elif kind in _pc._CLOSED_KINDS:
-        if primary is not None and (static_fill_ok or array_rest) and not hollow:
+    elif kind in _pc.CLOSED_KINDS:
+        if primary is not None and fill_ok and not hollow:
             st.fill_colour = primary
             st.filled = True
         # edge: explicit block line slot, else the static fill colour (Citect draws the border
@@ -403,11 +377,80 @@ def _decode_style(po, kind: ObjectKind, geom_end: int | None, props: dict | None
         elif hollow:
             st.line_colour = line_blk if line_blk is not None else primary
         else:
-            st.line_colour = (
-                line_blk if line_blk is not None else (primary if (static_fill_ok or array_rest) else None)
-            )
+            st.line_colour = line_blk if line_blk is not None else (primary if fill_ok else None)
     else:
         st.line_colour = primary if primary is not None else line_blk
+
+
+def decode_style(po, kind: ObjectKind, geom_end: int | None, props: dict | None = None, once=None) -> Style:
+    """Fill a Style from the on-disk colour data."""
+    st = Style()
+    if props is None:
+        try:
+            props = po.properties()
+        except Exception:  # noqa: BLE001
+            _note_exc("reader.decode_style")
+            props = {}
+    raw_props = {}
+    try:
+        raw_props = po.raw_properties()
+    except Exception:  # noqa: BLE001
+        _note_exc("reader.decode_style")
+        raw_props = {}
+
+    static = pair_static(props.get("COL_MAXON")) or pair_static(props.get("!COL_STATIC"))
+    fill_level = pair_on(props.get("FILCOL"))
+    # first state-array colour as a further fallback
+    state0 = pair_static(props.get("COL_STA_0")) or pair_static(props.get("COL_ARR_0"))
+
+    # a LITERAL gate COL_A='FALSE' is statically OFF: the bag pair never paints
+    if str(raw_props.get("COL_A", "")).strip().upper() == "FALSE":
+        static = None
+    fill_level_animated = any(k.startswith(("FILMODE", "FILMINPC", "FILMAXPC", "FILCOL")) for k in raw_props)
+
+    hi = sh = lo = line_blk = None
+    blk_static = None
+    hollow = False
+    line_null = False
+    # closed shapes ALWAYS consult the runtime colour sources (their static face never comes
+    # from the bag -- see below)
+    need_block = (
+        (kind in _pc.CLOSED_KINDS)
+        or (static is None and fill_level is None and state0 is None)
+        or fill_level_animated
+    )
+    # an OPEN shape's stroke, pen width / style and 3D effect are its own style block's too
+    # (fill rule: the stroke is the LINE slot, COL_MAXON only the runtime one)
+    if kind in _pc.OPEN_KINDS and po.subtype_size & 0x2:
+        need_block = True
+    if need_block and geom_end is not None:
+        hi, sh, lo, line_blk, blk_static, hollow, line_null = _style_block_colours(st, po, geom_end, once)
+
+    # trailing static-colour pair (minimal line / polygon / panel-rect layout;
+    # see format.geometry.find_trailing_colour_pair)
+    if blk_static is None and line_blk is None:
+        tp = _geom.find_trailing_colour_pair(po)
+        if tp is not None:
+            on_raw = _struct.unpack_from("<I", po.body_raw, tp)[0]
+            blk_static = _norm_colorref(on_raw)
+    # SxW chrome tail (flag + pair + 0xFFFFFFFF padding at body end)
+    if blk_static is None and line_blk is None and po.type_code in (0x0F, 0x10):
+        tc_col = _find_tail_colour(po.body_raw)
+        if tc_col is not None:
+            blk_static = _norm_colorref(tc_col)
+
+    _shape_tail_style(st, po)
+
+    # CLOSED-shape fill sources, in CtDraw's editor precedence:
+    #   1. a COL_MAXON/!COL_STATIC pair surviving the suppression rules (ungated, not
+    #      animation-driven);
+    #   2. else the runtime face (colour block / panel layout / trailing pair).
+    # COL_STA_*/COL_ARR_* state arrays and FILCOL fill levels NEVER fill: they are runtime state
+    # colours.
+    bag_primary = static if static is not None else (fill_level if fill_level is not None else state0)
+    primary, fill_ok, resting_none = _resting_fill(po, kind, blk_static, state0, bag_primary)
+
+    _stroke_and_fill(st, po, kind, primary, fill_ok, line_blk, blk_static, line_null, hollow, resting_none)
 
     st.hilight_colour = hi
     st.shadow_colour = sh
@@ -459,7 +502,7 @@ _KNOWN_FONTS = frozenset(
 )
 
 
-def _norm_nl(s: str) -> str:
+def norm_nl(s: str) -> str:
     """Normalise the CRLF that native strings store (e.g. 'Copper\\r\\nConc')."""
     return s.replace("\r\n", "\n").replace("\r", "\n")
 
@@ -470,7 +513,7 @@ def _norm_nl(s: str) -> str:
 _re_expr = __import__("re").compile(r"[A-Za-z0-9_.]\(")
 
 
-def _clean_display_text(raw: str) -> str:
+def clean_display_text(raw: str) -> str:
     """Resolve a display expression's ``@(...)`` markers per the current label mode. Plain
     Cicode expressions (value placeholders) are left as-is."""
     s = raw.strip()
@@ -479,7 +522,7 @@ def _clean_display_text(raw: str) -> str:
     mode = _pc.get_label_mode()
     if mode == "literal" or os.environ.get("CTG_RAW_LABELS") == "1":
         return s  # keep '@(...)' verbatim (editor look)
-    db = getattr(_pc._PAGE_CTX, "lang_db", None)
+    db = getattr(_pc.PAGE_CTX, "lang_db", None)
     if mode == "native" or db is None:
         repl = lambda m: m.group(1)  # noqa: E731
     else:
@@ -514,7 +557,7 @@ def _element_window_props(po, props):
     """(props, raw overrides) of a text in an element window."""
     if not _pc.get_element_window() or po.type_code not in (0x05, 0x1001):
         return props, None
-    at = getattr(_pc._PAGE_CTX, "record_at", None)
+    at = getattr(_pc.PAGE_CTX, "record_at", None)
     if at is None or at[0] is not po:
         return props, None
     try:
@@ -525,7 +568,7 @@ def _element_window_props(po, props):
         return props, None
     if not r.entries:
         return props, None
-    nested = at[1] in (getattr(_pc._PAGE_CTX, "nested_members", None) or ())
+    nested = at[1] in (getattr(_pc.PAGE_CTX, "nested_members", None) or ())
     src = r.entries[0][1] if nested else r.entries[0][2]
     if not src.pairs and not nested:
         return props, None  # no template bag (a plain element): nothing to swap
@@ -544,7 +587,7 @@ def _element_window_props(po, props):
     return out, raw
 
 
-def _literal_display(po, caption, props=None):
+def literal_display(po, caption, props=None):
     """The string CtDraw's editor draws for a text (what its extent measures):
     only in the literal (editor) label mode; None when not derivable. ``props``: raw
     property values in place of the record's (an element window's template side)."""
@@ -553,12 +596,12 @@ def _literal_display(po, caption, props=None):
     try:
         # the page's tag formats, else the lookup the editing layer installed -- passed, not
         # installed: nothing process-wide changes while a page derives
-        tf = getattr(_pc._PAGE_CTX, "tag_formats", None)
+        tf = getattr(_pc.PAGE_CTX, "tag_formats", None)
         if tf is not None:
             return _tm.measured_string(po, caption, tag_format=tf, props=props)
         return _tm.measured_string(po, caption, props=props)
     except Exception:  # noqa: BLE001
-        _note_exc("reader._literal_display")
+        _note_exc("reader.literal_display")
         return None
 
 
@@ -566,13 +609,13 @@ def _literal_display(po, caption, props=None):
 BUTTON_MODES = ("NORMAL", "BORDER_3D", "BORDER", "TARGET", "XP_STYLE")
 
 
-def _apply_button_style(obj: GraphicObject, po, props) -> None:
+def apply_button_style(obj: GraphicObject, po, props) -> None:
     """A button's look as CtDraw draws it."""
     st = obj.style
     try:
         raw = po.raw_properties()
     except Exception:  # noqa: BLE001
-        _note_exc("reader._apply_button_style")
+        _note_exc("reader.apply_button_style")
         raw = {}
     mode = str(raw.get("VIS_MODE") or "").strip().upper()
     obj.raw["_button_mode"] = BUTTON_MODES.index(mode) if mode in BUTTON_MODES else 0
@@ -582,7 +625,7 @@ def _apply_button_style(obj: GraphicObject, po, props) -> None:
         try:
             cb = _geom.find_colour_block(po)
         except Exception:  # noqa: BLE001
-            _note_exc("reader._apply_button_style")
+            _note_exc("reader.apply_button_style")
             cb = None
         if cb is not None and cb.flags[3] & 0x04:
             face = _norm_colorref(cb.slots[1][0])
@@ -591,7 +634,7 @@ def _apply_button_style(obj: GraphicObject, po, props) -> None:
     try:
         font = _pl.walk(po).get("font")
     except Exception:  # noqa: BLE001
-        _note_exc("reader._apply_button_style")
+        _note_exc("reader.apply_button_style")
         font = None
     if not font:
         return
@@ -613,103 +656,92 @@ def _apply_button_style(obj: GraphicObject, po, props) -> None:
         if (at & 0x0F) == 2
         else TextJustify.LEFT
     )
-    col = _design_colour(font["text"])
+    col = design_colour(font["text"])
     if col is not None:
         st.text_colour = col
     obj.raw["_button_font"] = True
 
 
-def _apply_text_style(obj: GraphicObject, po, props, once=None) -> None:
-    """Fill in text style fields."""
+def _text_tail_style(obj: GraphicObject, po, tail: dict, once) -> None:
+    """``obj``'s font, size, orientation, scale, attribs and colour from its text tail and
+    style block."""
     st = obj.style
-    tail = None
-    # an element window shows the template side of the display keys (common.get_element_window)
-    props, raw_over = _element_window_props(po, props)
-    if po.type_code == 0x05:
-        try:
-            tail = _geom.parse_text_tail(po)
-        except Exception:  # noqa: BLE001
-            _note_exc("reader._apply_text_style")
-            tail = None
-    if tail is not None:
-        if tail["face"].strip():
-            st.font = tail["face"]
-        if 0 < tail["size"] < 0x80:
-            st.font_size = tail["size"]
-        st.vertical = tail["orient"] == 3
-        # the tail 'orient' IS the rotation: 1=0deg, 3=90CW, 2=180, 4=270CW
-        turns = _geom.ORIENT_TO_TURNS.get(tail["orient"], 0)
-        if turns:
-            obj.raw["_text_turns"] = turns
-        try:
-            # a text that keeps a matrix (a mirrored text resized) is drawn through it,
-            # its font scaled by the matrix
-            ts = _geom.text_scale(po)
-        except Exception:  # noqa: BLE001
-            _note_exc("reader._apply_text_style")
-            ts = None
-        if ts is not None:
-            obj.raw["_text_scale"] = ts
-        try:
-            cb = _colour_block(po, once)
-        except Exception:  # noqa: BLE001
-            _note_exc("reader._apply_text_style")
-            cb = None
-        if cb is not None:
-            attribs = cb.flags[3]
-            st.justify = (
-                TextJustify.RIGHT
-                if (attribs & 0x0F) == 1
-                else TextJustify.CENTRE
-                if (attribs & 0x0F) == 2
-                else TextJustify.LEFT
-            )
-            st.bold = bool(attribs & 0x10)
-            st.italic = bool(attribs & 0x20)
-            st.underline = bool(attribs & 0x40)
-            st.strikeout = bool(attribs & 0x80)
-            st.three_d = cb.flags[0] & 0x0F
-            # the block's LINE slot is the text colour; the no-colour sentinel (Transparent)
-            # draws nothing (COM: CtDraw's text colour -1)
-            col = _design_colour(cb.slots[0])
-            if col is not None:
-                st.text_colour = col
-            else:
-                obj.raw["_text_transparent"] = True
-    if po.type_code == 0x1001:
-        _apply_button_style(obj, po, props)
-    # font face fallback: only accept a recognised Windows face name (the page-level heuristic
-    # yields false positives on this type)
-    if not st.font and po.font_face and po.type_code in (0x05, 0x1004, 0x1001):
-        if po.font_face.strip().lower() in _KNOWN_FONTS:
-            st.font = po.font_face
+    if tail["face"].strip():
+        st.font = tail["face"]
+    if 0 < tail["size"] < 0x80:
+        st.font_size = tail["size"]
+    st.vertical = tail["orient"] == 3
+    # the tail 'orient' IS the rotation: 1=0deg, 3=90CW, 2=180, 4=270CW
+    turns = _geom.ORIENT_TO_TURNS.get(tail["orient"], 0)
+    if turns:
+        obj.raw["_text_turns"] = turns
+    try:
+        # a text that keeps a matrix (a mirrored text resized) is drawn through it,
+        # its font scaled by the matrix
+        ts = _geom.text_scale(po)
+    except Exception:  # noqa: BLE001
+        _note_exc("reader._text_tail_style")
+        ts = None
+    if ts is not None:
+        obj.raw["_text_scale"] = ts
+    try:
+        cb = _colour_block(po, once)
+    except Exception:  # noqa: BLE001
+        _note_exc("reader._text_tail_style")
+        cb = None
+    if cb is not None:
+        attribs = cb.flags[3]
+        st.justify = (
+            TextJustify.RIGHT
+            if (attribs & 0x0F) == 1
+            else TextJustify.CENTRE
+            if (attribs & 0x0F) == 2
+            else TextJustify.LEFT
+        )
+        st.bold = bool(attribs & 0x10)
+        st.italic = bool(attribs & 0x20)
+        st.underline = bool(attribs & 0x40)
+        st.strikeout = bool(attribs & 0x80)
+        st.three_d = cb.flags[0] & 0x0F
+        # the block's LINE slot is the text colour; the no-colour sentinel (Transparent)
+        # draws nothing (COM: CtDraw's text colour -1)
+        col = design_colour(cb.slots[0])
+        if col is not None:
+            st.text_colour = col
+        else:
+            obj.raw["_text_transparent"] = True
 
-    # display text: prefer the first @() expression, else a TXT_*/TEXT bag value (buttons carry
-    # their caption in TEXT). Icon-reference captions (#icons.* / @ exprs) are excluded.
-    def _label(val: str) -> str:
-        raw = str(val)
-        s = _clean_display_text(raw)
-        if not s or s == "a":
-            return ""
-        # a TRANSLATABLE label (raw carried '@(...)') is a real caption in every mode -- keep it
-        # (literal, native, or translation) even though the literal form has parentheses.
-        if "@(" in raw:
-            return _norm_nl(s)
-        # a bare cicode/value expression (or the 1-char 'analog' default 'a') has no static
-        # label -> the numeric placeholder below stands in. A 1-char UPPERCASE caption is a real
-        # label (the Mixer motors' 'M').
-        # Parens alone do NOT make it an expression: a plain caption can carry a trailing
-        # parenthetical word ('Free Virtual Memory (MB)', '(0 - 30 t)'). Only reject a genuine
-        # Cicode reference: a FUNCTION CALL ('DspParetoText(3)', 'MultiSignatureTagWrite(...)' --
-        # an identifier glued to '('), or a FORMATTED VALUE ('(tag.PV):#.#' -- a '):' format tail).
-        if s.startswith(("@", "#", "$")):
-            return ""
-        # (a format tail is something after the colon: a caption ending in a parenthetical
-        # and a colon, 'Flow since last flush (calculated):', is a caption)
-        if _re_expr.search(s) or _re.search(r"\):[^():]{1,16}$", s):
-            return ""
-        return _norm_nl(s)
 
+def _caption_label(val: str) -> str:
+    """The caption a display value ``val`` shows ('' for an expression or an icon
+    reference)."""
+    raw = str(val)
+    s = clean_display_text(raw)
+    if not s or s == "a":
+        return ""
+    # a TRANSLATABLE label (raw carried '@(...)') is a real caption in every mode -- keep it
+    # (literal, native, or translation) even though the literal form has parentheses.
+    if "@(" in raw:
+        return norm_nl(s)
+    # a bare cicode/value expression (or the 1-char 'analog' default 'a') has no static
+    # label -> the numeric placeholder below stands in. A 1-char UPPERCASE caption is a real
+    # label (the Mixer motors' 'M').
+    # Parens alone do NOT make it an expression: a plain caption can carry a trailing
+    # parenthetical word ('Free Virtual Memory (MB)', '(0 - 30 t)'). Only reject a genuine
+    # Cicode reference: a FUNCTION CALL ('DspParetoText(3)', 'MultiSignatureTagWrite(...)' --
+    # an identifier glued to '('), or a FORMATTED VALUE ('(tag.PV):#.#' -- a '):' format tail).
+    if s.startswith(("@", "#", "$")):
+        return ""
+    # (a format tail is something after the colon: a caption ending in a parenthetical
+    # and a colon, 'Flow since last flush (calculated):', is a caption)
+    if _re_expr.search(s) or _re.search(r"\):[^():]{1,16}$", s):
+        return ""
+    return norm_nl(s)
+
+
+def _caption_text(st: Style, po, props) -> None:
+    """``st.text``: the caption of a static text, a value display's embedded literal or
+    its format tail."""
     # A runtime VALUE display (TXT_STR present, no static TXT_OFF/TXT_ON/TEXT
     # caption) shows its value placeholder -- the format mask after ':' or the
     # cicode echo -- NOT a harvested @() string. On these records the only @()
@@ -725,15 +757,15 @@ def _apply_text_style(obj: GraphicObject, po, props, once=None) -> None:
         # through to the mask / cicode-echo placeholder below.
         em = _re.search(r'"(@\([^"]*?\))"', str(props["TXT_STR"].raw))
         if em:
-            st.text = _label(em.group(1))
+            st.text = _caption_label(em.group(1))
     if po.text_exprs and not _value_display:
-        st.text = _label(po.text_exprs[0])
+        st.text = _caption_label(po.text_exprs[0])
     if not st.text and "TXT_OFF" in props:
-        st.text = _label(props["TXT_OFF"].raw)
+        st.text = _caption_label(props["TXT_OFF"].raw)
     if not st.text and "TXT_ON" in props:
-        st.text = _label(props["TXT_ON"].raw)
+        st.text = _caption_label(props["TXT_ON"].raw)
     if not st.text and "TEXT" in props:
-        st.text = _label(props["TEXT"].raw)
+        st.text = _caption_label(props["TEXT"].raw)
 
     # numeric display expression "(<cicode>):<format>": CtDraw shows the FORMAT tail as the
     # placeholder ('(...FLW01.PV):#.#' -> '#.#', ':#!' -> '#!').
@@ -742,6 +774,10 @@ def _apply_text_style(obj: GraphicObject, po, props, once=None) -> None:
         if m and m.group(1).strip():
             st.text = m.group(1).strip()
 
+
+def _value_placeholder(st: Style, obj: GraphicObject, po, props) -> None:
+    """``st.text`` of a value display without a caption: its format mask, its expression
+    ('=' + TXT_STR in the editor's look) or the value placeholder."""
     # numeric / value display: CtDraw shows the FORMAT mask ('####.#') as the placeholder for a
     # runtime-valued number. The mask can live in FORMAT, in TXT_OFF (the Mixer level displays
     # store TXT_OFF='####.#' + TXT_STR=<tag>), or after the ':' in TXT_STR.
@@ -777,7 +813,7 @@ def _apply_text_style(obj: GraphicObject, po, props, once=None) -> None:
             expr = str(props["TXT_STR"].raw).strip() if "TXT_STR" in props else ""
             editor = _pc.get_label_mode() == "literal" or os.environ.get("CTG_RAW_LABELS") == "1"
             if expr and editor:
-                st.text = "=" + _norm_nl(expr)
+                st.text = "=" + norm_nl(expr)
             elif editor:
                 # no expression -> an EMPTY string display: CtDraw's editor draws
                 # NOTHING, so leave it blank rather than the generic 'abc' placeholder.
@@ -785,20 +821,11 @@ def _apply_text_style(obj: GraphicObject, po, props, once=None) -> None:
             else:
                 # (Simulate Settings: 'abc' or nothing until the simulator sends the value)
                 st.text = _pc.get_value_placeholder()
-    # CtDraw's EDITOR draws exactly the string its extent measures (the text
-    # draw and the extent both take):
-    # a static caption literally, a numeric display's FORMAT mask (the tag's
-    # own for a bare tag), a string display '=' + TXT_STR. In the editor
-    # (literal) label mode show that; the other modes keep the translated /
-    # native captions and placeholders above.
-    _rp = po.raw_properties() if hasattr(po, "raw_properties") else {}
-    _mode = str(_rp.get("TXTMODE", "")).strip()
-    # a value display (3 numeric / 4 string) needs no caption: its string is
-    # derived from TXT_STR even on an art-stripped genie member (no tail)
-    if po.type_code == 0x05 and (tail is not None or _mode in ("3", "4")):
-        shown = _literal_display(po, tail["text"] if tail else None, raw_over)
-        if shown is not None:
-            st.text = "" if not shown.strip() else _norm_nl(shown).rstrip("\n")
+
+
+def _text_colour(st: Style, obj: GraphicObject, po, props, tail) -> None:
+    """``st.text_colour``: the text's own style-block colour, else its static bag or tail
+    pair, else its colour-state array's state 0."""
     # text colour: use COL_MAXON.on only when it is NOT an animation 'on' state (animated text
     # colour defaults to black statically, like the thumbnail's labels). A text record's own
     # colour lives in its trailing colour pair (the Mixer motor 'M' carries magenta 0x00FF00FF).
@@ -824,12 +851,56 @@ def _apply_text_style(obj: GraphicObject, po, props, once=None) -> None:
             st.text_colour = _text_tail_colour(po.body_raw)
         else:
             st.text_colour = (
-                _pair_on(props.get("COL_MAXON"))
-                or _pair_on(props.get("!COL_STATIC"))
+                pair_on(props.get("COL_MAXON"))
+                or pair_on(props.get("!COL_STATIC"))
                 or _text_tail_colour(po.body_raw)
             )
     else:
         # a COL_STA/COL_ARR-driven text rests in STATE 0, like shapes do
-        state0 = _pair_static(props.get("COL_STA_0")) or _pair_static(props.get("COL_ARR_0"))
+        state0 = pair_static(props.get("COL_STA_0")) or pair_static(props.get("COL_ARR_0"))
         if state0 is not None:
             st.text_colour = state0
+
+
+def apply_text_style(obj: GraphicObject, po, props, once=None) -> None:
+    """Fill in text style fields."""
+    st = obj.style
+    tail = None
+    # an element window shows the template side of the display keys (common.get_element_window)
+    props, raw_over = _element_window_props(po, props)
+    if po.type_code == 0x05:
+        try:
+            tail = _geom.parse_text_tail(po)
+        except Exception:  # noqa: BLE001
+            _note_exc("reader.apply_text_style")
+            tail = None
+    if tail is not None:
+        _text_tail_style(obj, po, tail, once)
+    if po.type_code == 0x1001:
+        apply_button_style(obj, po, props)
+    # font face fallback: only accept a recognised Windows face name (the page-level heuristic
+    # yields false positives on this type)
+    if not st.font and po.font_face and po.type_code in (0x05, 0x1004, 0x1001):
+        if po.font_face.strip().lower() in _KNOWN_FONTS:
+            st.font = po.font_face
+
+    # display text: prefer the first @() expression, else a TXT_*/TEXT bag value (buttons carry
+    # their caption in TEXT). Icon-reference captions (#icons.* / @ exprs) are excluded.
+    _caption_text(st, po, props)
+
+    _value_placeholder(st, obj, po, props)
+    # CtDraw's EDITOR draws exactly the string its extent measures (the text
+    # draw and the extent both take):
+    # a static caption literally, a numeric display's FORMAT mask (the tag's
+    # own for a bare tag), a string display '=' + TXT_STR. In the editor
+    # (literal) label mode show that; the other modes keep the translated /
+    # native captions and placeholders above.
+    _rp = po.raw_properties() if hasattr(po, "raw_properties") else {}
+    _mode = str(_rp.get("TXTMODE", "")).strip()
+    # a value display (3 numeric / 4 string) needs no caption: its string is
+    # derived from TXT_STR even on an art-stripped genie member (no tail)
+    if po.type_code == 0x05 and (tail is not None or _mode in ("3", "4")):
+        shown = literal_display(po, tail["text"] if tail else None, raw_over)
+        if shown is not None:
+            st.text = "" if not shown.strip() else norm_nl(shown).rstrip("\n")
+    _text_colour(st, obj, po, props, tail)

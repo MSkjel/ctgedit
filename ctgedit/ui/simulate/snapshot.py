@@ -78,8 +78,8 @@ class _Plan:
             # measured on the screen: the tab's page, less the tab window's own place there
             rinfo = self.tab.engine_info or {}
             xf = QtGui.QTransform()
-            x = r.x() - winhost._int(rinfo.get("x"))
-            y = r.y() - winhost._int(rinfo.get("y"))
+            x = r.x() - winhost.as_int(rinfo.get("x"))
+            y = r.y() - winhost.as_int(rinfo.get("y"))
         frame = QtCore.QRectF(x, y, vw + 2, vh + CAPTION + 2)
         self.ops.append(("frame", xf, frame, c.window_title()))
         cxf = QtGui.QTransform.fromScale(sx, sy) * QtGui.QTransform.fromTranslate(x + 1, y + CAPTION + 1) * xf

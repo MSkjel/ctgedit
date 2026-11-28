@@ -1,6 +1,10 @@
 """Changes since the last save: the Changes panel and Next / Previous Change."""
 
 from __future__ import annotations
+
+from ...infra.paths import path_key
+
+from ..names import plural
 from ..style.theme import sp as _sp  # (the spacing scale)
 
 import collections
@@ -86,9 +90,7 @@ class ChangeSet:
         n = self.units
         if not n and not self.count("page"):
             return self.nothing()
-        text = "%d object%s %s %s" % (n, "" if n == 1 else "s", self.verb, self.base)
-        if self.records:
-            text += " (%d record%s)" % (self.records, "" if self.records == 1 else "s")
+        text = "%s %s %s" % (plural(n, "object"), self.verb, self.base)
         kinds = [k for k in ("new", "changed", "removed") if self.count(k)]
         if len(kinds) > 1:
             text += ": " + ", ".join("%d %s" % (self.count(k), k) for k in kinds)
@@ -156,7 +158,7 @@ def _read_saved(doc, base) -> Optional[_Saved]:
     if not path or not os.path.isfile(path):
         return None
     st = os.stat(path)
-    key = (os.path.normcase(os.path.abspath(path)), element.lower(), st.st_mtime_ns, st.st_size)
+    key = (path_key(path), element.lower(), st.st_mtime_ns, st.st_size)
     hit = _SAVED_MEMO.get(key)
     if hit is not None:
         return hit
@@ -523,7 +525,7 @@ def _summary(doc, r: int, model, s: int, sub_now, sub_saved, pay, spay, saved) -
             if k >= len(sub_now) or k >= len(sub_saved) or pay[sub_now[k]] != spay[sub_saved[k]]
         )
         if len(sub_now) > 1 and n:
-            words.append("%d member%s changed" % (n, "" if n == 1 else "s"))
+            words.append("%s changed" % (plural(n, "member")))
     if len(words) > 4:
         words = words[:4] + ["and more"]
     return ", ".join(words)

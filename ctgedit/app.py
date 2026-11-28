@@ -15,6 +15,7 @@ import sys
 from typing import List, NamedTuple, Optional
 
 from PySide6 import QtCore, QtWidgets
+from .infra.logsetup import note_exception as _note_exc
 
 USAGE = (
     "Usage: ctgedit [page.ctg ...] [--new-instance]\n"
@@ -100,14 +101,14 @@ def _install_error_hook() -> None:
     busy = []
 
     def hook(etype, value, tb):
+        from .ui.messages import warn
+
         if isinstance(value, UnencodableTextError):
-            QtWidgets.QMessageBox.warning(
-                QtWidgets.QApplication.activeWindow(), "Unsupported Character", str(value)
-            )
+            warn(QtWidgets.QApplication.activeWindow(), "Unsupported Character", str(value))
             return
         if isinstance(value, TransformError):
             # (an edit refused with the page left as it was: said, not a crash report)
-            QtWidgets.QMessageBox.warning(QtWidgets.QApplication.activeWindow(), "Not Changed", str(value))
+            warn(QtWidgets.QApplication.activeWindow(), "Not Changed", str(value))
             return
         logged = None
         if not issubclass(etype, (KeyboardInterrupt, SystemExit)):
@@ -168,6 +169,7 @@ def start_window(argv: list[str], files: Optional[List[str]] = None, defer: bool
             try:
                 w.open_document(f)
             except Exception as e:  # noqa: BLE001 -- shown once the window is up
+                _note_exc("app.start_window.open_files", path=f)
                 failed.append((f, e))
 
     if defer:
@@ -221,7 +223,7 @@ def _hold_app_mutex() -> None:
         _mutex.append(ctypes.windll.kernel32.CreateMutexW(None, False, APP_MUTEX))
         # the taskbar groups and labels ctgedit as itself, not as python.exe
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_USER_MODEL_ID)
-    except Exception:  # noqa: BLE001 -- cosmetic / installer convenience only
+    except Exception:  # noqa: BLE001 -- swallow-ok: cosmetic / installer convenience only
         pass
 
 
@@ -243,7 +245,7 @@ def target_window():
     the newest visible one (None when no window is open)."""
     from .ui.main_window import MainWindow
 
-    wins = [w for w in MainWindow._instances if w.isVisible()]
+    wins = [w for w in MainWindow.instances if w.isVisible()]
     for w in wins:
         if w.isActiveWindow():
             return w
@@ -335,7 +337,9 @@ def _say(text: str, title: str = "ctgedit") -> None:
         print(text)
         return
     _app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
-    QtWidgets.QMessageBox.information(None, title, text)
+    from .ui.messages import inform
+
+    inform(None, title, text)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -434,7 +438,7 @@ def main(argv: list[str] | None = None) -> int:
 
         register_diagnostics()
     except Exception:  # noqa: BLE001 -- the report then has the essentials only
-        pass
+        _note_exc("app.main")
     try:
         _install_error_hook()
         if opts.smoke:
@@ -621,6 +625,7 @@ def recover_journals() -> list:
             )
         return notes
     except Exception:  # noqa: BLE001 -- never stop the editor from starting
+        _note_exc("app.recover_journals")
         return []
 
 
@@ -636,8 +641,7 @@ def clean_exit() -> None:
     with contextlib.suppress(Exception):
         from .editing import CtfPrecheck
 
-        for check in list(CtfPrecheck._running):
-            check.cancel()
+        CtfPrecheck.cancel_all()
     with contextlib.suppress(Exception):
         while _timer_period:
             import ctypes

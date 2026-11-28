@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..infra.paths import path_key
+
 import os
 import subprocess
 import time
@@ -98,7 +100,7 @@ def runs_project(project_dir: str) -> bool:
     root = root_project_for(project_dir)
     user = live_user_dir()
     path = (master_projects(user).get(root.lower()) if user else None) or project_dir
-    return os.path.normcase(os.path.abspath(run)) == os.path.normcase(os.path.abspath(path.rstrip("\\/")))
+    return path_key(run) == path_key(path.rstrip("\\/"))
 
 
 def _wait_until(done, seconds: float) -> bool:
@@ -125,7 +127,7 @@ def stop(timeout: float = 30.0, graceful: float = 20.0) -> str:
             from . import ctapi
 
             res = ctapi.cicode("DelayShutdown(1000)", timeout=15.0)
-        except Exception:  # noqa: BLE001 -- no CtAPI: the next steps
+        except Exception:  # noqa: BLE001 -- swallow-ok: no CtAPI: the next steps
             res = ["ERR"]
         if not any(r.startswith("ERR") for r in res):
             shut_down = _wait_until(lambda: not is_running(), graceful)

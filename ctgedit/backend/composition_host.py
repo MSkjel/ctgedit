@@ -44,7 +44,7 @@ def dll_path() -> Optional[str]:
         from .compiler import scada_bin
 
         p = os.path.join(scada_bin(), DLL_NAME)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- swallow-ok: no install: no DLL
         return None
     return p if os.path.isfile(p) else None
 

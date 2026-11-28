@@ -28,8 +28,8 @@ def win():
 
     w = MainWindow()
     yield w
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
 
 
 @pytest.fixture()
@@ -218,7 +218,7 @@ def test_close_with_a_failed_save_keeps_the_window_and_asks_the_other_pages(win,
     assert asked == ["A", "B"]
     assert not doc_a.dirty  # the good page was still saved
     assert doc_b.dirty and "B.ctg is read-only" in boxes.text
-    assert win in MainWindow._instances and win.doc is doc_b
+    assert win in MainWindow.instances and win.doc is doc_b
     assert not os.path.exists(a + TMP) and not os.path.exists(b + TMP)
 
 
@@ -442,8 +442,8 @@ def test_command_line_page_that_does_not_open_is_reported(tmp_path, monkeypatch)
     try:
         assert len(seen) == 1 and "Nope.ctg was not found" in seen[0]
     finally:
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.hide()
 
 
@@ -544,6 +544,6 @@ def test_a_page_open_in_another_window_is_brought_forward_not_opened_twice(win, 
         assert len(other._docs) == 0 or all(e["doc"] is not win.doc for e in other._docs)
         assert sum(len(w._docs) for w in (win, other)) == 1
     finally:
-        if other in MainWindow._instances:
-            MainWindow._instances.remove(other)
+        if other in MainWindow.instances:
+            MainWindow.instances.remove(other)
         other.close()

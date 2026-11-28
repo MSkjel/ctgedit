@@ -6,10 +6,11 @@ from typing import List, Tuple
 
 from PySide6 import QtWidgets
 
-from .fields import _Sub
+from .fields import Sub
 from ..style.theme import set_note_role
+from ...infra.logsetup import note_exception as _note_exc
 
-METADATA = _Sub("General", [], family=("METADATA_*",))
+METADATA = Sub("General", [], family=("METADATA_*",))
 SUBS = [METADATA]
 
 HELP_TOPIC = "properties#metadata"
@@ -33,7 +34,7 @@ class MetadataEditor:
             from ..help import set_help
 
             set_help(self.widget, HELP_TOPIC)
-        except Exception:  # noqa: BLE001
+        except RuntimeError:
             pass
         self.reload()
 
@@ -205,6 +206,7 @@ class MetadataEditor:
         try:
             self._initial = list(s._doc.metadata(s._index))
         except Exception:  # noqa: BLE001
+            _note_exc("objprops.metadata.reload")
             self._initial = []
         self._set_rows(self._initial)
         why = s.key_blocked("METADATA_0")
@@ -223,6 +225,7 @@ class MetadataEditor:
         try:
             found = s._doc.super_genie_associations(s._index)
         except Exception:  # noqa: BLE001 -- a hint only
+            _note_exc("objprops.metadata._association_hint")
             return ""
         parts = []
         for page, names in found:

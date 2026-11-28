@@ -9,10 +9,6 @@ import threading
 import time
 from typing import Callable, Dict, Iterable, Optional, Tuple
 
-#: (project, page) waits in seconds: the editor's (its GUI waits once, a short time) and the
-#: helper processes' (Update Pages, the closed-pages update, Replace All, the pictures); the
-#: defaults of Settings > Pages and libraries > Busy projects (ui/prefs/settings.lock_waits)
-EDITOR_WAITS = (10.0, 30.0)
 HELPER_WAITS = (120.0, 120.0)
 #: the wait when nothing set one (tests and tools)
 DEFAULT_WAIT = 30.0
@@ -25,7 +21,6 @@ _CANCEL: list = [None]
 WAIT_OBJECT_0 = 0x0
 WAIT_ABANDONED = 0x80
 WAIT_TIMEOUT = 0x102
-WAIT_FAILED = 0xFFFFFFFF
 
 
 class ProjectBusyError(OSError):

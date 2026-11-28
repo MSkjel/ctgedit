@@ -5,6 +5,8 @@ while can be ended."""
 
 from __future__ import annotations
 
+from .names import name_list
+
 import time
 import weakref
 from typing import List, Optional
@@ -92,7 +94,7 @@ class BuilderCloser(QtCore.QObject):
 
     def confirm(self, opened: List[str]) -> bool:
         """Ask before closing a builder with ``opened`` (its open pages and elements)."""
-        names = ", ".join(opened[:6]) + (" and %d more" % (len(opened) - 6) if len(opened) > 6 else "")
+        names = name_list(opened, 6)
         box = QtWidgets.QMessageBox(
             QtWidgets.QMessageBox.Warning,
             "Close Graphics Builder",

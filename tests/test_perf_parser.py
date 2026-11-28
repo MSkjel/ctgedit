@@ -49,10 +49,10 @@ def _fx(fx_install):
 def _ref_candidates(p, start):
     """Every offset the lookahead prefilter gives, in order (each search from c + 1)."""
     out = []
-    m = PG._BAG_CANDIDATE.search(p, start)
+    m = PG.BAG_CANDIDATE.search(p, start)
     while m is not None:
         out.append(m.start())
-        m = PG._BAG_CANDIDATE.search(p, m.start() + 1)
+        m = PG.BAG_CANDIDATE.search(p, m.start() + 1)
     return out
 
 
@@ -70,11 +70,11 @@ def _anchor_candidates(p, start):
 def _ref_scan(p, start):
     """The prefiltered bag scan as it was (lookahead search, a parse at every candidate)."""
     bags = []
-    search = PG._BAG_CANDIDATE.search
+    search = PG.BAG_CANDIDATE.search
     m = search(p, start)
     while m is not None:
         c = m.start()
-        entry = PG._parse_entry(p, c)
+        entry = PG.parse_entry(p, c)
         if entry is not None:
             pairs, trailer_len, end = entry
             bags.append((c, pairs, trailer_len, any(PG._key_is_known_uncached(k) for k, _ in pairs), end - c))
@@ -223,7 +223,7 @@ def _ref_geom_header(body):
             return None
         mode = body[o]
         o += 1
-        o += PG._XFORM_DOUBLES.get(mode, 6 if mode > 3 else 0) * 8
+        o += PG.XFORM_DOUBLES.get(mode, 6 if mode > 3 else 0) * 8
         if o > n:
             return None
     if o + 4 + 8 + 8 > n:
@@ -409,8 +409,8 @@ def test_a_full_memo_empties_and_the_parse_stays_the_same(monkeypatch):
 def test_each_bag_gets_its_own_pair_list():
     # two entries back to back: the second one is the memo's (no search)
     body = b"\x00" * 4 + b"\x0c\x00\x01\x00\x03\x00KEY\x03\x00val" * 2
-    a = PG._parse_object(0, 0, 0, 0, bytes(12) + body)
-    b = PG._parse_object(0, 0, 0, 0, bytes(12) + body)
+    a = PG.parse_object(0, 0, 0, 0, bytes(12) + body)
+    b = PG.parse_object(0, 0, 0, 0, bytes(12) + body)
     assert [x.pairs for x in a.bags] == [[("KEY", "val")]] * 2
     assert _bags(a.bags) == _ref_scan(bytes(12) + body, 12)
     assert a.bags[0].pairs is not a.bags[1].pairs and a.bags[0].pairs is not b.bags[0].pairs
@@ -423,7 +423,7 @@ def test_record_prefix_equals_the_old_reads():
         if n >= 12 and rnd.random() < 0.7:
             al = rnd.randint(0, 6)
             payload = payload[:10] + struct.pack("<H", al) + payload[12:]
-        po = PG._parse_object(0, 0, n, 0, payload)
+        po = PG.parse_object(0, 0, n, 0, payload)
         cf, tc, ss, an, body_offset, raw = _ref_prefix(payload)
         assert (
             po.class_flag,
@@ -436,9 +436,7 @@ def test_record_prefix_equals_the_old_reads():
         ) == (cf, tc, ss, an, body_offset, raw, payload[body_offset:])
     # a bytearray payload parses as its bytes
     p = bytes(12) + b"\x00" * 4 + b"\x0e\x00\x01\x00\x03\x00KEY\x03\x00val"
-    assert _bags(PG._parse_object(0, 0, 0, 0, bytearray(p)).bags) == _bags(
-        PG._parse_object(0, 0, 0, 0, p).bags
-    )
+    assert _bags(PG.parse_object(0, 0, 0, 0, bytearray(p)).bags) == _bags(PG.parse_object(0, 0, 0, 0, p).bags)
 
 
 # --------------------------------------------------------------- 2. / 3. the per-record walks
@@ -487,14 +485,14 @@ def test_walks_on_random_bodies():
         if n > 20 and rnd.random() < 0.5:
             body[6] = rnd.choice([0, 1, 2, 3, 8, 0x12, 0xFF])
         body = bytes(body)
-        assert PG._geom_name_len(body, 0) == _ref_name_len(body, 0)
+        assert PG.geom_name_len(body, 0) == _ref_name_len(body, 0)
         gh = G.parse_geom_header(body)
         assert (
             None
             if gh is None
             else (gh.anchor_off, gh.rect1_off, gh.rect2_off, gh.end, gh.anchor, gh.rect1, gh.rect2, gh.name)
         ) == _ref_geom_header(body)
-        po = PG._parse_object(0, 0, 0, 0, struct.pack("<HIIH", 0, 1, rnd.getrandbits(9), 0) + body)
+        po = PG.parse_object(0, 0, 0, 0, struct.pack("<HIIH", 0, 1, rnd.getrandbits(9), 0) + body)
         assert CS.layout(po) == _ref_layout(po)
         assert _outcome(PL.read_slots, body) == _outcome(_ref_read_slots, body)
     # every byte of an object name: the delete table is _name_byte
@@ -568,7 +566,7 @@ def test_serialize_equals_the_old_writer():
         assert pc.container.to_bytes() == ref
         assert W.serialize_ctg(pc.container, pc.page, pc.attributes) == data
     # an an_str the code page encodes with the registered codec, a bytearray body
-    po = PG._parse_object(0, 0, 0, 0, bytes(12) + b"\x00" * 8)
+    po = PG.parse_object(0, 0, 0, 0, bytes(12) + b"\x00" * 8)
     po.an_str = "\u00e5\u20ac12"
     po.body_raw = bytearray(b"\x01\x02")
     assert W.object_payload(po) == _ref_object_payload(po)
@@ -645,14 +643,14 @@ def test_thumbnail_bmp_and_record_shell_equal_the_old_code():
     rnd = random.Random(9)
     for n in (6, 7, 53, 54, 55, 300):
         th = b"TH" + bytes(rnd.getrandbits(8) for _ in range(n - 2))
-        assert PG._extract_bmp(th) == _ref_th_to_bmp(th)
+        assert PG.extract_bmp(th) == _ref_th_to_bmp(th)
         assert PS._th_to_bmp(th) == (_ref_th_to_bmp(th) if n >= 54 else b"")
-    assert PG._extract_bmp(b"TX" + bytes(10)) is None
+    assert PG.extract_bmp(b"TX" + bytes(10)) is None
     for n in list(range(0, 20)) + [rnd.randint(20, 300) for _ in range(300)]:
         payload = bytes(rnd.getrandbits(8) for _ in range(n))
         if n >= 12 and rnd.random() < 0.7:
             payload = payload[:10] + struct.pack("<H", rnd.randint(0, 6)) + payload[12:]
-        full = PG._parse_object(0, 0, n, 0, payload)
+        full = PG.parse_object(0, 0, n, 0, payload)
         shell = PG.parse_record_shell(payload)
         for f in (
             "index",
@@ -689,7 +687,7 @@ def _flash_check(PS, dib_section, lib):
     out = []
     for es in PS.read_element_summaries(lib, want_thumbnail=False):
         with open(lib, "rb") as fh:
-            h = PS._read_head(fh, es.offset, es.size, 0x0C)
+            h = PS.read_head(fh, es.offset, es.size, 0x0C)
             n = min(h.objdata, max(0, es.size - h.data_start))
             ref = False
             if 0 < n <= PS._FLASH_SCAN:
@@ -701,7 +699,7 @@ def _flash_check(PS, dib_section, lib):
                     psize = struct.unpack_from("<I", data, o)[0]
                     payload = data[o + 8 : o + 8 + psize]
                     o += 8 + psize
-                    po = PG._parse_object(0, 0, len(payload), 0, payload)
+                    po = PG.parse_object(0, 0, len(payload), 0, payload)
                     pending += po.class_flag - 1
                     if po.type_code == 0x07 and not (po.subtype_size & 0x1):
                         sec = dib_section(po)
@@ -719,7 +717,7 @@ def test_read_directory_equals_a_buffered_read():
 
     for path in [FX["lib"], FX["pages"][0]] + FX["symbols"]:
         with open(path, "rb") as fh:
-            ref = PS._read_dir(fh, path, os.path.getsize(path))
+            ref = PS.read_dir(fh, path, os.path.getsize(path))
         got = PS.read_directory(path)
         assert (got.ok, got.word2, got.entries) == (ref.ok, ref.word2, ref.entries)
 

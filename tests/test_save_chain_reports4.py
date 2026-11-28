@@ -1,5 +1,6 @@
 """Run reports and prompts after a library save."""
 
+from ctgedit.ui.window import open_tabs as open_tabs_mod
 import json
 import os
 import sys
@@ -31,8 +32,8 @@ def _drop_win(w):
     for ent in list(getattr(w, "_docs", ())):
         if hasattr(ent["doc"], "dirty"):
             ent["doc"].dirty = False
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.close()
     w.deleteLater()
 
@@ -56,7 +57,6 @@ def _quiet_runs():
     """The save prompts off; the run holds as they were after each test."""
     from ctgedit.ui.prefs.settings import app_settings
     from ctgedit.ui.jobs.update_run import UpdatePagesRun
-    from ctgedit.ui.window.library import LibraryCommands
 
     st = app_settings()
     for k, v in (
@@ -66,17 +66,8 @@ def _quiet_runs():
         ("opt/auto_update_genies", True),
     ):
         st.setValue(k, v)
-    due = getattr(LibraryCommands, "_USED_BY_DUE", None) or [False]
-    due[0] = False
+    UpdatePagesRun.used_by_due = False
     yield
-    UpdatePagesRun.users_busy = ""
-    UpdatePagesRun.chain_busy = False
-    UpdatePagesRun.tabs_following = False
-    UpdatePagesRun.tabs_run = ""
-    UpdatePagesRun.active = None
-    UpdatePagesRun.users_queue.clear()
-    UpdatePagesRun.users_retry = False
-    due[0] = False
 
 
 def _settle():
@@ -154,9 +145,8 @@ def test_the_used_by_window_waits_while_a_run_writes(fx_install, win):
     assert dlg.stale and _stale(dlg) == 0  # (marked; read when the run ends)
     UpdatePagesRun.users_busy = ""
     win._follow_used_by_windows()
-    from ctgedit.ui.window import library as L
 
-    L._refresh_stale_used_by()
+    open_tabs_mod.refresh_stale_used_by()
     assert not dlg.stale and _stale(dlg) > 0
     dlg.close()
 
@@ -295,7 +285,7 @@ def test_the_chain_names_the_pages_it_left_out_of_date_as_a_warning(win, monkeyp
 def test_the_result_lines_of_pages_left_out_of_date_make_a_warning(win, monkeypatch):
     from ctgedit.ui import notify
     from ctgedit.ui.jobs import run_results
-    from ctgedit.ui.window.library import LibraryCommands as L
+    from ctgedit.ui.main_window import MainWindow as L
 
     monkeypatch.setattr(run_results.RunResultsDialog, "exec", lambda self: 0)
     for line in (
@@ -475,7 +465,7 @@ def test_a_chain_that_found_nothing_says_so(win):
 # -- Cancel in the open tabs' step --------------------------------------------------------------
 def _users_run_left_a_tab(win, monkeypatch, fx, saved):
     from ctgedit.io import genieusage as GU
-    from ctgedit.ui.window.library import OpenTabsUpdate
+    from ctgedit.ui.window.open_tabs import OpenTabsUpdate
 
     users = [
         types.SimpleNamespace(
@@ -597,7 +587,7 @@ def test_a_template_copy_left_is_named_as_a_template_spelled_as_its_library(fx_i
 
 
 def test_the_results_call_them_nested_copies(win):
-    from ctgedit.ui.window.library import LibraryCommands as L
+    from ctgedit.ui.main_window import MainWindow as L
 
     left = [("mytpl.made@XGA", ["the template fx_style.normal@XGA"])]
     assert L._not_composed_text(left) == (
@@ -679,7 +669,7 @@ def test_the_result_of_a_chain_whose_window_closed_is_told_in_another(win, win2,
     from ctgedit.ui.main_window import MainWindow
 
     def fake(lib_path, element, *a, **k):
-        MainWindow._instances.remove(win2)  # (closed while it ran)
+        MainWindow.instances.remove(win2)  # (closed while it ran)
         return {
             "format": GW.FORMAT,
             "updated": ["FxGenies"],
@@ -697,7 +687,7 @@ def test_the_result_of_a_chain_whose_window_closed_is_told_in_another(win, win2,
         "Updated 1 closed page that uses fxgenie.fx_pump."
     ]
     assert not notify.centre(win2).entries
-    MainWindow._instances.append(win2)  # (for the fixture's cleanup)
+    MainWindow.instances.append(win2)  # (for the fixture's cleanup)
 
 
 def test_the_chains_note_counts_the_pages_it_leaves_to_their_tabs(fx_install, win):
@@ -733,14 +723,14 @@ def test_the_pages_phase_writes_its_partial_answer_once(fx_install, tmp_path, mo
 
     _move_text(fx_install.file("FxLib", "fxgenie.ctm"), "fx_pump")
     writes = []
-    real = GW._write_json
+    real = GW.write_json
 
     def count(path, obj):
         if path.endswith(GW.GENIES_SUFFIX) and obj.get("pages"):
             writes.append(len(obj.get("updated") or ()))
         return real(path, obj)
 
-    monkeypatch.setattr(GW, "_write_json", count)
+    monkeypatch.setattr(GW, "write_json", count)
     prog = str(tmp_path / "run.progress")
     res = GW.update_closed_pages(fx_install.file("FxLib", "fxgenie.ctm"), "fx_pump", progress_file=prog)
     assert len(res["updated"]) > 1 and writes == [0], (writes, res["updated"])

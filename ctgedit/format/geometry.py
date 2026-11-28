@@ -5,11 +5,12 @@ from __future__ import annotations
 import copy
 import importlib
 import math
+import re
 import struct
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
-from .page import PageObject, _XFORM_DOUBLES, _geom_name_len
+from .page import PageObject, XFORM_DOUBLES, geom_name_len
 from .textcodec import CODEC
 from . import codes as _codes
 from ..infra.logsetup import note_exception as _note_exc
@@ -111,7 +112,7 @@ def set_handle(po: PageObject, handle: int) -> None:
 def set_object_name(po: PageObject, name: str) -> bool:
     """Set the object name in the geometry header."""
     body = po.body_raw
-    end = _geom_name_len(body, 0)
+    end = geom_name_len(body, 0)
     if end < 6:
         return False
     enc = str(name).encode(CODEC, "replace")
@@ -131,7 +132,7 @@ def live_an(po: PageObject) -> int:
 def parse_geom_header(body: bytes) -> Optional[GeomHeader]:
     """Decode the deterministic geometry header. Returns None if it overruns."""
     n = len(body)
-    o = _geom_name_len(body, 0)
+    o = geom_name_len(body, 0)
     if o == 0 or o > n:
         return None
     name = body[6:o].decode(CODEC, "replace") if o > 6 else ""
@@ -147,8 +148,8 @@ def parse_geom_header(body: bytes) -> Optional[GeomHeader]:
     return GeomHeader(o, o + 4, o + 12, o + 20, _P2H(body, o), _P4H(body, o + 4), _P4H(body, o + 12), name)
 
 
-#: transform mode byte -> the bytes of its slot (the mode byte and its doubles: _XFORM_DOUBLES)
-_XFORM_SKIP = tuple(1 + _XFORM_DOUBLES.get(m, 6 if m > 3 else 0) * 8 for m in range(256))
+#: transform mode byte -> the bytes of its slot (the mode byte and its doubles: XFORM_DOUBLES)
+_XFORM_SKIP = tuple(1 + XFORM_DOUBLES.get(m, 6 if m > 3 else 0) * 8 for m in range(256))
 _P2H = struct.Struct("<2h").unpack_from
 _P4H = struct.Struct("<4h").unpack_from
 
@@ -296,13 +297,12 @@ def _find_node_array(po: PageObject, body: bytes) -> Optional[NodeArray]:
     # its bbox
     l, t, r, b = rect
     lo_x, hi_x, lo_y, hi_y = l - _BBOX_TOL, r + _BBOX_TOL, t - _BBOX_TOL, b + _BBOX_TOL
+    starts = _run_starts(body, gh.end, lo_x, hi_x, lo_y, hi_y)
     n = len(body)
     u16 = struct.unpack_from
     iter_pts = struct.iter_unpack
-    for pos in range(n - 2, gh.end - 1, -1):
+    for pos in reversed(starts):
         (cnt,) = u16("<H", body, pos)
-        if not (2 <= cnt <= 512):
-            continue
         end = pos + 2 + cnt * 4
         if end > n:
             continue
@@ -327,6 +327,31 @@ def _find_node_array(po: PageObject, body: bytes) -> Optional[NodeArray]:
                     (cnt,) = u16("<H", body, pos)
                 return NodeArray(pos, cnt, counted=True)
     return None
+
+
+def _high_byte_class(lo: int, hi: int) -> Optional[bytes]:
+    """A regex byte class of the high bytes of the int16 values lo..hi (None: no value)."""
+    lo, hi = max(lo, -32768), min(hi, 32767)
+    if lo > hi:
+        return None
+    a, z = lo >> 8, hi >> 8
+    if z - a >= 255:
+        return b"[\x00-\xff]"
+    return b"[" + b"".join(re.escape(bytes((v & 0xFF,))) for v in range(a, z + 1)) + b"]"
+
+
+def _run_starts(body: bytes, start: int, lo_x: int, hi_x: int, lo_y: int, hi_y: int) -> List[int]:
+    """The positions from ``start`` on, in order, of a u16 count of 2 to 512 followed by a
+    first point whose high bytes fit x lo_x..hi_x and y lo_y..hi_y: the general scan's
+    candidates (every other position fails its count or its first point)."""
+    hx, hy = _high_byte_class(lo_x, hi_x), _high_byte_class(lo_y, hi_y)
+    if hx is None or hy is None:
+        return []
+    # (re keeps the compiled patterns: the rects of a page give few distinct ones)
+    pat = re.compile(
+        b"(?=(?:[\x02-\xff]\x00|[\x00-\xff]\x01|\x00\x02)[\x00-\xff]" + hx + b"[\x00-\xff]" + hy + b")"
+    )
+    return [m.start() for m in pat.finditer(body, start)]
 
 
 def _class_section_run(po: PageObject, body: bytes, rect) -> Optional[NodeArray]:
@@ -415,13 +440,13 @@ def set_object_nodes(po: PageObject, pts: List[Tuple[int, int]]) -> bool:
         if len(pts) != 2:
             return False
         (x1, y1), (x2, y2) = pts
-        return _set_line_endpoints(po, x1, y1, x2, y2)
+        return set_line_endpoints(po, x1, y1, x2, y2)
 
     na = find_node_array(po)
     if na is None or not pts:
         return False
     gh = parse_geom_header(po.body_raw)
-    d = _rect2_deltas(gh)
+    d = rect2_deltas(gh)
     flags = style_flags(po)
     follows = False
     if flags is not None:
@@ -548,7 +573,7 @@ def node_insert_point(info: ReshapeInfo, p, tol: float) -> Optional[Tuple[int, T
     return None if best is None else (best[1], best[2])
 
 
-def _set_line_endpoints(po: PageObject, x1: int, y1: int, x2: int, y2: int) -> bool:
+def set_line_endpoints(po: PageObject, x1: int, y1: int, x2: int, y2: int) -> bool:
     """Set a line's endpoints the way the line class derives its header."""
     body = bytearray(po.body_raw)
     gh = parse_geom_header(bytes(body))
@@ -564,14 +589,14 @@ def _set_line_endpoints(po: PageObject, x1: int, y1: int, x2: int, y2: int) -> b
         flags = style_flags(po)
         rect2 = predict_bounds(LINE_TC, rect1, flags) if flags else None
         if rect2 is None:
-            d = _rect2_deltas(gh)
+            d = rect2_deltas(gh)
             rect2 = (rect1[0] + d[0], rect1[1] + d[1], rect1[2] + d[2], rect1[3] + d[3])
-        _set_rect2(po, rect2)
+        set_rect2(po, rect2)
         refresh_bags(po)
         return True
     na = find_node_array(po)
 
-    d = _rect2_deltas(gh)
+    d = rect2_deltas(gh)
     struct.pack_into("<4h", body, gh.rect1_off, x1, y1, x2, y2)
     nl, nt, nr, nb = norm_rect((x1, y1, x2, y2))
     struct.pack_into("<4h", body, gh.rect2_off, nl + d[0], nt + d[1], nr + d[2], nb + d[3])
@@ -682,7 +707,7 @@ def predict_bounds(type_code: int, rect1, flags: bytes, points: Optional[int] = 
     return None
 
 
-def _set_rect2(po: PageObject, rect2) -> None:
+def set_rect2(po: PageObject, rect2) -> None:
     gh = parse_geom_header(po.body_raw)
     if gh is None:
         return
@@ -710,9 +735,9 @@ def rebound(
         return
     r2 = gh.rect2
     if tuple(r2) == tuple(p0):
-        _set_rect2(po, p1)
+        set_rect2(po, p1)
     else:
-        _set_rect2(po, tuple(r2[i] + p1[i] - p0[i] for i in range(4)))
+        set_rect2(po, tuple(r2[i] + p1[i] - p0[i] for i in range(4)))
 
 
 def style_flags(po: PageObject) -> Optional[bytes]:
@@ -722,7 +747,7 @@ def style_flags(po: PageObject) -> Optional[bytes]:
 
 
 # --------------------------------------------------------------------------- translate / resize
-def _rect2_deltas(gh: GeomHeader) -> Tuple[int, int, int, int]:
+def rect2_deltas(gh: GeomHeader) -> Tuple[int, int, int, int]:
     """rect2's per-edge offsets from the normalised rect1 (preserved across edits)."""
     nl, nt, nr, nb = norm_rect(gh.rect1)
     l2, t2, r2, b2 = gh.rect2
@@ -751,11 +776,11 @@ def _update_rect_echo(po: PageObject, body: bytearray, old_rect1, new_rect1) -> 
         body[n - 21 : n - 13] = new
 
 
-def _retarget_header(po: PageObject, old_rect, new_rect) -> None:
+def retarget_header(po: PageObject, old_rect, new_rect) -> None:
     """Map anchor/rect1/rect2 from old normalised rect to new normalised rect."""
     body = bytearray(po.body_raw)
     gh = parse_geom_header(bytes(body))
-    d = _rect2_deltas(gh)
+    d = rect2_deltas(gh)
 
     def mapx(x):
         ow = old_rect[2] - old_rect[0]
@@ -926,7 +951,7 @@ def resize_object(
             if key in props and props[key] != str(v):
                 writer.set_object_property(po, key, str(v))
     keep = parse_geom_header(po.body_raw).anchor if _local_anchor(po) else None
-    _retarget_header(po, old_rect, nr)
+    retarget_header(po, old_rect, nr)
     if keep is not None:
         gh2 = parse_geom_header(po.body_raw)
         body = bytearray(po.body_raw)
@@ -1203,12 +1228,12 @@ def _xform_count(mode: int) -> int:
     # stride switches on the FULL mode byte (default = 6 doubles), matching
     # parse_geom_header + page.py/reader.py, also on the high-nibble modes
     # (0x11/0x12/0x31/...) of legacy library elements.
-    return _XFORM_DOUBLES.get(mode, 6 if mode > 3 else 0)
+    return XFORM_DOUBLES.get(mode, 6 if mode > 3 else 0)
 
 
 def transform_spans(body: bytes):
     """The 3 header transform slots as ``[(mode_off, mode, n_doubles)]``."""
-    o = _geom_name_len(body, 0)
+    o = geom_name_len(body, 0)
     if not o:
         return None
     out = []
@@ -1517,7 +1542,7 @@ def button_caption_lines(text: str) -> List[str]:
     return s.split("\n")
 
 
-def _button_auto_width(po: PageObject) -> bool:
+def button_auto_width(po: PageObject) -> bool:
     """A button sizes its width to its caption when its WIDTH property is
     absent or 0 (atoi(WIDTH) == 0)."""
     from .cnum import c_atoi
@@ -1531,7 +1556,7 @@ def _button_auto_width(po: PageObject) -> bool:
 
 def refit_button(po: PageObject) -> bool:
     """Resize an auto-width button to its caption."""
-    if po.type_code != BUTTON_TC or not _button_auto_width(po):
+    if po.type_code != BUTTON_TC or not button_auto_width(po):
         return False
     textmetrics = _lazy("textmetrics")
     value_bag = _lazy("writer").value_bag
@@ -1574,7 +1599,7 @@ def refit_button(po: PageObject) -> bool:
         rebound(po, gh.rect1, old_flags, new_r1, old_flags)
     else:
         l2, t2, r2, b2 = gh.rect2
-        _set_rect2(po, (l2, t2, r2 + (l + w - r), b2))
+        set_rect2(po, (l2, t2, r2 + (l + w - r), b2))
     return True
 
 
@@ -1803,7 +1828,7 @@ def fit_new_text(po: PageObject, rect) -> bool:
         return False
     M6 = box_map(norm_rect(gh.rect1), norm_rect(rect))
     if not _bake_plain_text(po, M6, M6[3]):
-        _retarget_header(po, norm_rect(gh.rect1), norm_rect(rect))  # (no text metrics)
+        retarget_header(po, norm_rect(gh.rect1), norm_rect(rect))  # (no text metrics)
     return True
 
 
@@ -1815,7 +1840,7 @@ def _bake_plain_text(po: PageObject, M6, s: float, anchor=None) -> bool:
     gh = parse_geom_header(po.body_raw)
     old = norm_rect(gh.rect1)
     textmetrics = _lazy("textmetrics")
-    g = textmetrics._Gdi.get()
+    g = textmetrics.Gdi.get()
     if g is None:
         return False
     ax, ay = tail["echo"]
@@ -1832,7 +1857,7 @@ def _bake_plain_text(po: PageObject, M6, s: float, anchor=None) -> bool:
     body[tail["size_off"]] = size
     po.body_raw = bytes(body)
     if not refit_text(po):
-        _retarget_header(po, old, _map_box(M6, old))
+        retarget_header(po, old, _map_box(M6, old))
     return True
 
 
@@ -1853,7 +1878,7 @@ def _bake_text_matrix(po: PageObject, L2, s: float, M6, old) -> bool:
     struct.pack_into("<2h", body, tail["echo_off"], *anchor)
     po.body_raw = bytes(body)
     if not refit_text(po):
-        _retarget_header(po, old, _map_box(M6, old))
+        retarget_header(po, old, _map_box(M6, old))
     return True
 
 
@@ -1955,7 +1980,7 @@ def relayout_text(po: PageObject, fallback=None) -> None:
         return
     if not refit_text(po) and fallback is not None:
         old, M6 = fallback
-        _retarget_header(po, old, _map_box(M6, old))
+        retarget_header(po, old, _map_box(M6, old))
     tail = parse_text_tail(po)
     gh = parse_geom_header(po.body_raw)
     a, b, c, d, h, k = text_total(po)
@@ -1986,7 +2011,7 @@ def bake_text_scale(po: PageObject, scale: float) -> bool:
     """A text's point size times ``scale`` the way CtDraw bakes it:
     MulDiv(trunc(px * scale), 72, LOGPIXELSY), px = LOGPIXELSY * points / 72. False without
     text metrics or a tail."""
-    g = _lazy("textmetrics")._Gdi.get()
+    g = _lazy("textmetrics").Gdi.get()
     tail = parse_text_tail(po)
     if g is None or tail is None:
         return False

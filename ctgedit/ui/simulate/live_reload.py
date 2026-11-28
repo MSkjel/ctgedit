@@ -2,17 +2,22 @@
 
 from __future__ import annotations
 
+from ...infra.paths import path_key
+from ...infra.logsetup import note_exception as _note_exc
+
+from ..prefs.settings import option
+
 import contextlib
 import os
 from typing import Callable, Dict, Iterable, List, Optional, Set, Tuple
 
 from PySide6 import QtCore
 
+from ...format.fileio import LIBRARY_EXTS
 from . import options
 from . import sources as S
 
 CICODE_EXTS = (".ci",)
-LIBRARY_EXTS = (".ctl", ".ctm", ".ctt")
 PAGE_EXTS = (".ctg",)
 WATCHED_EXTS = CICODE_EXTS + LIBRARY_EXTS + PAGE_EXTS
 #: a .ci change is sent this long after the last change of the file (ms): the default of
@@ -21,18 +26,11 @@ CICODE_DEBOUNCE_MS = 500
 #: a page reloads this long after the last edit (or library change) (s): the default of
 #: Settings > Simulate > Reload after a pause of (options.reload_delay_s)
 PAGE_DEBOUNCE_S = 1.0
-#: the watched folders are also compared this often (ms): the default of Settings >
-#: Simulate > Check the folders every (options.folder_check_ms)
-SWEEP_MS = 2000
 
 
 def page_delay_s() -> float:
     """The pause after the last edit before the page reloads (s; the setting)."""
     return options.reload_delay_s()
-
-
-def _key(path: str) -> str:
-    return os.path.normcase(os.path.abspath(path))
 
 
 def file_stamp(path: str) -> Optional[Tuple[int, int]]:
@@ -63,7 +61,7 @@ def editor_genie_update_pending(doc) -> bool:
         return False
     mw = sys.modules.get("ctgedit.ui.main_window")
     cls = getattr(mw, "MainWindow", None) if mw is not None else None
-    for w in list(getattr(cls, "_instances", None) or ()):
+    for w in list(getattr(cls, "instances", None) or ()):
         waiting = getattr(w, "__dict__", {}).get("_after_run_docs") or ()
         if any(d is doc for d in waiting):
             return True
@@ -91,9 +89,7 @@ def library_run_going() -> bool:
 def tabs_wait_for_runs() -> bool:
     """Settings > Pages and libraries > When a page opens: 'Open tabs wait for the update of
     what uses a saved genie' (opt/tabs_wait_for_runs, off by default: ui/window/tabs)."""
-    from ..prefs.settings import app_settings
-
-    return bool(app_settings().value("opt/tabs_wait_for_runs", False, type=bool))
+    return option("tabs_wait_for_runs")
 
 
 def run_holds_documents() -> bool:
@@ -124,7 +120,7 @@ def _editor_windows_of(doc) -> list:
     mw = sys.modules.get("ctgedit.ui.main_window")
     cls = getattr(mw, "MainWindow", None) if mw is not None else None
     out = []
-    for w in list(getattr(cls, "_instances", None) or ()):
+    for w in list(getattr(cls, "instances", None) or ()):
         try:
             if any(e["doc"] is doc for e in list(getattr(w, "_docs", ()))):
                 out.append(w)
@@ -137,12 +133,12 @@ def editor_library_watches(doc, paths) -> list:
     """The editor windows holding ``doc`` whose library watch looks at the folder of one of
     ``paths`` (ui/window/libwatch, Settings > Pages and libraries: on): they compose the
     document's genies again for a library another program wrote, after their own pause."""
-    folders = {_key(os.path.dirname(os.path.abspath(p))) for p in paths or () if p}
+    folders = {path_key(os.path.dirname(os.path.abspath(p))) for p in paths or () if p}
     out = []
     for w in _editor_windows_of(doc):
         watch = getattr(w, "__dict__", {}).get("_lib_watch")
         have = getattr(watch, "folders", None) if watch is not None else None
-        if have and folders & {_key(f) for f in have}:
+        if have and folders & {path_key(f) for f in have}:
             out.append(w)
     return out
 
@@ -161,9 +157,12 @@ def editor_library_check_pending(doc) -> bool:
     return False
 
 
-def folder_snapshot(folder: str, exts: Tuple[str, ...] = WATCHED_EXTS) -> Dict[str, Tuple[str, int, int]]:
+def folder_snapshot(
+    folder: str, exts: Tuple[str, ...] = WATCHED_EXTS, key: Callable[[str], str] = path_key
+) -> Dict[str, Tuple[str, int, int]]:
     """{normcased path: (path, mtime_ns, size)} of the files of ``exts`` in ``folder`` (not its
-    subfolders: the compiler reads a project's top-level .ci files)."""
+    subfolders: the compiler reads a project's top-level .ci files); ``key`` normcases a
+    path (:func:`path_key`)."""
     out: Dict[str, Tuple[str, int, int]] = {}
     try:
         with os.scandir(folder) as it:
@@ -176,7 +175,7 @@ def folder_snapshot(folder: str, exts: Tuple[str, ...] = WATCHED_EXTS) -> Dict[s
                     st = e.stat()
                 except OSError:
                     continue
-                out[_key(e.path)] = (e.path, st.st_mtime_ns, st.st_size)
+                out[key(e.path)] = (e.path, st.st_mtime_ns, st.st_size)
     except OSError:
         pass
     return out
@@ -206,22 +205,32 @@ class FolderWatch(QtCore.QObject):
         self.folders: List[str] = []
         seen: Set[str] = set()
         for f in folders:
-            if f and os.path.isdir(f) and _key(f) not in seen:
-                seen.add(_key(f))
+            if f and os.path.isdir(f) and path_key(f) not in seen:
+                seen.add(path_key(f))
                 self.folders.append(os.path.abspath(f))
         self._snap: Dict[str, Dict[str, Tuple[str, int, int]]] = {}
+        #: path -> path_key of the paths seen (a rescan compares every watched file: the
+        #: tab switches and window activations rescan every folder)
+        self._keys: Dict[str, str] = {}
         self._watcher = QtCore.QFileSystemWatcher(self)
         for f in self.folders:
-            snap = folder_snapshot(f, self.exts)
-            self._snap[_key(f)] = snap
+            snap = folder_snapshot(f, self.exts, self._key)
+            self._snap[path_key(f)] = snap
             self._watch(f, snap)
         self._watcher.directoryChanged.connect(self._rescan)
         self._watcher.fileChanged.connect(lambda p: self._rescan(os.path.dirname(p)))
 
+    def _key(self, path: str) -> str:
+        k = self._keys.get(path)
+        if k is None:
+            k = self._keys[path] = path_key(path)
+        return k
+
     def _watch(self, folder: str, snap) -> None:
+        key = self._key
         want = [folder] + [v[0] for v in snap.values()]
-        have = {_key(p) for p in self._watcher.files() + self._watcher.directories()}
-        add = [p for p in want if _key(p) not in have]
+        have = {key(p) for p in self._watcher.files() + self._watcher.directories()}
+        add = [p for p in want if key(p) not in have]
         if add:
             self._watcher.addPaths(add)
 
@@ -236,15 +245,15 @@ class FolderWatch(QtCore.QObject):
         return out
 
     def _rescan(self, folder: str) -> None:
-        if _key(folder) in self._snap:
+        if path_key(folder) in self._snap:
             self.rescan(folder)
 
     def _diff(self, folder: str) -> List[str]:
-        k = _key(folder)
+        k = self._key(folder)
         old = self._snap.get(k)
         if old is None:
             return []
-        new = folder_snapshot(folder, self.exts)
+        new = folder_snapshot(folder, self.exts, self._key)
         self._snap[k] = new
         out = [v[0] for p, v in new.items() if old.get(p) is None or old[p][1:] != v[1:]]
         out += [v[0] for p, v in old.items() if p not in new]
@@ -254,7 +263,7 @@ class FolderWatch(QtCore.QObject):
     def close(self) -> None:
         try:
             self._watcher.removePaths(self._watcher.files() + self._watcher.directories())
-        except Exception:  # noqa: BLE001 -- closing anyway
+        except Exception:  # noqa: BLE001  # swallow-ok: closing anyway
             pass
         self.deleteLater()
 
@@ -363,12 +372,12 @@ class LiveReload(QtCore.QObject):
         for p in paths:
             if not is_cicode(p):
                 continue
-            sw.since_start[_key(p)] = p
+            sw.since_start[path_key(p)] = p
             if not options.get("reload_cicode"):
                 continue
             if getattr(sw.session, "attached", False):
-                if _key(p) not in sw.told:
-                    sw.told.add(_key(p))
+                if path_key(p) not in sw.told:
+                    sw.told.add(path_key(p))
                     self._log(
                         sw.session,
                         S.LogEntry(
@@ -380,7 +389,7 @@ class LiveReload(QtCore.QObject):
                         ),
                     )
                 continue
-            sw.pending.add(_key(p))
+            sw.pending.add(path_key(p))
             sw.timer.start()
         if libs:
             self.libraryChanged.emit(libs)
@@ -526,6 +535,7 @@ class LiveReload(QtCore.QObject):
         try:
             return float(fn()) if fn is not None else 0.0
         except Exception:  # noqa: BLE001
+            _note_exc("sim.live_reload._now")
             return 0.0
 
 
@@ -544,9 +554,9 @@ def editor_documents(path: str) -> list:
     cls = getattr(mw, "MainWindow", None) if mw is not None else None
     if cls is None or not path:
         return []
-    want = _key(path)
+    want = path_key(path)
     out = []
-    for w in list(getattr(cls, "_instances", None) or ()):
+    for w in list(getattr(cls, "instances", None) or ()):
         try:
             entries = list(getattr(w, "_docs", ()) or ())
         except RuntimeError:  # a window being destroyed
@@ -556,7 +566,7 @@ def editor_documents(path: str) -> list:
             p = getattr(d, "path", "") if d is not None else ""
             if not p or not hasattr(d, "export_page_model") or not hasattr(d, "parsed"):
                 continue  # (a restored tab not opened yet, an element)
-            if _key(p) == want:
+            if path_key(p) == want:
                 out.append(d)
     return out
 
@@ -587,7 +597,7 @@ def resolver_libraries(resolver) -> Optional[List[str]]:
     for libs in list(cache.values()):
         for lib in libs or ():
             p = getattr(lib, "path", "")
-            if p and _key(p) not in seen:
-                seen.add(_key(p))
+            if p and path_key(p) not in seen:
+                seen.add(path_key(p))
                 out.append(p)
     return out

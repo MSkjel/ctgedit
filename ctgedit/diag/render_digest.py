@@ -35,7 +35,7 @@ def art_key(bmp) -> Optional[tuple]:
         else:
             w, h, rgba = bmp.width, bmp.height, bmp.rgba
         return (int(w), int(h), zlib.crc32(rgba) & 0xFFFFFFFF if rgba else 0)
-    except Exception:  # noqa: BLE001 -- an odd value still counts as art
+    except Exception:  # noqa: BLE001 -- swallow-ok: an odd value still counts as art
         return (0, 0, 0)
 
 
@@ -286,7 +286,7 @@ def display_digest_main(argv=None) -> int:
     res: dict
     try:
         res = fresh_digest(page, as_path=opts.get("--as"), label_mode=opts.get("--label-mode"), detail=detail)
-    except Exception as e:  # noqa: BLE001 -- reported to the editor
+    except Exception as e:  # noqa: BLE001 -- swallow-ok: reported to the editor with its traceback
         import traceback
 
         res = {

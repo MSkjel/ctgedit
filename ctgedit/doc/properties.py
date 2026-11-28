@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+
 from typing import TYPE_CHECKING
+from ..infra.logsetup import note_exception as _note_exc
 
 if TYPE_CHECKING:  # (names only the annotations use)
     from collections import OrderedDict
@@ -28,11 +30,11 @@ from ..editing_base import (  # noqa: F401
     writer,
 )
 from ..editing_base import (  # noqa: F401
-    _LIBRARY_GENERATION,
-    _codes,
-    _find_options,
-    _name_key,
-    _rename_header,
+    LIBRARY_GENERATION,
+    codes,
+    find_options,
+    name_key,
+    rename_header,
 )
 
 
@@ -91,7 +93,7 @@ class PropertyEdits:
     def _refit_button(self, po: PageObject) -> bool:
         """Resize an auto-width button to its caption and store the width."""
         changed = geom.refit_button(po)
-        if po.type_code == 0x1001 and geom._button_auto_width(po):
+        if po.type_code == 0x1001 and geom.button_auto_width(po):
             gh = geom.parse_geom_header(po.body_raw)
             if gh is not None:
                 l, _t, r, _b = geom.norm_rect(gh.rect1)
@@ -699,7 +701,7 @@ class PropertyEdits:
         match, inside_genies, inside_templates, template_editable)."""
         from ..features import find_replace as FR
 
-        return FR.find_hits(self, FR.FindOptions(text, **_find_options(options)))
+        return FR.find_hits(self, FR.FindOptions(text, **find_options(options)))
 
     def replace_text(self, text: str, replacement: str, hits=None, **options):
         """Replace ``text`` by ``replacement`` in ``hits`` (default: every
@@ -708,7 +710,7 @@ class PropertyEdits:
         genie), never the member. A find_replace.ReplaceReport."""
         from ..features import find_replace as FR
 
-        opts = FR.FindOptions(text, **_find_options(options))
+        opts = FR.FindOptions(text, **find_options(options))
         if hits is None:
             hits = FR.find_hits(self, opts)
         return FR.replace_hits(self, hits, opts, replacement)
@@ -821,7 +823,7 @@ class PropertyEdits:
             raise ValueError(problem)
         # an object named by the legacy NAME key (the SA AlarmList / TabBar
         # objects, NAME == the header name) keeps that form
-        key = _name_key(self.parsed.page.objects[index])[0] or "__AN_NAME__"
+        key = name_key(self.parsed.page.objects[index])[0] or "__AN_NAME__"
         with self.batch("object name"):
             if name:
                 if not self.ensure_property(index, key, name):
@@ -831,7 +833,7 @@ class PropertyEdits:
                     return False
             hdr = geom.parse_geom_header(self.parsed.page.objects[index].body_raw)
             if hdr is not None and hdr.name != name:
-                self._body_edit("object name", index, lambda po: _rename_header(po, name))
+                self._body_edit("object name", index, lambda po: rename_header(po, name))
         return True
 
     def _unique_pasted_names(self, records: Sequence[PageObject]) -> None:
@@ -843,7 +845,7 @@ class PropertyEdits:
         pending = 0
         for po in records:
             if pending == 0:
-                key, old = _name_key(po)
+                key, old = name_key(po)
                 if old:
                     new = unique_object_name(old, lambda c: c.lower() in taken)
                     if new != old:
@@ -853,7 +855,7 @@ class PropertyEdits:
                             writer.remove_object_property(po, key)
                         hdr = geom.parse_geom_header(po.body_raw)
                         if hdr is not None and hdr.name.lower() == old.lower():
-                            _rename_header(po, new)
+                            rename_header(po, new)
                     if new:
                         taken.add(new.lower())
             else:
@@ -872,6 +874,7 @@ class PropertyEdits:
         try:
             anc = self.page.ancestors(index)
         except Exception:  # noqa: BLE001
+            _note_exc("properties.PropertyEdits._in_genie_context", index=index)
             anc = []
         return any(a < len(objs) and (objs[a].subtype_size & 0x201) for a in anc)
 
@@ -1484,12 +1487,12 @@ class PropertyEdits:
             static = (
                 colourstate.state0_source(b, L["style_at"])
                 if slot is not None
-                else colourstate._pair_at(b, L["state0_at"])
+                else colourstate.pair_at(b, L["state0_at"])
             )
             if "arr_at" in L:
-                arr = [colourstate._pair_at(b, L["arr_at"] + 8 * k) for k in range(L["arr_n"])]
+                arr = [colourstate.pair_at(b, L["arr_at"] + 8 * k) for k in range(L["arr_n"])]
             if "sta_at" in L:
-                sta = [colourstate._pair_at(b, L["sta_at"] + 8 * k) for k in range(L["sta_n"])]
+                sta = [colourstate.pair_at(b, L["sta_at"] + 8 * k) for k in range(L["sta_n"])]
         return fillcolour.read(
             self.object_properties(index),
             static,
@@ -1572,7 +1575,7 @@ class PropertyEdits:
     # Touch 0x1010 / Keyboard 0x100B carry CMD/ACTION input bags with
     # substitution-style trailers; they are input definitions, not genie
     # parameters, so the composite parameter union skips them.
-    _BEHAVIOUR_TCS = frozenset({_codes.TC.TOUCH, _codes.TC.KEYBOARD})
+    _BEHAVIOUR_TCS = frozenset({codes.TC.TOUCH, codes.TC.KEYBOARD})
 
     def genie_bindings(self, index: int) -> dict[str, str]:
         """A placed genie's editable parameter bindings."""
@@ -1594,22 +1597,16 @@ class PropertyEdits:
     def _resolver(self):
         """A SymbolResolver for this document's page (lazy, cached). None when
         symbol resolution is disabled (``CTG_NO_SYMBOLS=1``)."""
-        if getattr(self, "_sym_resolver_gen", None) != _LIBRARY_GENERATION[0]:
+        if getattr(self, "_sym_resolver_gen", None) != LIBRARY_GENERATION[0]:
             # a library element was saved / created since: its SymbolLibrary
             # objects (cached per resolver) and the placement link info are stale
             self._sym_resolver = "unset"
             self.__dict__.pop("_link_cache", None)
-            self._sym_resolver_gen = _LIBRARY_GENERATION[0]
+            self._sym_resolver_gen = LIBRARY_GENERATION[0]
         if getattr(self, "_sym_resolver", "unset") == "unset":
-            self._sym_resolver = None
-            if os.environ.get("CTG_NO_SYMBOLS") != "1":
-                try:
-                    from ..format.symbols import SymbolResolver
+            from ..format.symbols import SymbolResolver
 
-                    extra = [p for p in os.environ.get("CTG_LIB_PATH", "").split(os.pathsep) if p]
-                    self._sym_resolver = SymbolResolver.for_page(self.path, extra_paths=extra)
-                except Exception:  # noqa: BLE001
-                    self._sym_resolver = None
+            self._sym_resolver = SymbolResolver.for_page_env(self.path)
         return self._sym_resolver
 
     def genie_declared_params(self, index: int) -> "Optional[OrderedDict[str, str]]":
@@ -1624,6 +1621,7 @@ class PropertyEdits:
             resolver = self._resolver()
             resolved = resolver.resolve(ref) if (resolver and ref) else None
         except Exception:  # noqa: BLE001
+            _note_exc("properties.PropertyEdits.genie_declared_params", index=index)
             resolved = None
         if resolved is None:
             return None
@@ -1645,30 +1643,40 @@ class PropertyEdits:
 
         run = runmemo.table("properties.declared_params") if key is not None else None
         rkey = key + (tuple(getattr(resolver, "search_paths", ()) or ()),) if run is not None else None
+        from ..format.symbols import lookups_made, note_lookup
+
         if run is not None and rkey in run:
             self._use_tag_formats()  # (as the first ask of the page sets them)
-            cache[key] = run[rkey]
-            return run[rkey]
+            decl, looks = run[rkey]
+            # (the library lookups the run's first ask made count for this read too: Find's
+            # index of the closed pages keeps what each page's read depended on)
+            for sp, lk in looks:
+                lib, _dot, ext = lk.rpartition(".")
+                note_lookup(sp, lib, ext)
+            cache[key] = decl
+            return decl
         # the page's tag formats, as the genie dialog's OK loads the element
         # with them (_recompose_genie): an element the process-wide memo holds
         # (genie_place.load_element) is valid for this page's formats
         self._use_tag_formats()
-        try:
-            # = declared_params(load_element(...)): from the memoised element,
-            # else from the declarations alone (genie_place.declared_params_of:
-            # no re-composition of the nested genies)
-            el = GP.memoised_element(path, ref.element, resolver=resolver)
-            decl = (
-                GP.declared_params(el)
-                if el is not None
-                else GP.declared_params_of(path, ref.element, resolver)
-            )
-        except Exception:  # noqa: BLE001
-            decl = None
+        with lookups_made() as looks:
+            try:
+                # = declared_params(load_element(...)): from the memoised element,
+                # else from the declarations alone (genie_place.declared_params_of:
+                # no re-composition of the nested genies)
+                el = GP.memoised_element(path, ref.element, resolver=resolver)
+                decl = (
+                    GP.declared_params(el)
+                    if el is not None
+                    else GP.declared_params_of(path, ref.element, resolver)
+                )
+            except Exception:  # noqa: BLE001
+                _note_exc("properties.PropertyEdits.genie_declared_params")
+                decl = None
         if key is not None:
             cache[key] = decl
             if run is not None:
-                run[rkey] = decl
+                run[rkey] = (decl, tuple(looks))
         return decl
 
     def genie_param_uses(self, index: int):
@@ -1710,7 +1718,7 @@ class PropertyEdits:
             return None
         try:
             r = GP.decode(po)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 -- swallow-ok: a record the strict walk cannot read
             return None
         if not r.entries:
             return OrderedDict()
@@ -1729,6 +1737,102 @@ class PropertyEdits:
             return OrderedDict(inst)
         low = {k.lower(): v for k, v in inst.items()}
         return OrderedDict((name, low.get(name.lower(), default)) for name, default in decl.items())
+
+    def genie_values(self, index: int) -> "List[Tuple[str, str]]":
+        """(parameter, value) of what genie ``index`` passes its element as the Graphics
+        Builder composes the page: an outermost placed genie's dialog rows
+        (genie_all_params); a genie copy nested in one, its templates filled from the level
+        above, from the outermost genie down (what the objects inside it run: the values the
+        copy stores are those its element was composed with alone); a copy without templates
+        (a composite genie's content), its stored values. [] for an object that is no placed
+        genie or copy. Kept while the document is the same."""
+        return [
+            (k, v) for k, v in self._genie_value_bag(index) if k.upper() != "AN" and not k.startswith("!")
+        ]
+
+    def genie_inputs(self, index: int) -> "List[Tuple[str, str, tuple]]":
+        """(parameter, value, uses) of each input of genie ``index``: genie_values, then any
+        parameter its objects name that the genie gives no value; ``uses`` the fields of its
+        objects the input reaches (features/genie_uses.InputUse), () for one nothing uses.
+        [] for an object that is no placed genie or copy. Kept while the document is the same."""
+        from ..features import genie_uses as GU
+
+        values = self.genie_values(index)
+        if not values and not self._genie_value_bag(index):
+            return []
+        memo = self.__dict__["_genie_values"]  # (genie_values made it for this state)
+        key = ("inputs", index)
+        got = memo[1].get(key)
+        if got is None:
+            uses = GU.page_uses(self.parsed.page.objects, self.page, index)
+            rows = [(k, v, tuple(uses.pop(k.lower(), ("", ()))[1])) for k, v in values]
+            rows += [(nm, "", tuple(us)) for nm, us in uses.values()]
+            got = memo[1][key] = tuple(rows)
+        return list(got)
+
+    def _genie_value_bag(self, index: int) -> "Tuple[Tuple[str, str], ...]":
+        """genie_values with the genie's own AN (and the editor's '!' keys)."""
+        from ..format import genie_place as GP
+
+        state = (
+            getattr(self, "derive_serial", 0),
+            getattr(self, "touch_serial", 0),
+            getattr(self, "edit_serial", 0),
+            LIBRARY_GENERATION[0],
+        )
+        memo = self.__dict__.get("_genie_values")
+        if memo is None or memo[0] != state:
+            memo = self.__dict__["_genie_values"] = (state, {})
+        got = memo[1].get(index)
+        if got is not None:
+            return got
+        objs = self.parsed.page.objects
+        out: "List[Tuple[str, str]]" = []
+        po = objs[index] if 0 <= index < len(objs) else None
+        if po is not None and po.class_flag and po.subtype_size & 0x200:
+            if po.subtype_size & 0x1:
+                if not self.is_composite_genie(index):
+                    try:
+                        an = own_value_bag(GP.decode(po)).get("AN")
+                    except Exception:  # noqa: BLE001 -- swallow-ok: a record the strict walk cannot read
+                        an = None
+                    out = [
+                        (k, "" if v is None else str(v))
+                        for k, v in self.genie_all_params(index).items()
+                        if an is None or k.upper() != "AN"
+                    ]
+                    if an is not None:
+                        out.append(("AN", str(an)))
+            else:
+                out = self._copy_values(index, po, GP)
+        got = memo[1][index] = tuple(out)
+        return got
+
+    def _copy_values(self, index: int, po, GP) -> "List[Tuple[str, str]]":
+        """_genie_value_bag of the genie copy ``index`` (record ``po``) nested in a placed genie:
+        its templates (in its parent genie's parameters) filled with its parent's values, as the
+        composition derives the level (GP.subst_level, on a copy of its stored values). The
+        record keeps no values for the levels between it and the outermost genie: each comes
+        from its own parent, down from the outermost. A copy in a composite genie (no
+        templates), its stored values."""
+        objs = self.parsed.page.objects
+        try:
+            ents = GP.decode(po).entries or []
+        except Exception:  # noqa: BLE001 -- swallow-ok: a record the strict walk cannot read
+            return []
+        if len(ents) < 2:
+            return []
+        own = ents[1]
+        anc = self.page.ancestors(index)  # (the nearest first)
+        roots = [a for a in anc if objs[a].subtype_size & 0x201 == 0x201]
+        parent = next((a for a in anc if objs[a].class_flag and objs[a].subtype_size & 0x200), None)
+        if parent is None or not roots or self.is_composite_genie(roots[-1]) or not own[2].pairs:
+            return list(own[1].pairs)
+        outer = GP.Bag(list(self._genie_value_bag(parent)))
+        decls = GP.Bag([(k, "\n" if d is None else d) for k, d in GP.template_decls(own[2]).items()])
+        mine = [own[0], GP.Bag(list(own[1].pairs)), own[2]]
+        GP.subst_level(mine, [decls, outer, GP.Bag([])], outer_vals=outer, decls=decls)
+        return list(mine[1].pairs)
 
 
 def own_value_bag(r):

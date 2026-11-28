@@ -46,15 +46,15 @@ def win(monkeypatch):
 
     for t in list(tasks.registry().tasks.values()):
         tasks.drop(t.token)
-    for x in list(MainWindow._instances):
+    for x in list(MainWindow.instances):
         with_watch = getattr(x, "_watcher", None)
         if with_watch is not None and with_watch.files():
             with_watch.removePaths(with_watch.files())
         x._disk_timer.stop()
         for e in getattr(x, "_docs", []):
             e["doc"].dirty = False
-        if x in MainWindow._instances:
-            MainWindow._instances.remove(x)
+        if x in MainWindow.instances:
+            MainWindow.instances.remove(x)
         x.hide()
 
 
@@ -206,7 +206,7 @@ def test_cancel_in_the_list_survives_the_tasks_progress(win):
     _pump()
     pop = win.status_tasks.popover
     btn = next(
-        b for b in pop.rows.findChildren(QtWidgets.QToolButton) if b.text() == "Cancel" and b.isVisible()
+        b for b in pop.rows.findChildren(QtWidgets.QToolButton) if b.text() == "Stop" and b.isVisible()
     )
     bar = pop.rows.findChildren(QtWidgets.QProgressBar)[0]
     QtTest.QTest.mousePress(btn, QtCore.Qt.LeftButton)

@@ -37,8 +37,8 @@ def _close(w):
 
     for d in list(w._dialogs.values()):
         d.reject()
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.doc.dirty = False
     w.close()
 
@@ -406,8 +406,8 @@ def test_new_group_sheet_edits_the_group(tmp_path, monkeypatch, fx_page):
     finally:
         for d in list(w._dialogs.values()):
             d.reject()
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.doc.dirty = False
         w.close()
 
@@ -465,10 +465,11 @@ def test_goto_object_tree_is_ctdraws_tree_and_finds_by_an(win, tplwin):
     assert inputs and dlg.object_count() == len(pg.objects) - len(inputs)
     assert dlg._root.text(0) == "Page FxMembers"
     assert dlg._items[0].text(0) == "FxPair  Group AN%d" % PAIR_AN
-    # a nested genie without its own link (FxNestedHost's)
+    # a nested genie without its own link (FxNestedHost's): named by the element of the
+    # definition record it is composed from
     host = _named(doc, "FxNestedHost")
     nested = next(k for k in doc.page.objects[host].members if doc.page.objects[k].is_genie)
-    assert dlg._items[nested].text(0) == "Genie AN%d" % pg.objects[nested].an
+    assert dlg._items[nested].text(0) == "Genie fxnest.n1 AN%d" % pg.objects[nested].an
     # topmost first: the root's first row is the last top-level record, group 0 last
     roots = [
         i
@@ -505,7 +506,8 @@ def test_goto_object_tree_is_ctdraws_tree_and_finds_by_an(win, tplwin):
     tdlg = GotoObjectDialog(tdoc, tplwin)
     assert tdlg._items[tpl].text(0) == "Template fx_style.normal@XGA AN11"
     menu = _named(tdoc, "FxTplMenu")
-    assert tdlg._items[menu].text(0) == "FxTplMenu  Genie AN%d" % tdoc.page.objects[menu].an
+    # (a genie copy in the template: named by the template's record it is composed from)
+    assert tdlg._items[menu].text(0) == "FxTplMenu  Genie fxgenie.fx_value AN%d" % tdoc.page.objects[menu].an
     tdlg.reject()
 
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..infra.paths import lib_path_dirs
+
 import os
 import re
 import weakref
@@ -18,6 +20,7 @@ from ..format import writer
 from ..format import genie_place as GP
 from ..format.genie_place import root_key_kept
 from ..format.symbols import reference_from_body
+from ..infra.logsetup import note_exception as _note_exc
 
 #: what a search looks in (FindOptions.scopes)
 SCOPE_TEXT = "text"  # captions, display texts, button texts
@@ -42,6 +45,8 @@ K_PAGEREC, K_PAGEKEY, K_ASSOC = "page_record", "page_keyboard", "association"
 LIMIT_EXPR, LIMIT_TEXT, LIMIT_META = 254, 256, 255
 
 _TEXT_KEY = re.compile(r"^(TXT_OFF|TXT_ON|TEXT|STATE_\d+|ARRAY_\d+)$", re.IGNORECASE)
+#: a state / array row key (upper case): its kind and number
+_ROW_KEY = re.compile(r"^(STATE|ARRAY)_(\d+)$")
 _NAME_KEYS = frozenset(("__AN_NAME__", "NAME", "DESC", "COMMENT"))
 _UNSET = "#\n"  # a blank state / array row (dspval.UNSET)
 _USER = "<User>"  # a genie member's own Access value (editing.USER_MARKED_KEYS)
@@ -288,6 +293,73 @@ def _regex(needle: str):
 #: Find's compiled regular expressions (by the text)
 _RX_CACHE: Dict[str, object] = {}
 
+_folds_wide: Optional[frozenset] = None
+
+
+def _wide_folds() -> frozenset:
+    """The ASCII letters a case-blind regular expression also matches a non-ASCII character
+    of the pages' code page with (code page 1254: 'i' matches the dotless i), read once."""
+    global _folds_wide
+    if _folds_wide is None:
+        from ..format.textcodec import dec
+
+        wide = set()
+        for b in range(0x80, 0x100):
+            try:
+                c = dec(bytes([b]))
+            except Exception:  # noqa: BLE001  # swallow-ok: a byte the code page has no character for
+                continue
+            for a in "abcdefghijklmnopqrstuvwxyz":
+                if len(c) == 1 and not c.isascii() and re.fullmatch(a, c, re.IGNORECASE):
+                    wide |= {a, a.upper()}
+        _folds_wide = frozenset(wide)
+    return _folds_wide
+
+
+#: the ASCII letters a case-blind regular expression matches a non-ASCII letter with too
+#: (the dotless and the dotted I, the long s, the Kelvin sign)
+_UNICODE_FOLDS = frozenset("iskISK")
+
+
+def required_text(pattern: str, unicode: bool = False) -> str:
+    """The longest text (lower case, ASCII) that every match of the regular expression
+    ``pattern`` holds, '' when none is known: a closed page whose bytes do not hold it cannot
+    match (PagePrefilter); ``unicode``: in text, not the pages' bytes (find_index). Read from
+    the parsed expression: a run of plain characters in its top-level sequence, in a group,
+    or in a part repeated at least once."""
+    try:
+        from re import _constants as C, _parser as P
+
+        tree = P.parse(pattern, re.IGNORECASE)
+    except Exception:  # noqa: BLE001  # swallow-ok: no known text (every page is read)
+        return ""
+    repeats = {C.MAX_REPEAT, C.MIN_REPEAT, getattr(C, "POSSESSIVE_REPEAT", C.MAX_REPEAT)}
+    wide = _UNICODE_FOLDS if unicode else _wide_folds()
+    best = [""]
+
+    def walk(seq) -> None:
+        run: List[str] = []
+
+        def flush() -> None:
+            s = "".join(run)
+            run.clear()
+            if len(s) > len(best[0]):
+                best[0] = s
+
+        for op, av in seq:
+            if op is C.LITERAL and av < 128 and chr(av) not in wide:
+                run.append(chr(av).lower())
+                continue
+            flush()
+            if op is C.SUBPATTERN:
+                walk(av[-1])
+            elif op in repeats and av[0] >= 1:
+                walk(av[2])
+        flush()
+
+    walk(tree)
+    return best[0]
+
 
 def _regex_matches(text: str, needle: str, match: str):
     """The regular expression's matches in ``text`` as match objects (MATCH_WHOLE: the whole
@@ -381,6 +453,7 @@ def _is_element_template(doc, index: int) -> bool:
     try:
         return bool(f(index)) if f is not None else False
     except Exception:  # noqa: BLE001
+        _note_exc("find_replace._is_element_template", index=index)
         return False
 
 
@@ -436,14 +509,18 @@ def traced_params(po, key: str, levels: int) -> Optional[frozenset]:
     m = _memo(po)
     k = ("traced", key, levels)
     if k not in m:
-        m[k] = _traced_params(po, key, levels)
+        if "decoded" not in m:
+            try:
+                m["decoded"] = GP.decode(po)
+            except Exception:  # noqa: BLE001 -- swallow-ok: a record the strict walk cannot read
+                m["decoded"] = None
+        m[k] = _traced_params(m["decoded"], key, levels)
     return m[k]
 
 
-def _traced_params(po, key: str, levels: int) -> Optional[frozenset]:
-    try:
-        r = GP.decode(po)
-    except Exception:  # noqa: BLE001
+def _traced_params(r, key: str, levels: int) -> Optional[frozenset]:
+    """traced_params of the record's strict walk ``r`` (None: it cannot be read)."""
+    if r is None:
         return None
     ents = r.entries
     if not ents:
@@ -466,7 +543,7 @@ def _traced_params(po, key: str, levels: int) -> Optional[frozenset]:
 def field_label(key: str) -> str:
     up = key.upper()
     name = FIELD_NAMES.get(up)
-    m = re.match(r"^(STATE|ARRAY)_(\d+)$", up)
+    m = _ROW_KEY.match(up)
     if m:
         name = "%s %s text" % ("State" if m.group(1) == "STATE" else "Array row", m.group(2))
     return "%s (%s)" % (name, key) if name else key
@@ -481,25 +558,6 @@ def own_fields(doc, index: int) -> list:
     except Exception:  # noqa: BLE001  # swallow-ok: a record the walk cannot frame is no root
         root = False
     return _own_fields(doc, index, po, root)
-
-
-def _kept_own_fields(doc, index: int, po, genie_root: bool, scopes) -> list:
-    """:func:`_own_fields`, kept per record between searches while the document is the same
-    (its derive and in-place change counters: an edit, a Replace and an Undo move one); a
-    search whose scopes leave out the texts decodes no caption."""
-    state = (getattr(doc, "derive_serial", 0), getattr(doc, "touch_serial", 0))
-    memo = doc.__dict__.get("_find_fields_memo")
-    if memo is None or memo[0] != state:
-        memo = (state, {})
-        doc.__dict__["_find_fields_memo"] = memo
-    with_text = SCOPE_TEXT in scopes
-    key = (index, id(po), bool(genie_root))
-    got = memo[1].get(key)
-    if got is not None and got[0] is po and (got[1] or not with_text):
-        return got[2]
-    fields = _own_fields(doc, index, po, genie_root, captions=with_text)
-    memo[1][key] = (po, with_text, fields)
-    return fields
 
 
 def _own_fields(doc, index: int, po, genie_root: bool, captions: bool = True):
@@ -519,6 +577,7 @@ def _own_fields(doc, index: int, po, genie_root: bool, captions: bool = True):
                 try:
                     cap = doc.text_caption(index)
                 except Exception:  # noqa: BLE001
+                    _note_exc("find_replace._own_fields", index=index)
                     cap = None
                 static = cap if cap is not None else (_get(vals, "TXT_OFF") or "")
                 if static:
@@ -573,7 +632,7 @@ def _template_root(sem, a: int) -> bool:
     try:
         o = sem[a]
         return o is not None and o.parent is None and bool(o.raw.get("_from_template"))
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- swallow-ok: an index the model does not hold: not a template root
         return False
 
 
@@ -586,14 +645,14 @@ def _genie_root(doc, index: int, po, genies) -> bool:
         return True
     try:
         return doc.page.objects[index].kind.value == "composite_genie"
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- swallow-ok: an index the page does not hold: not a genie root
         return False
 
 
 def _is_composite(doc, index: int) -> bool:
     try:
         return doc.page.objects[index].kind.value == "composite_genie"
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- swallow-ok: an index the page does not hold: not a composite
         return False
 
 
@@ -605,6 +664,7 @@ def genie_params(doc, root: int, cache: Optional[dict] = None) -> Dict[str, str]
     try:
         rows = dict(doc.genie_all_params(root))
     except Exception:  # noqa: BLE001
+        _note_exc("find_replace.genie_params", root=root)
         rows = {}
     rows = {
         k: ("" if v is None else str(v))
@@ -620,6 +680,7 @@ def _link_name(po) -> str:
     try:
         ref = reference_from_body(po.body_raw) if po.subtype_size & 0x1 else None
     except Exception:  # noqa: BLE001
+        _note_exc("find_replace._link_name")
         ref = None
     return "%s.%s" % (ref.library, ref.element) if ref is not None else ""
 
@@ -638,26 +699,18 @@ def _user_marked_keys():
     return _user_marked
 
 
-def _member_route(
-    doc, po, kind: str, key: str, genies: List[int], self_genie: bool, cache: dict, opts: FindOptions
-) -> Tuple[str, Tuple[str, ...]]:
-    """How a hit in a genie member is replaced: (reason, parameters)."""
+def _member_route(pf, e, slot: int, kind: str, key: str, opts: FindOptions) -> Tuple[str, Tuple[str, ...]]:
+    """How a hit in field ``slot`` of genie member ``e`` (an ObjectEntry of ``pf``) is
+    replaced: (reason, parameters)."""
     USER_MARKED_KEYS = _user_marked_keys()
-    outer = genies[-1]
-    try:
-        composite = doc.page.objects[outer].kind.value == "composite_genie"
-    except Exception:  # noqa: BLE001
-        composite = False
-    if composite:
+    outer = e.outer
+    if pf.composite(outer):
         # its members are a composition-cache snapshot (no %parameter%
         # tokens): only the genie's own parameter rows can change
         return ("", ()) if key.upper() in USER_MARKED_KEYS else (COMPOSITE_REASON, ())
-    params = genie_params(doc, outer, cache)
+    params = pf.params(outer)
     tkey = "TXT_OFF" if kind == K_CAPTION else key
-    # the placed level: 1 + the genies between the member and the outermost
-    # one (the member itself counted when it is a nested genie root)
-    level = len(genies) + (1 if self_genie else 0)
-    traced = traced_params(po, tkey, level) if tkey else frozenset()
+    traced = pf.traced(e, slot, tkey) if tkey else frozenset()
     holds = tuple(n for n, v in params.items() if match_spans(v, opts.text, opts.match, opts.regex))
     if traced is None:
         # the strict walk cannot frame the record: a field is taken to follow
@@ -671,8 +724,7 @@ def _member_route(
         return "", cands
     if key.upper() in USER_MARKED_KEYS:
         return "", ()
-    objs = doc.parsed.page.objects
-    link = _link_name(objs[outer]) if 0 <= outer < len(objs) else ""
+    link = pf.link(outer)
     what = "the genie %s" % link if link else "its genie"
     if uses:
         return (
@@ -692,113 +744,253 @@ def _member_route(
     ), ()
 
 
+# --------------------------------------------------------------------------- a page's fields
+@dataclass(slots=True)
+class ObjectEntry:
+    """What every search reads of one record, whatever it looks for (PageFields.entries)."""
+
+    index: int
+    #: the record (None in a kept index: features/find_index)
+    po: object
+    #: its ancestors, innermost first (Page.ancestors)
+    anc: Tuple[int, ...]
+    #: placed by a genie or a linked symbol (Options > Inside genies)
+    inside: bool
+    #: the page template's (Options > Inside the page template)
+    template: bool
+    #: its unit is locked (Edit > Lock: dwFlags 0x4 on its root)
+    locked: bool
+    #: an outermost placed genie: its parameters are rows of their own
+    root: bool
+    #: the outermost genie it is a member of
+    outer: Optional[int]
+    #: the placed level of its fields: 1 + the genies between it and the outermost one (the
+    #: record itself counted when it is a nested genie root)
+    level: int
+
+
+class PageFields:
+    """The searchable fields of an open document, read once while it is the same
+    (:func:`page_fields`); a search only matches them (:func:`match_fields`). Each part is
+    read when a search first needs it. features/find_index.KeptFields is the same of a closed
+    page, kept on disk."""
+
+    def __init__(self, doc):
+        self.doc = doc
+        self.page_name = _doc_page_name(doc)
+        objs = self._objs = doc.parsed.page.objects
+        sem = self._sem = doc.page.objects
+        self._fields: Dict[int, tuple] = {}
+        self._params: Dict[int, Dict[str, str]] = {}
+        self._names: Dict[int, Tuple[str, ...]] = {}
+        self._links: Dict[int, str] = {}
+        self._composite: Dict[int, bool] = {}
+        entries = []
+        for i, po in enumerate(objs):
+            if i >= len(sem) or sem[i] is None:
+                continue
+            try:
+                anc = tuple(doc.page.ancestors(i))
+            except Exception:  # noqa: BLE001
+                _note_exc("find_replace.PageFields", index=i)
+                anc = ()
+            genies = [a for a in anc if a < len(objs) and objs[a].subtype_size & 0x200]
+            # (the page template's own linked root is not a genie / symbol: its records are
+            # 'Inside the page template', whatever that option says)
+            inside = bool(genies) or any(
+                a < len(objs)
+                and objs[a].class_flag
+                and objs[a].subtype_size & 0x1
+                and not _template_root(sem, a)
+                for a in anc
+            )
+            top = anc[-1] if anc else i
+            locked = bool(
+                0 <= top < len(objs)
+                and objs[top].subtype_size & 0x4
+                and not (top < len(sem) and sem[top] is not None and sem[top].raw.get("_from_template"))
+            )
+            self_genie = bool(po.class_flag and po.subtype_size & 0x200)
+            entries.append(
+                ObjectEntry(
+                    i,
+                    po,
+                    anc,
+                    inside,
+                    bool(sem[i].raw.get("_from_template")),
+                    locked,
+                    _genie_root(doc, i, po, genies),
+                    genies[-1] if genies else None,
+                    len(genies) + (1 if self_genie else 0),
+                )
+            )
+        self.entries: List[ObjectEntry] = entries
+
+    def fields(self, e: ObjectEntry, with_text: bool = True) -> tuple:
+        """(scope, kind, key, value, label) of every searchable own field of ``e``
+        (``with_text`` False: a static text's caption is left out, not decoded)."""
+        got = self._fields.get(e.index)
+        if got is not None and (got[0] or not with_text):
+            return got[1]
+        out = tuple(_own_fields(self.doc, e.index, e.po, e.root, captions=with_text))
+        self._fields[e.index] = (with_text, out)
+        return out
+
+    def traced(self, e: ObjectEntry, slot: int, tkey: str) -> Optional[frozenset]:
+        """The outermost genie's parameters field ``slot`` (key ``tkey``) is substituted from."""
+        return traced_params(e.po, tkey, e.level)
+
+    def params(self, i: int) -> Dict[str, str]:
+        return genie_params(self.doc, i, self._params)
+
+    def names(self, a: int) -> Tuple[str, ...]:
+        return _object_names(self.doc, a, self._objs, self._names)
+
+    def linked(self, a: int) -> bool:
+        return _linked(self._objs, self._sem, a)
+
+    def link(self, a: int) -> str:
+        """'library.element' record ``a`` links ('' = none)."""
+        got = self._links.get(a)
+        if got is None:
+            got = self._links[a] = _link_name(self._objs[a]) if 0 <= a < len(self._objs) else ""
+        return got
+
+    def composite(self, a: int) -> bool:
+        got = self._composite.get(a)
+        if got is None:
+            got = self._composite[a] = _is_composite(self.doc, a)
+        return got
+
+    def associations(self) -> list:
+        """Page Properties > Associations (read each time: not part of the objects' state)."""
+        try:
+            return list(self.doc.associations())
+        except Exception:  # noqa: BLE001
+            _note_exc("find_replace.PageFields.associations")
+            return []
+
+
+def page_fields(doc) -> PageFields:
+    """``doc``'s PageFields, kept while the document is the same (its derive, in-place change
+    and edit counters and the library generation: an edit, a Replace, an Undo and a library
+    change each move one)."""
+    state = (
+        getattr(doc, "derive_serial", 0),
+        getattr(doc, "touch_serial", 0),
+        getattr(doc, "edit_serial", 0),
+        _library_generation(),
+    )
+    memo = doc.__dict__.get("_find_fields")
+    if memo is not None and memo[0] == state:
+        return memo[1]
+    pf = PageFields(doc)
+    doc.__dict__["_find_fields"] = (state, pf)
+    return pf
+
+
+_editing_mod = None
+
+
+def _library_generation() -> int:
+    """editing.LIBRARY_GENERATION (imported once, as _user_marked_keys)."""
+    global _editing_mod
+    if _editing_mod is None:
+        from .. import editing
+
+        _editing_mod = editing
+    return _editing_mod.LIBRARY_GENERATION[0]
+
+
+#: one match: (record index; -1 = the page, scope, kind, key, value, label, reason, the genie
+#: whose parameters it is or is a member of, the parameters its replacement changes, sub)
+Match = Tuple[int, str, str, str, str, str, str, Optional[int], Tuple[str, ...], int]
+
+
+def match_fields(pf, opts: FindOptions, page_rows=None) -> List[Match]:
+    """Every field of ``pf`` (PageFields, or a closed page's find_index.KeptFields) that holds
+    ``opts.text``: the page's own properties first, then the objects in page order (a
+    genie's parameter rows on its root). ``page_rows()`` = (the pages.DBF row as the next
+    save writes it or None, its page keyboard commands), read only when the page's own
+    properties are searched."""
+    if not opts.text:
+        return []
+    if opts.pages.on and not opts.pages.allows([pf.page_name]):
+        return []
+    text, how, rx = opts.text, opts.match, opts.regex
+    out: List[Match] = []
+    if SCOPE_PAGE in opts.scopes and opts.genies.allows(()) and opts.objects.allows(()):
+        rec, keys = page_rows() if page_rows is not None else (None, [])
+        out.extend(
+            m for m in _page_matches(rec, keys, pf.associations(), opts) if opts.fields.allows((m[3], m[5]))
+        )
+    own_scopes = bool(opts.scopes - {SCOPE_PARAM, SCOPE_PAGE})
+    with_text = SCOPE_TEXT in opts.scopes
+    for e in pf.entries:
+        i = e.index
+        if opts.objects.on and not opts.objects.allows([n for a in (i,) + e.anc for n in pf.names(a)]):
+            continue
+        if opts.genies.on and not opts.genies.allows([pf.link(a) for a in (i,) + e.anc if pf.linked(a)]):
+            continue
+        if e.inside and not opts.inside_genies:
+            continue
+        if e.template and not opts.inside_templates:
+            continue
+        reason = TEMPLATE_REASON if e.template and not opts.template_editable else ""
+        if not reason and not e.template and not opts.break_lock and e.locked:
+            # a locked unit is not edited until Break Lock Mode, like every other edit of it
+            reason = LOCK_REASON
+        if e.root and SCOPE_PARAM in opts.scopes:
+            # CtDraw's load re-composes a composite from its cache.<hash>
+            # element and restores every option, root and members alike
+            p_reason = reason or (COMPOSITE_PARAM_REASON if pf.composite(i) else "")
+            for name, value in pf.params(i).items():
+                label = "Genie parameter %s" % name
+                if opts.fields.on and not opts.fields.allows((name, label)):
+                    continue
+                if match_spans(value, text, how, rx):
+                    out.append((i, SCOPE_PARAM, K_PARAM, name, value, label, p_reason, i, (), 0))
+        if not own_scopes:
+            continue
+        for slot, (scope, kind, key, value, label) in enumerate(pf.fields(e, with_text)):
+            if scope not in opts.scopes or (opts.fields.on and not opts.fields.allows((key, label))):
+                continue
+            if not match_spans(value, text, how, rx):
+                continue
+            why, params = reason, ()
+            if not why and e.outer is not None:
+                why, params = _member_route(pf, e, slot, kind, key, opts)
+            out.append((i, scope, kind, key, value, label, why, e.outer, params, 0))
+    return out
+
+
 def find_hits(doc, opts: FindOptions) -> List[Hit]:
-    """Every field of ``doc`` that contains ``opts.text``: the page's own
-    properties first, then the objects in page order (a genie's parameter
-    rows on its root)."""
+    """Every field of ``doc`` that contains ``opts.text`` (:func:`match_fields`)."""
     if doc is None or not opts.text or getattr(doc, "page", None) is None:
         return []
     if opts.pages.on and not opts.pages.allows([_doc_page_name(doc)]):
         return []
-    out: List[Hit] = []
-    if SCOPE_PAGE in opts.scopes and opts.genies.allows(()) and opts.objects.allows(()):
-        out.extend(h for h in _page_hits(doc, opts) if opts.fields.allows((h.key, h.label)))
     objs = doc.parsed.page.objects
-    sem = doc.page.objects
-    cache: dict = {}
-    names: Dict[int, Tuple[str, ...]] = {}  # the Objects filter's names, by record
-    for i, po in enumerate(objs):
-        if i >= len(sem) or sem[i] is None:
-            continue
-        g = sem[i]
-        try:
-            anc = doc.page.ancestors(i)
-        except Exception:  # noqa: BLE001
-            anc = []
-        if opts.objects.on and not opts.objects.allows(
-            [n for a in [i] + list(anc) for n in _object_names(doc, a, objs, names)]
-        ):
-            continue
-        if opts.genies.on and not opts.genies.allows(
-            [_link_name(objs[a]) for a in [i] + list(anc) if _linked(objs, sem, a)]
-        ):
-            continue
-        genies = [a for a in anc if a < len(objs) and objs[a].subtype_size & 0x200]
-        # (the page template's own linked root is not a genie / symbol: its
-        # records are 'Inside the page template', whatever this option says)
-        inside = bool(genies) or any(
-            a < len(objs) and objs[a].class_flag and objs[a].subtype_size & 0x1 and not _template_root(sem, a)
-            for a in anc
+    return [
+        Hit(
+            doc,
+            objs[i] if i >= 0 else None,
+            i,
+            scope,
+            kind,
+            key,
+            value,
+            label,
+            reason,
+            genie=g,
+            genie_po=objs[g] if g is not None else None,
+            params=params,
+            sub=sub,
         )
-        if inside and not opts.inside_genies:
-            continue
-        template = bool(g.raw.get("_from_template"))
-        if template and not opts.inside_templates:
-            continue
-        tpl_reason = TEMPLATE_REASON if template and not opts.template_editable else ""
-        if not tpl_reason and not template and not opts.break_lock:
-            # a locked unit (Edit > Lock: dwFlags 0x4 on its root) is not
-            # edited until Break Lock Mode, like every other edit of it
-            top = anc[-1] if anc else i
-            if (
-                0 <= top < len(objs)
-                and objs[top].subtype_size & 0x4
-                and not (top < len(sem) and sem[top] is not None and sem[top].raw.get("_from_template"))
-            ):
-                tpl_reason = LOCK_REASON
-        root = _genie_root(doc, i, po, genies)
-        if root and SCOPE_PARAM in opts.scopes:
-            # CtDraw's load re-composes a composite from its cache.<hash>
-            # element and restores every option, root and members alike
-            p_reason = tpl_reason or (COMPOSITE_PARAM_REASON if _is_composite(doc, i) else "")
-            for name, value in genie_params(doc, i, cache).items():
-                if opts.fields.on and not opts.fields.allows((name, "Genie parameter %s" % name)):
-                    continue
-                if match_spans(value, opts.text, opts.match, opts.regex):
-                    out.append(
-                        Hit(
-                            doc,
-                            po,
-                            i,
-                            SCOPE_PARAM,
-                            K_PARAM,
-                            name,
-                            value,
-                            "Genie parameter %s" % name,
-                            p_reason,
-                            genie=i,
-                            genie_po=po,
-                        )
-                    )
-        if not opts.scopes - {SCOPE_PARAM, SCOPE_PAGE}:
-            continue
-        outer = genies[-1] if genies else None
-        self_genie = bool(po.class_flag and po.subtype_size & 0x200)
-        for scope, kind, key, value, label in _kept_own_fields(doc, i, po, root, opts.scopes):
-            if scope not in opts.scopes or (opts.fields.on and not opts.fields.allows((key, label))):
-                continue
-            if not match_spans(value, opts.text, opts.match, opts.regex):
-                continue
-            reason, params = tpl_reason, ()
-            if not reason and outer is not None:
-                reason, params = _member_route(doc, po, kind, key, genies, self_genie, cache, opts)
-            out.append(
-                Hit(
-                    doc,
-                    po,
-                    i,
-                    scope,
-                    kind,
-                    key,
-                    value,
-                    label,
-                    reason,
-                    genie=outer,
-                    genie_po=objs[outer] if outer is not None else None,
-                    params=params,
-                )
-            )
-    return out
+        for i, scope, kind, key, value, label, reason, g, params, sub in match_fields(
+            page_fields(doc), opts, lambda: _doc_page_rows(doc)
+        )
+    ]
 
 
 def _doc_page_name(doc) -> str:
@@ -830,71 +1022,102 @@ def _object_names(doc, a: int, objs, memo: dict) -> Tuple[str, ...]:
     return got
 
 
-def _page_hits(doc, opts: FindOptions) -> List[Hit]:
-    out: List[Hit] = []
+def _doc_page_rows(doc) -> tuple:
+    """(the pages.DBF row as the next save writes it or None, the page keyboard commands)."""
     try:
         rec = doc.page_record() if doc.page_record_available() else None
     except Exception:  # noqa: BLE001
+        _note_exc("find_replace._doc_page_rows")
         rec = None
+    try:
+        keys = doc.page_keyboard_commands() if rec is not None else []
+    except Exception:  # noqa: BLE001
+        _note_exc("find_replace._doc_page_rows")
+        keys = []
+    return rec, keys
+
+
+#: the page rows of the closed pages (closed_page_rows): project folder -> (the stamps of its
+#: pages.DBF and pgkey.DBF, {page name: the rows})
+_PAGE_ROWS: Dict[str, tuple] = {}
+
+
+def closed_page_rows(path: str) -> tuple:
+    """:func:`_doc_page_rows` of the page at ``path`` as it is on disk (the document a read of
+    it gives has no staged edits), kept while the project's tables are the same."""
+    from ..format.fileio import file_stamp, find_ci
+    from ..io import pgregister
+    from ..io.project import Project
+
+    d = os.path.dirname(os.path.abspath(path))
+    name = page_name_of(path)
+    stamps = (file_stamp(find_ci(d, "pages.DBF")), file_stamp(find_ci(d, "pgkey.DBF")))
+    kept = _PAGE_ROWS.get(d)
+    if kept is None or kept[0] != stamps:
+        kept = _PAGE_ROWS[d] = (stamps, {}, [])
+    low = name.lower()
+    got = kept[1].get(low)
+    if got is not None:
+        return dict(got[0]) if got[0] is not None else None, [dict(r) for r in got[1]]
+    if stamps[0] is None:
+        got = (None, [])
+    else:
+        if not kept[2]:
+            try:
+                kept[2].append(Project(d).page_rows())
+            except Exception:  # noqa: BLE001
+                _note_exc("find_replace.closed_page_rows", path=path)
+                kept[2].append([])
+        from ..format.projects import PAGE_NAME_LEN
+
+        # (io.project.Project.page_record: the first row of the name, matched truncated)
+        trunc = name.strip().lower()[:PAGE_NAME_LEN]
+        disk = next((r for r in kept[2][0] if r.get("NAME", "").strip().lower() == trunc), None)
+        rec = dict(disk) if disk is not None else {"NAME": name, "TITLE": name}
+        try:
+            rows = pgregister.page_keyboard_rows(d, name)
+        except Exception:  # noqa: BLE001
+            _note_exc("find_replace.closed_page_rows", path=path)
+            rows = []
+        got = (rec, [{k: v for k, v in r.items() if k.upper() not in ("PAGE", "AN")} for r in rows])
+    kept[1][low] = got
+    return dict(got[0]) if got[0] is not None else None, [dict(r) for r in got[1]]
+
+
+def _page_matches(rec, keys, assocs, opts: FindOptions) -> List[Match]:
+    """The matches in the page's own properties: its pages.DBF row ``rec``, its page keyboard
+    commands ``keys`` and its associations ``assocs``."""
+    text, how, rx = opts.text, opts.match, opts.regex
+    out: List[Match] = []
     for col in PAGE_COLUMNS:
-        v = (rec or {}).get(col) or ""
-        v = v.rstrip()
-        if v and match_spans(v, opts.text, opts.match, opts.regex):
+        v = ((rec or {}).get(col) or "").rstrip()
+        if v and match_spans(v, text, how, rx):
             out.append(
-                Hit(
-                    doc,
-                    None,
+                (
                     -1,
                     SCOPE_PAGE,
                     K_PAGEREC,
                     col,
                     v,
                     "Page %s" % PAGE_COLUMN_NAMES.get(col, col).lower(),
+                    "",
+                    None,
+                    (),
+                    0,
                 )
             )
-    try:
-        keys = doc.page_keyboard_commands() if rec is not None else []
-    except Exception:  # noqa: BLE001
-        keys = []
-    for n, row in enumerate(keys):
+    for n, row in enumerate(keys or ()):
         for col in ("CMD", "MSG_LOG"):
             v = (row.get(col) or "").rstrip()
-            if v and match_spans(v, opts.text, opts.match, opts.regex):
+            if v and match_spans(v, text, how, rx):
                 seq = (row.get("KEY_SEQ") or "").strip()
-                out.append(
-                    Hit(
-                        doc,
-                        None,
-                        -1,
-                        SCOPE_PAGE,
-                        K_PAGEKEY,
-                        col,
-                        v,
-                        "Page keyboard %s (%s)"
-                        % ("command" if col == "CMD" else "log message", seq or n + 1),
-                        sub=n,
-                    )
-                )
-    try:
-        assocs = doc.associations()
-    except Exception:  # noqa: BLE001
-        assocs = []
-    for name, *parts in assocs:
+                label = "Page keyboard %s (%s)" % ("command" if col == "CMD" else "log message", seq or n + 1)
+                out.append((-1, SCOPE_PAGE, K_PAGEKEY, col, v, label, "", None, (), n))
+    for name, *parts in assocs or ():
         for p, v in enumerate(parts):
-            if v and match_spans(v, opts.text, opts.match, opts.regex):
-                out.append(
-                    Hit(
-                        doc,
-                        None,
-                        -1,
-                        SCOPE_PAGE,
-                        K_ASSOC,
-                        name,
-                        v,
-                        "Association %s (%s)" % (name, _ASSOC_PARTS[p]),
-                        sub=p,
-                    )
-                )
+            if v and match_spans(v, text, how, rx):
+                label = "Association %s (%s)" % (name, _ASSOC_PARTS[p])
+                out.append((-1, SCOPE_PAGE, K_ASSOC, name, v, label, "", None, (), p))
     return out
 
 
@@ -907,11 +1130,12 @@ class PagePrefilter:
         from ..format.textcodec import MULTIBYTE
 
         text = opts.text or ""
-        self.on = bool(text) and not opts.regex and not MULTIBYTE and ASCII_FAST and text.isascii()
-        self.needle = text.lower()
+        # (a regular expression: the text each of its matches holds)
+        self.needle = required_text(text) if opts.regex else text.lower() if text.isascii() else ""
+        self.on = bool(self.needle) and not MULTIBYTE and ASCII_FAST
         self.needle_bytes = self.needle.encode("ascii") if self.on else b""
+        self.opts = opts
         self.scopes = frozenset(opts.scopes)
-        self._rows: Dict[str, dict] = {}  # project dir -> {name: pages.DBF row}
         self._resolvers: Dict[str, object] = {}  # project dir -> SymbolResolver
         self._elements: Dict[tuple, bool] = {}  # (library file, stamp, element) -> may
 
@@ -923,39 +1147,16 @@ class PagePrefilter:
             if self.needle_bytes in data.lower():
                 return True
             d = os.path.dirname(os.path.abspath(path))
-            name = os.path.splitext(os.path.basename(path))[0]
-            if SCOPE_PAGE in self.scopes and self._page_tables_have(d, name):
-                return True
+            if SCOPE_PAGE in self.scopes:
+                # the page's own rows (the pages.DBF row, else the one its registration
+                # writes, and its page keyboard commands)
+                rec, keys = closed_page_rows(path)
+                if _page_matches(rec, keys, (), self.opts):
+                    return True
             if SCOPE_PARAM in self.scopes and self._elements_have(path, d):
                 return True
         except Exception:  # noqa: BLE001  # swallow-ok: may (the page is opened and searched)
             return True
-        return False
-
-    def _page_tables_have(self, d: str, name: str) -> bool:
-        """The page's own rows hold the text (_page_hits: the pages.DBF row, else the one its
-        registration writes, and its page keyboard commands)."""
-        from ..io import pgregister
-        from ..io.project import Project
-
-        rows = self._rows.get(d)
-        if rows is None:
-            pj = Project(d)
-            rows = None if not pj.has_page_table() else {}
-            if rows is not None:
-                for r in pj.page_rows():
-                    # (Project.page_record: the first row of the name, matched truncated)
-                    rows.setdefault(r.get("NAME", "").strip().lower(), r)
-            self._rows[d] = rows
-        if rows is None:
-            return False  # (no page table: no page fields)
-        n = self.needle
-        rec = rows.get(name.strip().lower()[: Project.NAME_LEN]) or {"NAME": name, "TITLE": name}
-        if any(n in (rec.get(c) or "").rstrip().lower() for c in PAGE_COLUMNS):
-            return True
-        for row in pgregister.page_keyboard_rows(d, name):
-            if any(n in (row.get(c) or "").rstrip().lower() for c in ("CMD", "MSG_LOG")):
-                return True
         return False
 
     def _elements_have(self, path: str, d: str) -> bool:
@@ -967,7 +1168,7 @@ class PagePrefilter:
         if res is None:
             from ..format.symbols import SymbolResolver
 
-            extra = [p for p in os.environ.get("CTG_LIB_PATH", "").split(os.pathsep) if p]
+            extra = lib_path_dirs()
             res = self._resolvers[d] = SymbolResolver.for_page(path, extra_paths=extra)
         return any(self._element_has(res, n, set()) for n in read_link_names(path))
 
@@ -1021,7 +1222,7 @@ class PagePrefilter:
 
 
 # --------------------------------------------------------------------------- replacing
-def _resolve(doc, hit: Hit) -> Optional[int]:
+def resolve_hit(doc, hit: Hit) -> Optional[int]:
     """The record's current index, or None if it's gone."""
     objs = doc.parsed.page.objects
     if 0 <= hit.index < len(objs) and objs[hit.index] is hit.po:
@@ -1065,7 +1266,7 @@ def replace_hits(
         if h.po is None:
             page.append(h)
             continue
-        i = _resolve(doc, h)
+        i = resolve_hit(doc, h)
         if i is None:
             rep.gone += 1
             continue
@@ -1091,7 +1292,7 @@ def replace_hits(
         # first (a re-composition may change its subtree's length)
         order = []
         for gpo, names in genie.values():
-            gi = _resolve(doc, Hit(doc, gpo, -1, "", "", "", "", ""))
+            gi = resolve_hit(doc, Hit(doc, gpo, -1, "", "", "", "", ""))
             if gi is None:
                 rep.gone += len(names)
                 continue
@@ -1112,6 +1313,7 @@ def _current(doc, i: int, h: Hit) -> Optional[str]:
         try:
             td = doc.text_display(i)
         except Exception:  # noqa: BLE001
+            _note_exc("find_replace._current", index=i)
             return None
         return td.static
     vals = own_values(doc, i)
@@ -1119,6 +1321,7 @@ def _current(doc, i: int, h: Hit) -> Optional[str]:
         try:
             return doc.object_name(i)  # a name the header holds alone
         except Exception:  # noqa: BLE001
+            _note_exc("find_replace._current", index=i)
             return None
     v = _get(vals, h.key)
     if v is None:
@@ -1205,7 +1408,7 @@ def _replace_params(
     rep.parameters += len(vals)
     try:
         composite = doc.page.objects[gi].kind.value == "composite_genie"
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- swallow-ok: an index the page does not hold: not a composite
         composite = False
     if composite:
         # ctgedit cannot compose a composite genie (its element is a
@@ -1224,6 +1427,7 @@ def _replace_page(doc, hits: List[Hit], opts: FindOptions, replacement: str, rep
         if doc.page_record_available():
             cur = doc.page_record() or {}
     except Exception:  # noqa: BLE001
+        _note_exc("find_replace._replace_page")
         cur = {}
     keys = None
     n_keys = 0
@@ -1321,3 +1525,5 @@ from ..infra import caches as _caches  # noqa: E402
 # (a record's own payload decides an entry: a library change leaves it right)
 _caches.register("find_replace.memo", _MEMO, on=("tests",))
 _caches.register("find_replace.regex", _RX_CACHE, on=("tests",))
+# (keyed by the tables' stamps)
+_caches.register("find_replace.page_rows", _PAGE_ROWS, on=("refresh", "tests"))

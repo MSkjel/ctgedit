@@ -77,3 +77,29 @@ def load() -> dict:
 
     find_dialog.FindReplaceDialog.PAGES_PER_HELPER = int(v["opt/find_pages_per_helper"])
     return v
+
+
+def processes_box(key: str, parent=None):
+    """The helper-process count box of ``key`` ('opt/find_processes', 'opt/update_processes'),
+    as Find, Update Pages and Settings show it: 0 is Automatic. It shows the setting; the
+    caller stores it."""
+    from PySide6 import QtWidgets
+
+    from .settings import FIND_PROCESSES_RANGE, HELPER_MB, UPDATE_PER_HELPER_RANGE, UPDATE_PROCESSES_RANGE
+
+    if key == "opt/find_processes":
+        span = FIND_PROCESSES_RANGE
+        tip = "How many helper processes search the closed pages at once. Automatic: half the processors, at most 4."
+    else:
+        span = UPDATE_PROCESSES_RANGE
+        tip = (
+            "How many helper processes update the pages at once. Automatic: half the processors, at "
+            "most 4, fewer when memory is short. Each gets at least %d pages, so a small run uses fewer."
+            % whole("opt/update_pages_per_helper", UPDATE_PER_HELPER_RANGE)
+        )
+    box = QtWidgets.QSpinBox(parent)
+    box.setRange(*span)
+    box.setSpecialValueText("Automatic")
+    box.setToolTip("%s Each takes about %d MB while it runs." % (tip, HELPER_MB))
+    box.setValue(whole(key, span))
+    return box

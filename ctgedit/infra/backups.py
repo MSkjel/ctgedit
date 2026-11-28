@@ -52,12 +52,9 @@ def _manifest_path(folder: str) -> str:
 
 
 def read_manifest(folder: str) -> dict:
-    try:
-        with open(_manifest_path(folder), encoding="utf-8") as fh:
-            m = json.load(fh)
-        return m if isinstance(m, dict) else {}
-    except OSError, ValueError:
-        return {}
+    from ..format.fileio import read_json_dict
+
+    return read_json_dict(_manifest_path(folder))
 
 
 def add_entry(folder: str, kind: str, entry: dict) -> None:
@@ -93,7 +90,7 @@ class BackupInfo:
         libraries."""
         n = len(self.entries)
         if self.kind == "update-users" or (
-            self.kind in PAGE_KINDS and any(e.get("library") for e in self.entries)
+            self.kind in PAGE_KINDS and any(e.get("original") for e in self.entries)
         ):
             return "file" if n == 1 else "files"
         if self.kind in PAGE_KINDS:
@@ -109,6 +106,45 @@ class BackupInfo:
             len(self.entries),
             self.noun,
         )
+
+
+def backup_file(folder: str, kind: str, path: str, data=None, *, under=None, once: bool = False) -> None:
+    """Keep the file ``path`` (its bytes ``data``, else read from it) in the backup ``folder``,
+    at <project>/<name> (``under``: the project folder whose subfolders the copy keeps), and
+    list it in the manifest as {original, backup, size}; ``kind`` is the backup's when this is
+    its first entry; ``once``: a copy this backup already holds stands (the first write of a
+    run is the one to keep)."""
+    from ..format.fileio import write_atomic
+
+    if under:
+        proj = os.path.basename(os.path.normpath(under))
+        rel = os.path.relpath(os.path.abspath(path), os.path.abspath(under))
+    else:
+        proj = os.path.basename(os.path.dirname(os.path.abspath(path)))
+        rel = os.path.basename(path)
+    dest = os.path.join(folder, proj, rel)
+    if once and os.path.exists(dest):
+        return
+    if data is None:
+        with open(path, "rb") as fh:
+            data = fh.read()
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    write_atomic(dest, data)
+    add_entry(
+        folder,
+        kind,
+        {"original": os.path.abspath(path), "backup": os.path.relpath(dest, folder), "size": len(data)},
+    )
+
+
+def restore_file(folder: str, entry: dict) -> str:
+    """Put the file of a manifest ``entry`` (:func:`backup_file`) back; its path."""
+    from ..format.fileio import write_atomic
+
+    with open(os.path.join(folder, entry["backup"]), "rb") as fh:
+        data = fh.read()
+    write_atomic(entry["original"], data)
+    return entry["original"]
 
 
 def _folder_size(folder: str) -> int:

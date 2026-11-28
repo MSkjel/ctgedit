@@ -24,6 +24,13 @@ With one object selected the panel shows:
   defaults.
 - **Input**: touch and keyboard commands.
 - For a genie, **Genie Parameters…** and **Edit Definition**.
+- For a genie, **Inputs**: each value the genie is given, and under it every field of its
+  objects that value goes into, through the genies nested in it, with the value the field ends
+  up with. Copies of one object share a row. A value nothing uses says so. Double-click a field
+  to select its objects. A nested genie lists its own inputs, worked out from the genie above.
+- For an object in a genie, **Set by the genie**: each field the genie's inputs set, with the
+  value it holds, the field as the genie's definition writes it (**From** `%Tag%.Alarm`) and
+  each input in it with the input's value. Double-click an input to select the genie.
 - **All properties**: every stored setting, named as in Object Properties.
 
 With several objects selected:

@@ -8,12 +8,6 @@ from PySide6 import QtCore, QtWidgets
 class SelectionHUD(QtWidgets.QFrame):
     #: the buttons' icons (px at 100 %)
     ICON = 14
-    #: the surface's alpha at Overlay opacity 100 %
-    ALPHA = 225
-    #: the surface, in the dark design's colours (the overlay and border roles)
-    SHEET = (
-        "#SelectionHUD { background: rgba(34, 38, 44, %d); border: 1px solid #3a3f46; border-radius: 5px; }"
-    )
 
     def __init__(self, view, window):
         super().__init__(view.viewport())
@@ -57,13 +51,13 @@ class SelectionHUD(QtWidgets.QFrame):
         return [b.defaultAction() for b in self._buttons]
 
     def _theme_changed(self) -> None:
-        """The surface's alpha from Overlay opacity, the icons and margins at the text size
+        """The canvas overlays' surface (Overlay opacity), the icons and margins at the text size
         (theme._retheme_widgets; canvas_options.apply_canvas_nav after Settings). A visible
         bar is hidden and the window shows it again where it fits at its new size."""
-        from .navbar import overlay_opacity
+        from .navbar import surface_qss
         from ..style.theme import px
 
-        self.setStyleSheet(self.SHEET % round(self.ALPHA * overlay_opacity() / 100))
+        self.setStyleSheet(surface_qss("SelectionHUD"))
         self.layout().setContentsMargins(px(4), px(2), px(4), px(2))
         size = QtCore.QSize(px(self.ICON), px(self.ICON))
         for b in self._buttons:
@@ -104,7 +98,7 @@ class SelectionHUD(QtWidgets.QFrame):
                 idx = it.data(PAGE_INDEX_ROLE)
                 if isinstance(idx, int) and idx not in skip:
                     seen.add(idx)
-        except Exception:  # noqa: BLE001 -- placement only
+        except Exception:  # noqa: BLE001  # swallow-ok: placement only, it runs on every move
             return 0
         return len(seen)
 

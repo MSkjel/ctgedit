@@ -4,8 +4,7 @@ import os
 import shutil
 
 from ctgedit.format import geometry as geom
-from ctgedit.format import links
-from ctgedit.format import writer
+from ctgedit.format import links, writer
 
 VALUE = ("fxgenie", "fx_value")
 BOX = ("fxsym", "fx_box")
@@ -444,8 +443,8 @@ def test_the_window_draws_copy_to_library_thumbnails_from_the_element(fx_install
         assert saved["thumbnail_for"] is headless_thumb.element_thumbnail
         assert saved["thumbnail"]  # (the tab's own picture too)
     finally:
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.hide()
         w.deleteLater()
 

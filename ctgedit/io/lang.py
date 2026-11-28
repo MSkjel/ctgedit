@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+from ..format.dbfcols import citect_rows
+
+from ..format.fileio import find_ci
+
 import os
-import struct
 from ..format.textcodec import CODEC
+from ..infra.logsetup import note_exception as _note_exc
 
 
 # Each <Language>.DBF stores its LOCAL strings in the Windows ANSI code page of
@@ -57,59 +61,6 @@ def language_codepage(name: str) -> str:
     return _LANG_CODEPAGE.get(first, CODEC)
 
 
-def _read_dbf(path: str, encodings: dict | None = None):
-    """(field_names, rows) of a dBASE III table."""
-    with open(path, "rb") as fh:
-        b = fh.read()
-    if len(b) < 32:
-        return [], []
-    nrec, hdr, rln = struct.unpack_from("<IHH", b, 4)
-    fields = []
-    off = 32
-    while off < len(b) and b[off] != 0x0D:
-        name = b[off : off + 11].split(b"\x00")[0].decode(CODEC)
-        flen = b[off + 16]
-        fields.append((name, flen))
-        off += 32
-    encodings = {k.upper(): v for k, v in (encodings or {}).items()}
-    rows = []
-    for i in range(nrec):
-        base = hdr + i * rln
-        rec = b[base : base + rln]
-        if len(rec) < rln or rec[:1] == b"*":  # deleted / truncated
-            continue
-        o = 1
-        row = {}
-        for name, flen in fields:
-            codec = encodings.get(name.upper(), CODEC)
-            row[name] = rec[o : o + flen].decode(codec, "replace").rstrip()
-            o += flen
-        rows.append(row)
-    return [f[0] for f in fields], rows
-
-
-#: a folder's file names by their lower case (the first listed), kept while the folder's
-#: mtime is the same
-_LISTING_CACHE: dict = {}
-
-
-def _find_file_ci(d: str, name: str):
-    """Case-insensitive file lookup in ``d`` (DBF names vary in case)."""
-    target = name.lower()
-    try:
-        stamp = os.stat(d).st_mtime_ns
-        hit = _LISTING_CACHE.get(d)
-        if hit is None or hit[0] != stamp:
-            names: dict = {}
-            for f in os.listdir(d):
-                names.setdefault(f.lower(), f)
-            hit = _LISTING_CACHE[d] = (stamp, names)
-    except OSError:
-        return None
-    f = hit[1].get(target)
-    return os.path.join(d, f) if f is not None else None
-
-
 def _project_dir_with_lang(page_path: str, extra_dirs=()):
     """The project dir that holds ``LANG.DBF`` -- the page dir, then any
     ``CTG_LIB_PATH`` entry (set during temp re-renders so the REAL project dir
@@ -120,7 +71,7 @@ def _project_dir_with_lang(page_path: str, extra_dirs=()):
         dirs += [d for d in libp.split(os.pathsep) if d]
     dirs += list(extra_dirs)
     for d in dirs:
-        if d and _find_file_ci(d, "LANG.DBF"):
+        if d and find_ci(d, "LANG.DBF"):
             return d
     return None
 
@@ -161,7 +112,7 @@ class LanguageDB:
     def _files_stamp(self) -> tuple:
         """((path, mtime_ns, size), ...) of LANG.DBF and each language's table (the
         listing cache finds them by the folder's mtime: a new table is seen too)."""
-        files = [_find_file_ci(self.project_dir, "LANG.DBF")]
+        files = [find_ci(self.project_dir, "LANG.DBF")]
         files += [self._file_for(n) for n in getattr(self, "_names", ())]
         out = []
         for f in files:
@@ -180,12 +131,13 @@ class LanguageDB:
         cls._cache.clear()
 
     def _load_names(self):
-        f = _find_file_ci(self.project_dir, "LANG.DBF")
+        f = find_ci(self.project_dir, "LANG.DBF")
         if not f:
             return []
         try:
-            _fields, rows = _read_dbf(f)
+            rows = citect_rows(f)
         except Exception:  # noqa: BLE001
+            _note_exc("lang.LanguageDB._load_names", path=f)
             return []
         out = []
         self._src = {}
@@ -204,11 +156,11 @@ class LanguageDB:
         # (the first word, before any '(': what the compiler falls back to).
         src = getattr(self, "_src", {}).get(name)
         if src:
-            f = _find_file_ci(self.project_dir, os.path.basename(src))
+            f = find_ci(self.project_dir, os.path.basename(src))
             if f:
                 return f
         first = name.split("(")[0].strip()
-        return _find_file_ci(self.project_dir, first + ".DBF") if first else None
+        return find_ci(self.project_dir, first + ".DBF") if first else None
 
     # ---- query ----
     def languages(self):
@@ -221,7 +173,7 @@ class LanguageDB:
             f = self._file_for(name)
             if f:
                 try:
-                    _fields, rows = _read_dbf(f, {"LOCAL": language_codepage(name)})
+                    rows = citect_rows(f, encodings={"LOCAL": language_codepage(name)})
                     for r in rows:
                         r = {k.upper(): v for k, v in r.items()}
                         nat = (r.get("NATIVE") or "").strip()
@@ -229,6 +181,7 @@ class LanguageDB:
                         if nat and loc:
                             tbl[nat] = loc
                 except Exception:  # noqa: BLE001
+                    _note_exc("lang.LanguageDB._table", path=f)
                     tbl = {}
             self._tables[name] = tbl
         return self._tables[name]
@@ -245,4 +198,3 @@ from ..infra import caches as _caches  # noqa: E402
 _caches.register(
     "lang.databases", LanguageDB, clear=LanguageDB.clear_cache, on=("libraries", "refresh", "tests")
 )
-_caches.register("lang.listings", _LISTING_CACHE, on=("refresh", "tests"))

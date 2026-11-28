@@ -1,6 +1,15 @@
 """The project and page browser dialog."""
 
 from __future__ import annotations
+
+from ..style.theme import COLORS, SearchField, icon, set_note_role, type_qss
+
+from ...infra.logsetup import note_exception as _note_exc
+from ...infra.paths import path_key
+
+from .. import messages as _messages
+
+from ..names import ElidedLabel, plural
 from ..style.theme import sp as _sp  # (the spacing scale)
 
 import contextlib
@@ -16,10 +25,9 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from ...io.catalog import Entry, ProjectCatalog, ProjectInfo, catalog_for, is_super_genie
 from ..panels import panel_options as _panels
 from ..prefs.settings import app_settings
-from ..style.theme import COLORS, SearchField, icon, type_qss
 from . import naming
 from .delegates import CARD_MAX, CARD_MIN, CardDelegate, card_size, cell_size
-from .model import _COL_SORT, COL_NAME, COL_TEMPLATE, CatalogModel
+from .model import COL_SORT, COL_NAME, COL_TEMPLATE, CatalogModel
 from .preview import PreviewPane
 from .new_mode import NEW_KIND_LABELS, NewMode
 from .project_tree import FLAT, TREE, ProjectTree, Scope
@@ -87,7 +95,7 @@ def project_view() -> str:
     """The shared Tree / Flat choice of the project lists (default Tree)."""
     try:
         v = str(app_settings().value(PROJECT_VIEW_KEY, TREE) or TREE)
-    except Exception:  # noqa: BLE001 -- a garbled setting must not break a dialog
+    except Exception:  # noqa: BLE001  # swallow-ok: a garbled setting must not break a dialog
         v = TREE
     return v if v in (TREE, FLAT) else TREE
 
@@ -139,20 +147,6 @@ class BrowserResult:
     entry: Optional[Entry] = None
 
 
-def reveal_in_explorer(path: str) -> None:
-    """Open the file's folder with the file selected (Windows), else the folder."""
-    import subprocess
-    import sys
-
-    try:
-        if sys.platform == "win32":
-            subprocess.Popen(["explorer", "/select,", os.path.normpath(path)])
-        else:
-            QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(os.path.dirname(path)))
-    except OSError:
-        pass
-
-
 def _list_icon(size: int = 16) -> QtGui.QIcon:
     pm = QtGui.QPixmap(size, size)
     pm.fill(QtCore.Qt.transparent)
@@ -187,37 +181,6 @@ def _tree_icon(size: int = 16) -> QtGui.QIcon:
     p.drawLine(QtCore.QPointF(10.0, 15.0), QtCore.QPointF(17.0, 15.0))
     p.end()
     return QtGui.QIcon(pm)
-
-
-class _ElidedLabel(QtWidgets.QLabel):
-    """A one-line label that elides its text instead of widening its parent
-    (the full text is its tool tip)."""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._full = ""
-        self.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
-        self.setMinimumWidth(80)
-
-    def setText(self, text: str) -> None:  # noqa: N802 (Qt API)
-        self._full = text or ""
-        self.setToolTip(self._full)
-        self._elide()
-
-    def text(self) -> str:
-        return self._full
-
-    def sizeHint(self) -> QtCore.QSize:  # noqa: N802 (Qt API)
-        fm = self.fontMetrics()
-        return QtCore.QSize(fm.horizontalAdvance(self._full) + 4, fm.height())
-
-    def _elide(self) -> None:
-        fm = self.fontMetrics()
-        super().setText(fm.elidedText(self._full, QtCore.Qt.ElideMiddle, max(10, self.width())))
-
-    def resizeEvent(self, ev) -> None:  # noqa: N802 (Qt API)
-        super().resizeEvent(ev)
-        self._elide()
 
 
 def _default_title(mode: str, kinds: Sequence[str], element_filter_super: Optional[bool]) -> str:
@@ -267,7 +230,7 @@ class PageBrowserDialog(NewMode, QtWidgets.QDialog):
         self._ok_text = ok_text or ""
         #: a page the first selection is not (Underlay a Page: the page itself, which one
         #: click would underlay under itself); normalised, '' = none
-        self._avoid_path = os.path.normcase(os.path.abspath(avoid_path)) if avoid_path else ""
+        self._avoid_path = path_key(avoid_path) if avoid_path else ""
         self._purpose = _PURPOSE.get(mode, "open")
         #: ``Entry -> bool``: which library elements are listed (Paste Genie
         #: leaves the super genies out, Paste Super Genie lists only them)
@@ -350,7 +313,7 @@ class PageBrowserDialog(NewMode, QtWidgets.QDialog):
         try:
             st = app_settings()
             return st.value(key, default, type=typ) if typ is not None else st.value(key, default)
-        except Exception:  # noqa: BLE001 -- a garbled setting must not break the dialog
+        except Exception:  # noqa: BLE001  # swallow-ok: a garbled setting must not break the dialog
             return default
 
     # ------------------------------------------------------------------ build
@@ -451,11 +414,13 @@ class PageBrowserDialog(NewMode, QtWidgets.QDialog):
 
     def _build_page_list(self, mv):
         chips = QtWidgets.QHBoxLayout()
-        self.scope_lbl = _ElidedLabel()
-        self.scope_lbl.setStyleSheet("color:%s;" % COLORS["text_dim"])
+        self.scope_lbl = ElidedLabel()
+        set_note_role(self.scope_lbl, "text_dim")
         chips.addWidget(self.scope_lbl, 1)
         chips.addSpacing(6)
-        self.chk_includes = QtWidgets.QCheckBox("With included projects")
+        from ..pick_fields import ProjectScopeField
+
+        self.chk_includes = QtWidgets.QCheckBox(ProjectScopeField.INCLUDES_TEXT)
         self.chk_includes.setToolTip("Also list the projects this project includes")
         self.chk_includes.setChecked(self.tree.with_includes())
         chips.addWidget(self.chk_includes)
@@ -480,7 +445,7 @@ class PageBrowserDialog(NewMode, QtWidgets.QDialog):
             cb.setSizeAdjustPolicy(QtWidgets.QComboBox.AdjustToMinimumContentsLengthWithIcon)
             cb.setMinimumContentsLength(8)
         self.btn_grid = QtWidgets.QToolButton()
-        self.btn_grid.setIcon(icon("grid", 16))
+        self.btn_grid.setIcon(icon("grid"))
         self.btn_grid.setCheckable(True)
         self.btn_grid.setToolTip("Thumbnail grid (Ctrl+1)")
         self.btn_grid.setAccessibleName("Thumbnail grid")
@@ -559,8 +524,8 @@ class PageBrowserDialog(NewMode, QtWidgets.QDialog):
             self._new_build_template_box()
         mv.addWidget(self.stack, 1)
         foot = QtWidgets.QHBoxLayout()
-        self.status = _ElidedLabel()
-        self.status.setStyleSheet("color:%s;" % COLORS["text_dim"])
+        self.status = ElidedLabel()
+        set_note_role(self.status, "text_dim")
         foot.addWidget(self.status, 1)
         foot.addWidget(self.cb_sort)
         foot.addSpacing(4)
@@ -761,7 +726,7 @@ class PageBrowserDialog(NewMode, QtWidgets.QDialog):
     def _recent_paths(self) -> List[str]:
         try:
             mru = [str(p) for p in (app_settings().value("mru", [], type=list) or [])]
-        except Exception:  # noqa: BLE001 -- a garbled setting must not break the dialog
+        except Exception:  # noqa: BLE001  # swallow-ok: a garbled setting must not break the dialog
             mru = []
         return [p for p in mru if p.lower().endswith(".ctg") and os.path.isfile(p)]
 
@@ -944,7 +909,7 @@ class PageBrowserDialog(NewMode, QtWidgets.QDialog):
         return self.tree.with_includes()
 
     def set_with_includes(self, on: bool) -> None:
-        """The 'With included projects' check box."""
+        """The 'And the projects it includes' check box."""
         self.chk_includes.setChecked(bool(on))
 
     def _on_includes_toggled(self, on: bool) -> None:
@@ -1039,7 +1004,7 @@ class PageBrowserDialog(NewMode, QtWidgets.QDialog):
             entries = [
                 e
                 for e in self.catalog.entries(chain, kind)
-                if not e.shadowed_by and os.path.normcase(os.path.abspath(e.project_dir)) in want
+                if not e.shadowed_by and path_key(e.project_dir) in want
             ]
         else:
             entries = self.catalog.entries(scope.projects, kind, shadow=scope.kind != "install")
@@ -1073,19 +1038,15 @@ class PageBrowserDialog(NewMode, QtWidgets.QDialog):
                 pv.setVisible(want)
 
     def _reload(self) -> None:
-        busy = QtWidgets.QApplication.overrideCursor() is None
-        if busy:
-            QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
-        try:
+        from ..busy import wait_cursor
+
+        with wait_cursor():
             entries = self._entries_for(self._scope, self._kind)
             self.thumbs.cancel_pending()
             self.model.set_entries(
                 entries, self._kind, keep_order=self._scope is not None and self._scope.kind == "recent"
             )
             self._maybe_prefetch()
-        finally:
-            if busy:
-                QtWidgets.QApplication.restoreOverrideCursor()
         self._update_scope_label()
         self._update_placeholder()
 
@@ -1147,14 +1108,14 @@ class PageBrowserDialog(NewMode, QtWidgets.QDialog):
         self._maybe_prefetch()
 
     def _sync_sort_indicator(self) -> None:
-        col = next((c for c, k in _COL_SORT.items() if k == self.model.sort_key), COL_NAME)
+        col = next((c for c, k in COL_SORT.items() if k == self.model.sort_key), COL_NAME)
         desc = self.model.sort_desc != (self.model.sort_key == "modified")
         self.table.header().setSortIndicator(
             col, QtCore.Qt.DescendingOrder if desc else QtCore.Qt.AscendingOrder
         )
 
     def _on_header_clicked(self, col: int) -> None:
-        key = _COL_SORT.get(col, "name")
+        key = COL_SORT.get(col, "name")
         desc = self.model.sort_key == key and not self.model.sort_desc
         self.model.set_sort(key, desc)
         self._sync_sort_indicator()
@@ -1175,7 +1136,7 @@ class PageBrowserDialog(NewMode, QtWidgets.QDialog):
         elif total == 0 and s is not None and s.kind == "project" and self._kind != "page":
             txt = (
                 "No %s in %s. They usually come from its included projects: tick "
-                "'With included projects'." % (self._kind_noun(), s.label)
+                "'And the projects it includes'." % (self._kind_noun(), s.label)
             )
         elif shown == 0 and total and self.model.query:
             txt = "No %s match '%s'." % (self._kind_noun(), self.model.query)
@@ -1306,7 +1267,7 @@ class PageBrowserDialog(NewMode, QtWidgets.QDialog):
         if not avoid:
             return row
         e = self.model.entry(row)
-        if e is None or os.path.normcase(os.path.abspath(e.path)) != avoid:
+        if e is None or path_key(e.path) != avoid:
             return row
         n = self.model.rowCount()
         if n <= 1:
@@ -1323,7 +1284,7 @@ class PageBrowserDialog(NewMode, QtWidgets.QDialog):
             e = self.model.entry(row)
             if e is None or not e.is_element or e.name.lower() != name:
                 continue
-            if os.path.normcase(os.path.abspath(e.path)) == path:
+            if path_key(e.path) == path:
                 return row
         return -1
 
@@ -1363,7 +1324,7 @@ class PageBrowserDialog(NewMode, QtWidgets.QDialog):
         # the card's project is where the page goes (the Active install row lists every
         # project)
         info = self._target_project()
-        if e.project_dir and (info is None or os.path.normcase(os.path.abspath(e.project_dir)) != info.key):
+        if e.project_dir and (info is None or path_key(e.project_dir) != info.key):
             self._select_combo_dir(e.project_dir, add_info=self.catalog.project_for_dir(e.project_dir))
             info = self._target_project()
         existing = self.catalog.page_names(info) if info is not None else {}
@@ -1400,7 +1361,7 @@ class PageBrowserDialog(NewMode, QtWidgets.QDialog):
             return info.name if info.is_live else "%s (other install)" % info.name
         n = self.catalog.count(info, "page")
         extra = "" if info.is_live else ", other install"
-        return "%s (%d page%s%s)" % (info.name, n, "" if n == 1 else "s", extra)
+        return "%s (%s%s)" % (info.name, plural(n, "page"), extra)
 
     def _fill_project_combo(self) -> None:
         """The target project and its includes first, a separator, then the
@@ -1438,7 +1399,7 @@ class PageBrowserDialog(NewMode, QtWidgets.QDialog):
             self._add_combo_project(info)
 
     def _add_combo_project(self, info: ProjectInfo) -> int:
-        self.cb_project.addItem(icon("open" if info.is_folder else "page", 16), self._combo_label(info), info)
+        self.cb_project.addItem(icon("open" if info.is_folder else "page"), self._combo_label(info), info)
         i = self.cb_project.count() - 1
         self.cb_project.setItemData(i, info.dir, QtCore.Qt.ToolTipRole)
         return i
@@ -1446,7 +1407,7 @@ class PageBrowserDialog(NewMode, QtWidgets.QDialog):
     def _select_combo_dir(self, directory: str, add_info: Optional[ProjectInfo] = None) -> None:
         if self.cb_project is None:
             return
-        k = os.path.normcase(os.path.abspath(directory))
+        k = path_key(directory)
         for i in range(self.cb_project.count()):
             info = self.cb_project.itemData(i)
             if isinstance(info, ProjectInfo) and info.key == k:
@@ -1548,6 +1509,7 @@ class PageBrowserDialog(NewMode, QtWidgets.QDialog):
         try:
             cache[info.key] = cat.pages_elsewhere(info)
         except Exception:  # noqa: BLE001 -- a hint only
+            _note_exc("browser.dialog._pages_elsewhere")
             cache[info.key] = {}
         if stamps is not None:
             kept[info.key] = (stamps, cache[info.key])
@@ -1607,7 +1569,7 @@ class PageBrowserDialog(NewMode, QtWidgets.QDialog):
         """A picker's entry is one the page can place (on its chain, not hidden)."""
         if not self._chain_keys or e.kind == "page":
             return True
-        key = os.path.normcase(os.path.abspath(e.project_dir)) if e.project_dir else ""
+        key = path_key(e.project_dir) if e.project_dir else ""
         return key in self._chain_keys and not e.shadowed_by
 
     def _update_accept(self) -> None:
@@ -1709,7 +1671,7 @@ class PageBrowserDialog(NewMode, QtWidgets.QDialog):
         try:
             self._save_settings()
         except Exception:  # noqa: BLE001 -- settings must never block closing
-            pass
+            _note_exc("browser.dialog.done/settings")
         self.thumbs.cancel_pending()
         for sig, slot in (
             (self.thumbs.thumbnailReady, self.model._on_thumb),
@@ -1741,7 +1703,7 @@ class PageBrowserDialog(NewMode, QtWidgets.QDialog):
         menu.addAction("Copy Name", lambda: clip.setText(e.name))
         if e.is_element:
             menu.addAction("Copy Reference (%s)" % e.reference, lambda: clip.setText(e.reference))
-        menu.addAction("Show in Explorer", lambda: reveal_in_explorer(e.path))
+        menu.addAction("Show in Explorer", lambda: _messages.reveal(e.path))
         if self.mode == MODE_OPEN and not self._ok_text:
             menu.addSeparator()
             if e.is_element or e.kind == "page":
@@ -1769,6 +1731,7 @@ class PageBrowserDialog(NewMode, QtWidgets.QDialog):
         try:
             usage = self.catalog.element_usage(e.path, e.name)
         except Exception:  # noqa: BLE001 -- best effort
+            _note_exc("browser.dialog.show_used_by", path=e.path, name=e.name)
             usage = []
         dlg = UsedByDialog(
             e.path, e.name, usage, self, on_open=self._open_other_path if self.mode == MODE_OPEN else None
@@ -1838,6 +1801,7 @@ class PageBrowserDialog(NewMode, QtWidgets.QDialog):
             [name],
             hold=getattr(win, "hold_pages", None),
             moved=getattr(win, "pages_moved", None),
+            fixed=True,
         )
         dlg.exec()
         new = next((n for _d, o, n in dlg.renamed if o.lower() == name.lower()), None)

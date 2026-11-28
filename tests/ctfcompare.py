@@ -65,7 +65,7 @@ def _redeflate(payload: bytes) -> bytes:
     out, pos = bytearray(), 0
     for start, end, flags, raws in secs:
         out += payload[pos:start]
-        z = [CTF._compress(r) for r in raws]
+        z = [CTF.compress(r) for r in raws]
         out += struct.pack("<III", flags, len(raws[0]), len(z[0])) + z[0]
         if len(z) > 1:
             out += struct.pack("<I", len(z[1])) + z[1]

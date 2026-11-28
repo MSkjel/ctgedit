@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ...infra.paths import path_key
+
 import collections
 import contextlib
 import hashlib
@@ -24,7 +26,6 @@ HELP_TOPIC = "underlay"
 OPACITY_KEY = "opt/underlay_opacity"
 TINT_KEY = "opt/underlay_tint"
 RESOLUTION_KEY = "opt/underlay_resolution"
-DIR_KEY = "dir/underlay"
 ABOVE_OPTION = "underlay_above"
 REMEMBER_OPTION = "underlay_remember"
 SNAP_OPTION = "underlay_snap"
@@ -50,7 +51,6 @@ IMAGE_FILTER = "Pictures (*.png *.jpg *.jpeg *.bmp *.gif *.svg *.tif *.tiff *.we
 #: Settings > Canvas > Underlay > Remember the underlay of at most:
 #: ui/prefs/timing_options.UNDERLAYS_KEPT)
 MEMORY_PREFIX = "underlay/"
-MEMORY_MAX = 200
 
 
 def default_opacity() -> int:
@@ -101,7 +101,7 @@ def file_stamp(path: str) -> Optional[tuple]:
 
 
 def _cache_key(path: str, stamp, *extra) -> tuple:
-    return (os.path.normcase(os.path.abspath(path)), stamp) + tuple(extra)
+    return (path_key(path), stamp) + tuple(extra)
 
 
 def _cache_get(key):
@@ -726,7 +726,7 @@ def page_name(doc) -> Optional[str]:
     path = getattr(doc, "path", None)
     if not path or _is_version_tab(doc):
         return None
-    name = os.path.normcase(os.path.abspath(path))
+    name = path_key(path)
     element = getattr(doc, "element_name", None)
     if element:
         name += "|" + str(element).lower()
@@ -1492,12 +1492,9 @@ def ask_page(win, doc) -> Optional[str]:
 
 def ask_image(win) -> Optional[str]:
     """Underlay an Image…: a picture file, from the folder of the last one (a seam)."""
-    st = app_settings()
-    start = str(st.value(DIR_KEY, "") or "")
-    path, _f = QtWidgets.QFileDialog.getOpenFileName(win, "Underlay an Image", start, IMAGE_FILTER)
-    if path:
-        st.setValue(DIR_KEY, os.path.dirname(path))
-    return path or None
+    from ..remember import file_path
+
+    return file_path(win, "Underlay an Image", "underlay", IMAGE_FILTER, save=False) or None
 
 
 def ask_version(win, doc, versions):
@@ -1764,11 +1761,7 @@ class UnderlayCommands:
         page = getattr(self.doc, "path", "") or ""
         if ul.kind == "image":
             text = "Underlaid %s at 100 %% at the page's top left corner." % ul.name()
-        elif (
-            ul.kind == "page"
-            and page
-            and os.path.normcase(os.path.abspath(page)) == os.path.normcase(ul.path)
-        ):
+        elif ul.kind == "page" and page and path_key(page) == os.path.normcase(ul.path):
             # (picked on purpose: the page under its own unsaved changes)
             text = "Underlaid %s as it was last saved, under your changes." % ul.name()
         else:

@@ -1,5 +1,6 @@
 """What the user looks at updates first, one step per save."""
 
+from ctgedit.ui.main_window import MainWindow
 import os
 import sys
 import time
@@ -669,7 +670,6 @@ def test_the_nesting_depth_is_the_shortest_way(fx_install):
     genie itself: its depth is the shortest way (1), not the first copy's (2)."""
     from ctgedit.editing import ElementDocument
     from ctgedit.format import genie_place as GP
-    from ctgedit.ui.window.files import PageFiles
 
     lib = _lib(fx_install)
     n2, n1 = (ElementDocument.open_element(lib, n) for n in ("n2", "n1"))
@@ -678,10 +678,10 @@ def test_the_nesting_depth_is_the_shortest_way(fx_install):
     tab = types.SimpleNamespace(
         parsed=types.SimpleNamespace(page=types.SimpleNamespace(objects=records)), _resolver=lambda: res
     )
-    assert PageFiles._nesting_depth(tab, [(lib, "n0")]) == 1
+    assert MainWindow._nesting_depth(tab, [(lib, "n0")]) == 1
     assert len(GP.records_nesting_chain(records, lib, "n0", res)) == 2, "the first way"
     assert GP.records_nesting_chain(records, lib, "n0", res, shortest=True) == ["fxnest.n0"]
-    assert PageFiles._nesting_depth(n2, [(lib, "n0")]) == 2, "n2 holds n1 holding n0"
+    assert MainWindow._nesting_depth(n2, [(lib, "n0")]) == 2, "n2 holds n1 holding n0"
 
 
 # -- in the event loop, with the window's real helper ----------------------------------------

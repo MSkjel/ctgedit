@@ -31,7 +31,6 @@ PAGE_HEAD_SIZE_LEGACY = 0x24  # the head of an old form (word2 < 0x0C): the firs
 #                               bytes of the current one, no GUID (format/upgrade.py)
 LINK_ENTRY_SIZE = 0x60  # 96 bytes per link/import-table entry
 RECORD_HEADER_SIZE = 8  # u32 payload_size + u32 next_link
-TRAILING_PAD = 0x200  # 512 bytes of zero pad after the thumbnail
 TEXT_TYPE_CODE = 0x05  # Text (format/codes.py TC names every type code)
 
 # Known animation/interaction property keys (+ array stems). Classify a bag as a
@@ -273,7 +272,7 @@ def _ascii_compatible_codec() -> bool:
     ANSI code page does: single-byte AND double-byte, whose lead bytes are >= 0x81)."""
     try:
         return all(bytes([b]).decode(CODEC) == chr(b) for b in range(0x80))
-    except Exception:  # noqa: BLE001
+    except LookupError, ValueError:
         return False
 
 
@@ -504,7 +503,7 @@ _SHORT_VALUE_MEMO: Dict[bytes, str] = {}
 _KEY_STR_MEMO_MAX = 1 << 15
 
 
-def _parse_entry(p: bytes, off: int) -> Optional[Tuple[List[Tuple[str, str]], int, int]]:
+def parse_entry(p: bytes, off: int) -> Optional[Tuple[List[Tuple[str, str]], int, int]]:
     """Parse an animation entry at ``off``."""
     if off + 2 > len(p):
         return None
@@ -587,10 +586,10 @@ def _key_is_known(key: str) -> bool:
 # also clamped to never overrun the first entry/bag.
 
 # transform mode -> number of 8-byte doubles that follow the mode byte
-_XFORM_DOUBLES = {0: 0, 1: 2, 2: 2, 3: 4, 8: 6}
+XFORM_DOUBLES = {0: 0, 1: 2, 2: 2, 3: 4, 8: 6}
 
 
-def _geom_name_len(p: bytes, start: int) -> int:
+def geom_name_len(p: bytes, start: int) -> int:
     """Bytes taken by the reserved word, handle and object name."""
     n = len(p)
     o = start
@@ -623,7 +622,7 @@ _NOT_NAME_BYTES = bytes(b for b in range(256) if not _name_byte(b))
 def _geom_prefix_len(p: bytes, start: int) -> int:
     """Length of the geometry header starting at ``start``."""
     n = len(p)
-    o = _geom_name_len(p, start)
+    o = geom_name_len(p, start)
     if o == start:
         return start
     for _ in range(3):
@@ -631,7 +630,7 @@ def _geom_prefix_len(p: bytes, start: int) -> int:
             return start
         mode = p[o]
         o += 1
-        ndoubles = _XFORM_DOUBLES.get(mode, 6 if mode > 3 else 0)
+        ndoubles = XFORM_DOUBLES.get(mode, 6 if mode > 3 else 0)
         o += ndoubles * 8
         if o > n:
             return start
@@ -667,7 +666,7 @@ class Bag:
 
 # Compute the (diagnostic-only) byte-coverage metric during parsing? Off by default for speed;
 # tools/verify_parser sets it True. See the note inside _scan_payload_bags.
-_WANT_COVERAGE = False
+WANT_COVERAGE = False
 
 
 # ---------------------------------------------------------------------------
@@ -678,7 +677,7 @@ _WANT_COVERAGE = False
 # hold, and the ORIGINAL checks then run at those offsets alone, in the same (ascending) order
 # and with the same skip-past-a-match rule -- so the result is identical by construction:
 #
-# * an animation entry (_parse_entry) needs u16 entry_len >= 4, a bag count 1..256, a first key
+# * an animation entry (parse_entry) needs u16 entry_len >= 4, a bag count 1..256, a first key
 #   length 1..96 and a printable first key byte (_is_keyish): 7 bytes, all in the regex;
 # * a Text expression needs the lpstr to start '@(' (bytes 2 and 3), a font-face token a length
 #   of 1..32 characters (1..32 bytes; 1..64 on a double-byte code page) and a first character
@@ -688,7 +687,7 @@ _WANT_COVERAGE = False
 # The character-level test of the Text prefilter assumes the ANSI code page decodes 0x00..0x7F
 # as ASCII (every Windows ANSI code page does; _ASCII_FAST checks it -- if not, the byte loops
 # run instead).
-_BAG_CANDIDATE = re.compile(
+BAG_CANDIDATE = re.compile(
     rb"(?=(?:[\x04-\xff].|[\x00-\x03][\x01-\xff])"  # u16 entry_len >= 4
     rb"(?:[\x01-\xff]\x00|\x00\x01)"  # u16 bag count 1..256
     rb"[\x01-\x60]\x00"  # u16 first key length 1..96
@@ -731,7 +730,7 @@ def _code_page_chars() -> Optional[str]:
         return None
     try:
         table = bytes(range(256)).decode(CODEC)
-    except Exception:  # noqa: BLE001
+    except LookupError, ValueError:
         return None
     return table if len(table) == 256 else None
 
@@ -751,7 +750,7 @@ _ALPHA_CHARS = frozenset(ch for ch in (_CP_CHARS or "") if ch.isalpha())
 
 _PREFILTER_OK = _ASCII_FAST
 
-# The scan's search for the next candidate: the same seven-byte condition as _BAG_CANDIDATE,
+# The scan's search for the next candidate: the same seven-byte condition as BAG_CANDIDATE,
 # anchored on the first key length's high byte (the \x00 at c + 5: sre runs a pattern with a
 # literal first byte as a tight loop), the five bytes before it in a fixed-width lookbehind.
 # A match at a is the candidate
@@ -767,7 +766,7 @@ _BAG_ANCHOR = re.compile(
 _ANCHOR_BACK = 5
 
 #: an animation entry's parse by its bytes (the u16 entry_len and the body after it): what
-#: _parse_entry reads, for it fails on a read past them. A page repeats a few thousand
+#: parse_entry reads, for it fails on a read past them. A page repeats a few thousand
 #: distinct entries over its records. The value is (the pairs as a tuple, trailer_len,
 #: is_property), None for bytes that do not parse; each Bag gets a list of its own. Entries up
 #: to _ENTRY_MEMO_SPAN bytes. Bounded (about 1 KB an entry: 16 MB when full); emptied when full
@@ -779,8 +778,8 @@ _NO_ENTRY = object()
 
 
 def _entry_spec(p: bytes, c: int) -> Optional[Tuple[Tuple[Tuple[str, str], ...], int, bool]]:
-    """:func:`_parse_entry` at ``c`` as the scan keeps it (pairs, trailer_len, is_property)."""
-    entry = _parse_entry(p, c)
+    """:func:`parse_entry` at ``c`` as the scan keeps it (pairs, trailer_len, is_property)."""
+    entry = parse_entry(p, c)
     if entry is None:
         return None
     pairs = entry[0]
@@ -808,7 +807,7 @@ def _scan_bags_prefiltered(p: bytes, start: int) -> List[Bag]:
         c = m.start() - back
         (entry_len,) = u16(p, c)
         end = c + 2 + entry_len
-        if end > n:  # _parse_entry: the entry overruns the payload
+        if end > n:  # parse_entry: the entry overruns the payload
             m = search(p, c + 1 + back)
             continue
         if end - c <= span:
@@ -846,7 +845,7 @@ def _scan_bags_prefiltered(p: bytes, start: int) -> List[Bag]:
 
 def _scan_payload_bags(p: bytes, start: int) -> Tuple[List[Bag], int]:
     """Walk the payload body and pick out the parts we recognise."""
-    if not _WANT_COVERAGE and _PREFILTER_OK:
+    if not WANT_COVERAGE and _PREFILTER_OK:
         return _scan_bags_prefiltered(p, start), 0
     n = len(p)
     bags: List[Bag] = []
@@ -854,7 +853,7 @@ def _scan_payload_bags(p: bytes, start: int) -> Tuple[List[Bag], int]:
     # First pass: discover the entry/bag structures (they anchor everything).
     o = start
     while o < n - 2:
-        entry = _parse_entry(p, o)
+        entry = parse_entry(p, o)
         if entry is not None:
             pairs, trailer_len, end = entry
             consumed = end - o
@@ -868,8 +867,8 @@ def _scan_payload_bags(p: bytes, start: int) -> Tuple[List[Bag], int]:
     # DIAGNOSTIC only -- never consumed by the reader/render/edit path, just summed for reports and
     # tools/verify_parser. It is by far the costliest part of parsing (a byte-by-byte bitmap + a
     # second whole-body lpstr scan per object), so SKIP it unless a tool
-    # explicitly asks (`_WANT_COVERAGE`).
-    if not _WANT_COVERAGE:
+    # explicitly asks (`WANT_COVERAGE`).
+    if not WANT_COVERAGE:
         return bags, 0
 
     # Coverage bitmap over the body region [start, n).
@@ -1183,7 +1182,7 @@ class PageBlock:
         return parse_page(block, word2)
 
 
-def _extract_bmp(thumb: bytes) -> Optional[bytes]:
+def extract_bmp(thumb: bytes) -> Optional[bytes]:
     """ "TH" thumbnail blob -> usable BMP (swap sig, fix bfSize)."""
     if len(thumb) < 6 or thumb[0:2] != b"TH":
         return None
@@ -1222,14 +1221,14 @@ def parse_page(block: Block, word2: int = 0x0C, lazy: bool = False) -> PageBlock
     region_end = data_start + objdata_size
     nd = len(d)
     header = _RECORD_HEADER
-    parse_object = _parse_object_lazy if lazy and not _WANT_COVERAGE else _parse_object
+    parse_one = _parse_object_lazy if lazy and not WANT_COVERAGE else parse_object
     append = objects.append
     for i in range(object_count):
         if off + RECORD_HEADER_SIZE > nd:
             break
         payload_size, next_link = header(d, off)
         start = off + RECORD_HEADER_SIZE
-        append(parse_object(i, off, payload_size, next_link, d[start : start + payload_size]))
+        append(parse_one(i, off, payload_size, next_link, d[start : start + payload_size]))
         off = start + payload_size
 
     objdata_consumed = off - data_start
@@ -1267,7 +1266,7 @@ _RECORD_HEADER = struct.Struct("<II").unpack_from
 _PREFIX = struct.Struct("<HIIH").unpack_from
 
 
-def _parse_object(
+def parse_object(
     index: int, record_offset: int, payload_size: int, next_link: int, payload: bytes
 ) -> PageObject:
     """Parse one object record payload into a :class:`PageObject`."""
@@ -1298,7 +1297,7 @@ def _parse_object(
     body_offset = an_end
     body_raw = bytes(payload[body_offset:])
 
-    if not _WANT_COVERAGE and _PREFILTER_OK:
+    if not WANT_COVERAGE and _PREFILTER_OK:
         bags = _scan_bags_prefiltered(payload, body_offset)
         covered = 0
     else:
@@ -1330,11 +1329,11 @@ def _parse_object(
 
 def parse_payload(payload: bytes) -> PageObject:
     """One record payload (prefix + body) as a record of its own (index 0, offset 0)."""
-    return _parse_object(0, 0, len(payload), 0, payload)
+    return parse_object(0, 0, len(payload), 0, payload)
 
 
 def parse_record_shell(payload: bytes) -> PageObject:
-    """:func:`_parse_object` of ``payload`` (index, offset and link 0) without the bag scan
+    """:func:`parse_object` of ``payload`` (index, offset and link 0) without the bag scan
     and the text extras: the prefix fields and the body alike, no bags. For a reader of
     nothing else (pagesummary's flashing test of a symbol element)."""
     if type(payload) is not bytes:
@@ -1381,7 +1380,7 @@ def parse_record_shell(payload: bytes) -> PageObject:
 # fields is first read: the values are those of the parse
 # made then (the payload it read is kept until then; the scan reads nothing else).
 
-#: the fields the bag scan and the text extras give (_parse_object)
+#: the fields the bag scan and the text extras give (parse_object)
 _SCANNED_FIELDS = ("bags", "bytes_covered", "text_exprs", "font_face")
 
 _LAZY_SRC = "_lazy_scan_src"
@@ -1395,7 +1394,7 @@ def _lazy_scan(obj) -> None:
     if src is None:
         return  # (scanned meanwhile)
     payload, body_offset, type_code = src
-    # (the scan _parse_object makes with the coverage diagnostic off)
+    # (the scan parse_object makes with the coverage diagnostic off)
     if _PREFILTER_OK:
         bags = _scan_bags_prefiltered(payload, body_offset)
     else:
@@ -1456,7 +1455,7 @@ class LazyPageObject(PageObject):
 def _parse_object_lazy(
     index: int, record_offset: int, payload_size: int, next_link: int, payload: bytes
 ) -> PageObject:
-    """:func:`_parse_object` with the bag scan and the text extras left for later
+    """:func:`parse_object` with the bag scan and the text extras left for later
     (:class:`LazyPageObject`): the prefix and the body as it reads them."""
     payload = bytes(payload)
     class_flag = struct.unpack_from("<H", payload, 0x00)[0] if len(payload) >= 2 else 0

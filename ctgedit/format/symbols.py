@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..infra.paths import path_key
+
 import os
 import re
 import struct
@@ -37,11 +39,6 @@ LIBRARY_EXTENSIONS = ("ctl", "ctm", "ctt")
 
 # The body marker that frames a placed reference: ".<ct" + one ASCII ext letter.
 _BODY_REF_RE = re.compile(rb"\.<ct([a-zA-Z])")
-
-# type_codes known to place a library element: 0x07 symbol, 0x08 genie/group,
-# 0x1009 SymbolSet, plus high-nibble-1 library codes. A hint only -- the extractor
-# scans the body regardless and is the source of truth.
-PLACED_TYPE_CODES = frozenset({0x07, 0x08, 0x1009})
 
 
 # ---------------------------------------------------------------------------
@@ -156,9 +153,29 @@ def _parse_ref_text(text: str, ext_letter: str) -> Optional[SymbolReference]:
     return SymbolReference(library=lib, element=element, ext=file_ext, kind=kind, raw=text)
 
 
+#: reference_from_object's per-record memo of the body's reference: (body_raw, the
+#: reference or None), valid while the record holds that same immutable body object (the
+#: reference is a function of the body alone)
+BODY_REF_MEMO_ATTR = "_body_ref_memo"
+
+
+def _body_reference(po: PageObject) -> Optional[SymbolReference]:
+    """reference_from_body(po.body_raw), memoised on the record (BODY_REF_MEMO_ATTR)."""
+    body = po.body_raw
+    d = getattr(po, "__dict__", None) if type(body) is bytes else None
+    if d is None:
+        return reference_from_body(body)
+    m = d.get(BODY_REF_MEMO_ATTR)
+    if m is not None and m[0] is body:
+        return m[1]
+    ref = reference_from_body(body)
+    d[BODY_REF_MEMO_ATTR] = (body, ref)
+    return ref
+
+
 def reference_from_object(po: PageObject) -> Optional[SymbolReference]:
     """Best-effort placed symbol reference for a PageObject."""
-    ref = reference_from_body(po.body_raw) if (po.subtype_size & 0x1) else None
+    ref = _body_reference(po) if (po.subtype_size & 0x1) else None
     if ref is not None:
         return ref
     try:
@@ -264,7 +281,7 @@ def _inflate_first(body: bytes, start: int) -> Optional[bytes]:
     return None
 
 
-def _find_stream(body: bytes, start: int):
+def find_stream(body: bytes, start: int):
     """Locate + inflate the first zlib stream at/after ``start``.
     Returns ``(offset, inflated)`` or ``None``. Never raises."""
     n = len(body)
@@ -338,11 +355,11 @@ def embedded_bitmaps_from_body(body: bytes, body_start: int = 0):
 
 
 def _embedded_bitmaps(body: bytes, body_start: int):
-    hit = _find_stream(body, body_start)
+    hit = find_stream(body, body_start)
     if hit is None:
         return None, None
     off, raw = hit
-    primary = _decode_dib(raw)
+    primary = decode_dib(raw)
     if primary is None:
         return None, None
     flash = None
@@ -352,7 +369,7 @@ def _embedded_bitmaps(body: bytes, body_start: int):
             if (flags & 0xF00) == 0x100 and off + comp + 4 <= len(body):
                 (comp2,) = struct.unpack_from("<I", body, off + comp)
                 blob = body[off + comp + 4 : off + comp + 4 + comp2]
-                flash = _decode_dib(inflate(bytes(blob)))
+                flash = decode_dib(inflate(bytes(blob)))
     except Exception:  # noqa: BLE001 -- a malformed flash half never breaks the primary
         _note_exc("symbols._embedded_bitmaps")
         flash = None
@@ -368,14 +385,14 @@ def _embedded_bitmap(body: bytes, body_start: int) -> Optional[EmbeddedBitmap]:
     raw = _inflate_first(body, body_start)
     if raw is None:
         return None
-    return _decode_dib(raw)
+    return decode_dib(raw)
 
 
 #: 0xFF - b for every byte value b
 _INVERT_BYTES = bytes(range(255, -1, -1))
 
 
-def _decode_dib(raw: bytes) -> Optional[EmbeddedBitmap]:
+def decode_dib(raw: bytes) -> Optional[EmbeddedBitmap]:
     """Decode one inflated BIH(40)+32bpp+AND-mask DIB into an EmbeddedBitmap."""
     if raw is None or len(raw) < _BMP_INFO_HEADER:
         return None
@@ -934,6 +951,20 @@ class SymbolResolver:
                 pass
         return cls(paths)
 
+    @classmethod
+    def for_page_env(cls, page_path: str) -> Optional["SymbolResolver"]:
+        """:meth:`for_page` with the extra library folders (CTG_LIB_PATH); None with
+        CTG_NO_SYMBOLS=1 or when it cannot be made (noted)."""
+        if os.environ.get("CTG_NO_SYMBOLS") == "1":
+            return None
+        from ..infra.paths import lib_path_dirs
+
+        try:
+            return cls.for_page(page_path, extra_paths=lib_path_dirs())
+        except Exception:  # noqa: BLE001
+            _note_exc("symbols.SymbolResolver.for_page_env", page=page_path)
+            return None
+
     # -- library lookup ---------------------------------------------------
     def _index_dir(self, directory: str) -> Dict[str, str]:
         idx = self._dir_index.get(directory)
@@ -975,6 +1006,8 @@ class SymbolResolver:
                 # (inside held_libraries: the version this composition read of each, the
                 # resolver's own cache as it was)
                 libs = [_held_cached(L, hold) for L in libs]
+                hold.found[(tuple(self.search_paths), key)] = self.found.get(key, [])
+            _trail(tuple(self.search_paths), key)
             return libs
         libs: List[SymbolLibrary] = []
         for path in self._find_library_files(library, ext):
@@ -990,14 +1023,15 @@ class SymbolResolver:
                     ver = _fileio.file_version(path)
                     lib = _open_library_version(path, *ver)
                 libs.append(lib)
-                self.opened[os.path.normcase(os.path.abspath(path))] = ver
+                self.opened[path_key(path)] = ver
             except Exception:  # noqa: BLE001
                 _note_exc("symbols.SymbolResolver.libraries", library=path)
                 continue
         self._libs_cache[key] = libs
-        self.found[key] = [
-            os.path.normcase(os.path.abspath(p)) for p in self._find_library_files(library, ext)
-        ]
+        self.found[key] = [path_key(p) for p in self._find_library_files(library, ext)]
+        if hold is not None:
+            hold.found[(tuple(self.search_paths), key)] = self.found[key]
+        _trail(tuple(self.search_paths), key)
         return libs
 
     def library(self, library: str, ext: str) -> Optional[SymbolLibrary]:
@@ -1116,10 +1150,13 @@ class LibraryHold:
     """What one composition read (:func:`held_libraries`): normcase path -> the
     SymbolLibrary its first read gave."""
 
-    __slots__ = ("pins",)
+    __slots__ = ("pins", "found")
 
     def __init__(self):
         self.pins: Dict[str, SymbolLibrary] = {}
+        #: (a resolver's search path, '<library>.<ext>') -> the files it found (normcase
+        #: paths, in order): what a library of the same name put nearer would change
+        self.found: Dict[Tuple[Tuple[str, ...], str], List[str]] = {}
 
     def changed(self) -> List[str]:
         """The library files read in the hold whose version on disk is another one now
@@ -1166,6 +1203,45 @@ def current_hold() -> Optional[LibraryHold]:
     return getattr(_HOLD, "hold", None)
 
 
+def note_lookup(search_paths, library: str, ext: str) -> None:
+    """Inside a hold: '<library>.<ext>' looked up on ``search_paths`` counts as a lookup of the
+    hold (LibraryHold.found) though no resolver ran it now (a result reused from a memo that
+    made it: genie_place._merge_deps, the run's declared parameters)."""
+    sp = tuple(search_paths or ())
+    key = ("%s.%s" % (library, ext)).lower()
+    _trail(sp, key)
+    hold = getattr(_HOLD, "hold", None)
+    if hold is not None and (sp, key) not in hold.found:
+        hold.found[(sp, key)] = [path_key(p) for p in SymbolResolver(list(sp)).library_files(library, ext)]
+
+
+def _trail(sp: tuple, key: str) -> None:
+    for t in getattr(_HOLD, "trails", None) or ():
+        t.add((sp, key))
+
+
+class lookups_made:
+    """``with lookups_made() as looks:`` the (search path, '<library>.<ext>') lookups this
+    thread makes inside, for a memo that keeps a result to replay them with it
+    (:func:`note_lookup`)."""
+
+    def __enter__(self) -> set:
+        self.looks: set = set()
+        trails = getattr(_HOLD, "trails", None)
+        if trails is None:
+            trails = _HOLD.trails = []
+        trails.append(self.looks)
+        return self.looks
+
+    def __exit__(self, *exc) -> bool:
+        trails = getattr(_HOLD, "trails", None) or []
+        if trails and trails[-1] is self.looks:
+            trails.pop()
+        elif self.looks in trails:
+            trails.remove(self.looks)
+        return False
+
+
 def one_read(fn):
     """A function (a composition) run inside :func:`held_libraries`: each library it reads
     is read once."""
@@ -1180,7 +1256,7 @@ def one_read(fn):
 
 
 def _pin_key(path: str) -> str:
-    return os.path.normcase(os.path.abspath(path))
+    return path_key(path)
 
 
 def _held(path: str, hold: LibraryHold, ver=None) -> SymbolLibrary:

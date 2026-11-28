@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .paths import data_dir, path_key
+
 import contextlib
 import hashlib
 import json
@@ -11,7 +13,6 @@ import time
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
-from .paths import data_dir
 
 MANIFEST = "manifest.json"
 #: the bytes all versions take, by history root: kept up to date by the copies and the
@@ -45,7 +46,7 @@ def history_root() -> str:
 
 def key_for(path: str, element: str = "") -> str:
     """The folder name of ``path``'s versions (``element``: of that library element)."""
-    name = os.path.normcase(os.path.abspath(path))
+    name = path_key(path)
     if element:
         name += "|" + element.lower()
     return hashlib.sha1(name.encode("utf-8", "replace")).hexdigest()[:16]
@@ -75,12 +76,9 @@ class Version:
 
 
 def read_manifest(folder: str) -> dict:
-    try:
-        with open(os.path.join(folder, MANIFEST), encoding="utf-8") as fh:
-            m = json.load(fh)
-        return m if isinstance(m, dict) else {}
-    except OSError, ValueError:
-        return {}
+    from ..format.fileio import read_json_dict
+
+    return read_json_dict(os.path.join(folder, MANIFEST))
 
 
 def _write_manifest(folder: str, m: dict) -> None:
@@ -129,7 +127,6 @@ def keep_version(
     path: str,
     data: bytes,
     element: str = "",
-    root: Optional[str] = None,
     now: Optional[float] = None,
     force: bool = False,
 ) -> Optional[Version]:
@@ -137,7 +134,7 @@ def keep_version(
     if not enabled() or not data:
         return None
     now = time.time() if now is None else now
-    folder = folder_for(path, element, root)
+    folder = folder_for(path, element)
     digest = hashlib.sha1(data).hexdigest()
     m = read_manifest(folder)
     rows = [r for r in (m.get("versions") or []) if isinstance(r, dict)]
@@ -179,7 +176,7 @@ def keep_version(
     }
     rows.append(row)
     m.update({"path": os.path.abspath(path), "element": element, "versions": rows})
-    rkey = _root_key(root)
+    rkey = _root_key(None)
     known = rkey in _TOTAL
     # (this page's folder by count: the others are as the last prune left them)
     rows.sort(key=lambda r: float(r.get("replaced_at") or 0.0))
@@ -191,14 +188,14 @@ def keep_version(
         _write_manifest(folder, m)
     if known:
         _TOTAL[rkey] += len(data) - sum(int(r.get("size") or 0) for r in gone)
-    total = _total(root)
+    total = _total()
     if total > _CONFIG["mb"] * 1024 * 1024:
-        prune(root=root, keep_file=file)
+        prune(keep_file=file)
     return _version(m, folder, row)
 
 
 def _root_key(root: Optional[str]) -> str:
-    return os.path.normcase(os.path.abspath(root or history_root()))
+    return path_key(root or history_root())
 
 
 def _total(root: Optional[str] = None) -> int:

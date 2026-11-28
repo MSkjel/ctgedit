@@ -18,7 +18,7 @@ def lockers(path: str, *, include_self: bool = False) -> List[Tuple[str, int]]:
         return []
     try:
         return _query(os.path.abspath(path), include_self)
-    except Exception:  # noqa: BLE001 -- a hint only
+    except Exception:  # noqa: BLE001 -- swallow-ok: a hint only
         return []
 
 

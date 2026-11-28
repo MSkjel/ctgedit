@@ -1760,6 +1760,8 @@ ACTION_ICONS = {
     "act_isolate": "isolate",
     "act_show_all_roots": "show_hidden",
     "act_mark_changes": "mark_changes",
+    "act_preview_states": "eye",
+    "act_click_map": "mouse",
     "act_focus_mode": "focus_mode",
     "act_reset_ui": "reset_layout",
     "act_rot_cw": "rotate_cw",

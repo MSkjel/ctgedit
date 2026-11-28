@@ -10,7 +10,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 from .cnum import c_atoi
 from . import colourstate as CS
-from .propget import getter as _getter, note_too_long, written_conditions  # noqa: F401 (written_conditions re-exported)
+from .propget import getter as getter, note_too_long, written_conditions  # noqa: F401 (written_conditions re-exported)
 
 Pair = Tuple[int, int]
 NO_COLOUR = 0xFF000000
@@ -73,7 +73,7 @@ def parse_pair(value) -> Optional[Pair]:
     value is empty."""
     if not value:
         return None
-    return CS._parse(value)
+    return CS.parse(value)
 
 
 def fmt_pair(p: Pair) -> str:
@@ -181,7 +181,7 @@ def read(
     binary_states: Optional[Sequence[Pair]] = None,
 ) -> FillColour:
     """What the page shows for an object with properties ``props``."""
-    get = _getter(props)
+    get = getter(props)
     mode = c_atoi(get("COLMODE"))
     known = mode in TYPES
     if not known:
@@ -355,7 +355,7 @@ def apply_edits(
     props: Dict[str, str], before: FillColour, after: FillColour
 ) -> Tuple[List[Tuple[str, Optional[str]]], Optional[Pair]]:
     """What Apply writes: ``([(key, value or None)], new static pair or None)``."""
-    get = _getter(props)
+    get = getter(props)
     if _relevant(before, False) != _relevant(after, False):
         target = target_values(after, get)
         if after.mode == THRESHOLD:
@@ -425,10 +425,10 @@ def written_texts(fc: FillColour) -> List[str]:
 # --------------------------------------------------------------------------- Fill > Level
 def direction(props: Dict[str, str]) -> int:
     """FILMODE as the page shows it: 0..3, anything else Up."""
-    d = c_atoi(_getter(props)("FILMODE"))
+    d = c_atoi(getter(props)("FILMODE"))
     return d if 0 <= d <= 3 else UP
 
 
 def level_background(props: Dict[str, str]) -> Pair:
     """FILCOL: the unfilled part's colour; absent = transparent."""
-    return parse_pair(_getter(props)("FILCOL")) or TRANSPARENT
+    return parse_pair(getter(props)("FILCOL")) or TRANSPARENT

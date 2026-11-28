@@ -1,5 +1,6 @@
 """Failures that would hide art are made visible."""
 
+from ctgedit.ui.main_window import MainWindow
 import logging
 import os
 import shutil
@@ -70,8 +71,8 @@ def win():
                 d.close()
             except RuntimeError:
                 pass
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.hide()
 
 
@@ -169,15 +170,14 @@ def test_a_swallowed_reader_error_is_logged_and_the_page_still_derives(art_page,
         calls.append(1)
         raise RuntimeError("picture decoder broke")
 
-    monkeypatch.setattr(reader_part("symbols"), "_attach_embedded_bitmap", boom)
+    monkeypatch.setattr(reader_part("symbols"), "attach_embedded_bitmap", boom)
     with logsetup.error_scope() as counts:
         page = reader.read_page(MIXER)
     assert calls and len(page.objects) == len(base.objects)
-    assert counts[("reader._object_from/embedded bitmap", "RuntimeError")] == len(calls)
+    assert counts[("reader.object_from/embedded bitmap", "RuntimeError")] == len(calls)
     msgs = _msgs(logs, "ctgedit.swallowed")
     assert any(
-        "reader._object_from/embedded bitmap: swallowed RuntimeError: picture decoder broke" in m
-        for m in msgs
+        "reader.object_from/embedded bitmap: swallowed RuntimeError: picture decoder broke" in m for m in msgs
     )
 
 
@@ -433,7 +433,7 @@ def test_automatic_display_check_runs_once_per_file_version(win, pages, monkeypa
     doc = win.doc
     assert _pump(lambda: ui_state(doc).display_check is not None, 90)
     assert doc.ui.display_check.identical and doc.ui.display_check.where == "process"
-    assert (os.path.normcase(os.path.abspath(MIXER)), doc._disk_stamp) in DiagnosticsMixin._display_checked
+    assert (os.path.normcase(os.path.abspath(MIXER)), doc._disk_stamp) in MainWindow._display_checked
     # the same file version is not checked again; a changed page is not checked
     win._close_doc_tab(0)
     win.open_page(MIXER)
@@ -441,7 +441,7 @@ def test_automatic_display_check_runs_once_per_file_version(win, pages, monkeypa
     from ctgedit.ui.prefs.settings import app_settings
 
     app_settings().setValue("opt/display_check", False)
-    DiagnosticsMixin._display_checked.clear()
+    MainWindow._display_checked.clear()
     win._queue_display_check(win.doc)
     assert not win.__dict__.get("_display_queue")
 

@@ -7,6 +7,7 @@ from typing import Dict, Iterable, List, Optional, Tuple
 
 from ...format.cnum import c_atoi
 from ...format import codes as _codes
+from ...infra.logsetup import note_exception as _note_exc
 
 
 @dataclass(frozen=True)
@@ -119,8 +120,6 @@ CLASS_DISABLED: Dict[int, Dict[str, str]] = {
     0x07: {"fill_color": "A bitmap or placed symbol has no fill colour animation."},
 }
 
-#: the class's OWN first page: type code -> (page, module)
-_GENERAL = ("Appearance", "General")
 OWN_PAGES: Dict[int, Page] = {}
 for _tc in (0x01, 0x02, 0x03, 0x04, 0x05, 0x0A, 0x0B, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x1001, 0x1006):
     OWN_PAGES[_tc] = Page("general", 0, "Appearance", "General", "appearance", check=False)
@@ -208,10 +207,12 @@ class SheetContext:
                 ref = reference_from_body(po.body_raw)
                 ext = (ref.ext or "").lower() if ref is not None else ""
             except Exception:  # noqa: BLE001
+                _note_exc("objprops.registry.for_object/reference")
                 ext = ""
         try:
             props = dict(doc.object_properties(index))
         except Exception:  # noqa: BLE001
+            _note_exc("objprops.registry.for_object/properties")
             props = {}
         return cls(doc, index, po.type_code, po.subtype_size, ext, props, read_only_reason(doc, index))
 
@@ -349,6 +350,7 @@ def _kept_props(ctx: SheetContext, props: Dict[str, str]) -> Dict[str, str]:
     try:
         return {k: v for k, v in props.items() if not drops(ctx.index, k)}
     except Exception:  # noqa: BLE001 -- a report only
+        _note_exc("objprops.registry._kept_props")
         return props
 
 
@@ -360,6 +362,7 @@ def _input_configured(which: str, ctx: SheetContext) -> bool:
         info = doc.input_commands(ctx.index)
         return bool(info.get("touch"))
     except Exception:  # noqa: BLE001 -- a report only
+        _note_exc("objprops.registry._input_configured")
         return False
 
 
@@ -410,7 +413,7 @@ def placed_genies_of(doc, index: int) -> List[int]:
     try:
         objs = doc.parsed.page.objects
         anc = list(doc.page.ancestors(index))
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # swallow-ok: no such object, no genies
         return []
     return [a for a in anc if a < len(objs) and (objs[a].subtype_size & 0x200)]
 
@@ -461,6 +464,7 @@ def read_only_reason(doc, index: int, template_locked: bool = True) -> str:
     try:
         why = genie_member_reason(doc, index)
     except Exception:  # noqa: BLE001
+        _note_exc("objprops.registry.read_only_reason")
         why = ""
     if why:
         return why
@@ -468,7 +472,7 @@ def read_only_reason(doc, index: int, template_locked: bool = True) -> str:
         obj = doc.page.objects[index]
         if template_locked and obj.raw.get("_from_template"):
             return "This object belongs to the page template. Edit the template to change it."
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # swallow-ok: no such object
         pass
     return ""
 
@@ -480,7 +484,7 @@ def member_editable_keys(doc, index: int) -> frozenset:
         anc = list(doc.page.ancestors(index))
         if doc.page.objects[index].raw.get("_from_template"):
             return frozenset()
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # swallow-ok: no such object, nothing editable
         return frozenset()
     if not any(a < len(objs) and objs[a].subtype_size & 0x200 for a in anc):
         return frozenset()
@@ -495,6 +499,7 @@ def _genie_name(po) -> str:
 
         ref = reference_from_body(po.body_raw) if po.subtype_size & 0x1 else None
     except Exception:  # noqa: BLE001
+        _note_exc("objprops.registry._genie_name")
         ref = None
     if ref is None:
         return ""

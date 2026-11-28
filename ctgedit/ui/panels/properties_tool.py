@@ -109,6 +109,34 @@ class ToolSection:
         mode.setProperty("propKey", "new_object_style")
         mode.activated.connect(lambda _i, c=mode: self._set_tool_mode(c.currentData()))
         form.addRow("Style for new objects", mode)
+        self._new_line_rows(form, kind, tool, vals, fields)
+        self._new_colour_rows(form, kind, tool, vals, own, fields, page)
+        self._new_shape_rows(form, kind, tool, vals, fields)
+        self._new_text_rows(form, kind, tool, vals, own, fields)
+        if kind == "button" and tool in DS.CLICK_SIZES:
+            form.addRow("Size of a click", self._click_size_row(tool))
+        if kind == "button":
+            xp = QtWidgets.QCheckBox()
+            xp.setChecked(panel_option("xp_buttons"))
+            xp.setProperty("propKey", "xp_buttons")
+            xp.setToolTip("Off: the classic raised look (also Settings > Editing > New objects)")
+            xp.toggled.connect(self._set_xp_buttons)
+            form.addRow("XP style", xp)
+        reset = self._link("Reset to the factory look", -1, "", slot=lambda t=tool: self._reset_tool(t))
+        reset.setToolTip(
+            "Lines 1 px, solid shapes, Arial text and the ribbon's colours"
+            + (
+                ". A click makes a %d x %d px button again" % DS.CLICK_SIZES[tool]
+                if kind == "button" and tool in DS.CLICK_SIZES
+                else ""
+            )
+        )
+        form.addRow(reset)
+
+    def _new_line_rows(self, form: QtWidgets.QFormLayout, kind: str, tool: str, vals: dict, fields) -> None:
+        """The line rows of the tool's look: line (or pipe) width, line style, filled."""
+        from ..editor import draw_styles as DS
+
         if "line_width" in fields:
             w = self._number(1, 32, " px", int(vals.get("line_width") or 1))
             w.setProperty("propKey", "line_width")
@@ -130,6 +158,14 @@ class ToolSection:
                 cb.setToolTip("The outline tool draws hollow shapes")
             cb.toggled.connect(lambda on: self._set_new(kind, tool, "filled", bool(on)))
             form.addRow("Filled", cb)
+
+    def _new_colour_rows(
+        self, form: QtWidgets.QFormLayout, kind: str, tool: str, vals: dict, own: dict, fields, page
+    ) -> None:
+        """The colour rows of the tool's look: fill, line (a pipe's highlight) and a pipe's
+        lowlight."""
+        from ..editor import draw_styles as DS
+
         for field, label, which in (
             ("fill_colour", "Fill colour", "fill"),
             ("line_colour", "Highlight colour" if kind == "pipe" else "Line colour", "line"),
@@ -173,6 +209,10 @@ class ToolSection:
                 )
             )
             form.addRow("Lowlight colour", btn)
+
+    def _new_shape_rows(self, form: QtWidgets.QFormLayout, kind: str, tool: str, vals: dict, fields) -> None:
+        """The shape rows of the tool's look: the gradient and its colour, the corner radius
+        and the border."""
         if "gradient_mode" in fields:
             from ..objprops.appearance import GRADIENTS
 
@@ -208,6 +248,11 @@ class ToolSection:
             )
             rs.activated.connect(lambda v: self._set_new(kind, tool, "rectangle_style", int(v)))
             form.addRow("Border", rs)
+
+    def _new_text_rows(
+        self, form: QtWidgets.QFormLayout, kind: str, tool: str, vals: dict, own: dict, fields
+    ) -> None:
+        """The text rows of the tool's look: the font, its size and style, the text colour."""
         if "font" in fields:
             fc = QtWidgets.QFontComboBox()
             fc.setInsertPolicy(QtWidgets.QComboBox.NoInsert)
@@ -251,25 +296,6 @@ class ToolSection:
                 )
             )
             form.addRow("Text colour", btn)
-        if kind == "button" and tool in DS.CLICK_SIZES:
-            form.addRow("Size of a click", self._click_size_row(tool))
-        if kind == "button":
-            xp = QtWidgets.QCheckBox()
-            xp.setChecked(panel_option("xp_buttons"))
-            xp.setProperty("propKey", "xp_buttons")
-            xp.setToolTip("Off: the classic raised look (also Settings > Editing > New objects)")
-            xp.toggled.connect(self._set_xp_buttons)
-            form.addRow("XP style", xp)
-        reset = self._link("Reset to the factory look", -1, "", slot=lambda t=tool: self._reset_tool(t))
-        reset.setToolTip(
-            "Lines 1 px, solid shapes, Arial text and the ribbon's colours"
-            + (
-                ". A click makes a %d x %d px button again" % DS.CLICK_SIZES[tool]
-                if kind == "button" and tool in DS.CLICK_SIZES
-                else ""
-            )
-        )
-        form.addRow(reset)
 
     def _click_size_row(self, tool: str) -> QtWidgets.QHBoxLayout:
         """'Size of a click': W and H of the box a click (no drag) with ``tool`` makes (its

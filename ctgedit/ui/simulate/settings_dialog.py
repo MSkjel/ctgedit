@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..dialog_buttons import dialog_buttons
+
 import json
 import os
 
@@ -19,6 +21,18 @@ class SimSettingsControls(QtCore.QObject):
 
     def __init__(self, parent=None, engine_path: str = ""):
         super().__init__(parent)
+        self._make_start_controls()
+        self._make_reload_controls()
+        self._make_debug_controls()
+        self._make_timing_controls()
+        self._make_engine_controls(engine_path)
+        self.reload_page.toggled.connect(self.reload_delay.setEnabled)
+        self.reload_cicode.toggled.connect(self.cicode_delay.setEnabled)
+        self.load()
+
+    def _make_start_controls(self) -> None:
+        """Tabs and windows, the start, closing, the user, undefined tags and the startup
+        code."""
         Q = QtWidgets
         self.new_tab = Q.QCheckBox("Open each page in a new tab")
         self.new_tab.setToolTip(
@@ -51,6 +65,10 @@ class SimSettingsControls(QtCore.QObject):
         )
         self.startup.toggled.connect(self.workspace.setEnabled)
         self.startup.toggled.connect(self.fast_startup.setEnabled)
+
+    def _make_reload_controls(self) -> None:
+        """Trend history, what a text shows until its value comes, and live reload."""
+        Q = QtWidgets
         self.trend_history = Q.QCheckBox("Show trend history from the start")
         self.trend_history.setToolTip("Each pen's first value fills the time before the simulation started")
         self.placeholder = Q.QComboBox()
@@ -71,6 +89,11 @@ class SimSettingsControls(QtCore.QObject):
         self.reload_auto.setToolTip("Off: the page runs on as it was, and Reload Page shows the update")
         self.reload_page.toggled.connect(self.reload_auto.setEnabled)
         # (the pauses under the switches they need, made below)
+
+    def _make_debug_controls(self) -> None:
+        """Debugging (errors, object numbers, text smoothing, breakpoints), DLLs and SQL
+        databases, and the log's length."""
+        Q = QtWidgets
         self.errors = Q.QCheckBox("Show errors on the page")
         self.errors.setToolTip("A badge on each object whose code raised a hardware error")
         self.numbers = Q.QCheckBox("Show object numbers (AN) in tool tips")
@@ -100,6 +123,11 @@ class SimSettingsControls(QtCore.QObject):
             "keeps as many of its own. An open Simulate window takes "
             "the new number at once"
         )
+
+    def _make_timing_controls(self) -> None:
+        """The pauses and counts: the reload pauses, the folder check, the Inspector's and
+        the Watch tab's refresh, the tags listed."""
+        Q = QtWidgets
         # the pauses and counts
         self.reload_delay = Q.QDoubleSpinBox()
         self.reload_delay.setRange(*options.RELOAD_DELAY_RANGE)
@@ -138,6 +166,11 @@ class SimSettingsControls(QtCore.QObject):
             "The Inputs panel's list, and the tags one search fetches. "
             "Typing narrows the list before the limit"
         )
+
+    def _make_engine_controls(self, engine_path: str) -> None:
+        """The simulator, the page's view (opening zoom, Space + drag) and the clock (speed
+        at start, Step)."""
+        Q = QtWidgets
         self.engine = Q.QLineEdit(engine_path)
         self.engine.setPlaceholderText("The one installed with ctgedit")
         self.engine.setToolTip("Path to ctsim.exe")
@@ -169,9 +202,6 @@ class SimSettingsControls(QtCore.QObject):
         self.step.setToolTip(
             "How far the Step button moves the stopped clock. One scan is a quarter of a second"
         )
-        self.reload_page.toggled.connect(self.reload_delay.setEnabled)
-        self.reload_cicode.toggled.connect(self.cicode_delay.setEnabled)
-        self.load()
 
     def lay_out(self, page) -> None:
         """The controls as sections of ``page`` (a settings_pages.Page)."""
@@ -417,9 +447,7 @@ class SimSettingsDialog(QtWidgets.QDialog):
         self.defaults_button.clicked.connect(self.defaults)
         row.addWidget(self.defaults_button)
         row.addStretch(1)
-        bb = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
-        bb.accepted.connect(self.accept)
-        bb.rejected.connect(self.reject)
+        bb = dialog_buttons(self)
         row.addWidget(bb)
         outer.addLayout(row)
         self.resize(640, 640)

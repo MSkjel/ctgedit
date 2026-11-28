@@ -1,5 +1,6 @@
 """Derive speed-ups change no output."""
 
+from ctgedit.format.fileio import find_ci
 import copy
 import os
 import pickle
@@ -170,7 +171,7 @@ def test_lazy_record_keeps_what_was_set_before_its_scan(fx_install):
 
 
 def test_lazy_parse_is_off_with_the_coverage_diagnostic(monkeypatch, fx_install):
-    monkeypatch.setattr(PG, "_WANT_COVERAGE", True)
+    monkeypatch.setattr(PG, "WANT_COVERAGE", True)
     blk, word2 = next(_blocks(fx_install.file(*GENIES_CTM)))
     assert not any(isinstance(o, PG.LazyPageObject) for o in PG.parse_page(blk, word2, lazy=True).objects)
 
@@ -208,7 +209,7 @@ def test_encode_many_is_encode(tmp_path, fx_install):
 
 # --------------------------------------------------------------------------- hotspots
 def _reference_hotspots(objs, only=None):
-    """graft._suppress_redundant_hotspots as it was (every box against every hotspot)."""
+    """graft.suppress_redundant_hotspots as it was (every box against every hotspot)."""
     from collections import defaultdict
 
     n = len(objs)
@@ -286,7 +287,7 @@ def test_hotspot_pass_finds_what_the_full_search_found():
         if trial % 3 == 0:
             only = {i for i in range(len(objs)) if rnd.random() < 0.7}
         want = _reference_hotspots(objs, only)
-        graft._suppress_redundant_hotspots(objs, only)
+        graft.suppress_redundant_hotspots(objs, only)
         got = {i for i, o in enumerate(objs) if o.raw.get("_no_outline")}
         assert got == want
 
@@ -356,15 +357,15 @@ def _reference_compare_rows(project_dir, page, tables):
 
     out = {}
     for table, rows in tables.items():
-        path = PR._find_file(project_dir, table + ".DBF")
+        path = find_ci(project_dir, table + ".DBF")
         if path is None:
             continue
         with Dbf(path, writable=False) as d:
             if "PAGE" not in d.fmap:
                 continue
-            ndx = PR._open_ndx(project_dir, table, writable=False)
+            ndx = PR.open_ndx(project_dir, table, writable=False)
             try:
-                have = [r for _i, r in sorted(PR._page_records(d, ndx, "PAGE", page)) if r[:1] != b"*"]
+                have = [r for _i, r in sorted(PR.page_records(d, ndx, "PAGE", page)) if r[:1] != b"*"]
             finally:
                 if ndx is not None:
                     ndx.close()
@@ -429,7 +430,7 @@ def test_compare_rows_is_the_hashed_comparison(monkeypatch, fx_page, fx_project)
     for t2, page in variants():
         assert PM.compare_rows(EXAMPLE, page, t2) == _reference_compare_rows(EXAMPLE, page, t2)
     # stored records with odd flag bytes and PAGE spellings
-    real = PR._page_records
+    real = PR.page_records
 
     def odd(dbf, ndx, field, value):
         out = []
@@ -442,7 +443,7 @@ def test_compare_rows_is_the_hashed_comparison(monkeypatch, fx_page, fx_project)
             out.append((i, b))
         return out
 
-    monkeypatch.setattr(PR, "_page_records", odd)
+    monkeypatch.setattr(PR, "page_records", odd)
     assert PM.compare_rows(EXAMPLE, name, tables) == _reference_compare_rows(EXAMPLE, name, tables)
 
 

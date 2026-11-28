@@ -55,6 +55,10 @@ deliberate exceptions are listed in that test.
 - The GUI process parses and derives on the GUI thread only. Work that parses many records
   runs in a helper process (`ctgedit/workers/`, started through `infra/workers.py`); the File >
   Open preview and the display checks run in their own processes too.
+- Find in closed pages: the helper keeps the searchable fields of each page it reads on disk,
+  with the files and library lookups its read depended on (`features/find_index.py`). The GUI
+  process matches the kept fields of the pages that have not changed (no record is parsed
+  there) and sends only the others to the helper.
 - Threads may only read page summaries and thumbnails or build tag indexes. Garbage
   collection runs on the GUI thread (`infra/gcguard.py`); a worker thread calls
   `gcguard.before_worker()` first.
@@ -73,9 +77,9 @@ State the mixins share is declared once on `ui/main_window_base.WindowState`;
   (`tests/test_cache_registry.py`).
 - Settings keys are declared once (`ui/prefs/settings.py`: `SETTINGS_KEYS`, `OPTION_DEFAULTS`);
   `tests/test_settings_keys.py` checks every use.
-- The activity log is `infra/logsetup.py`. The read and render path notes every error it
-  swallows; a ratchet keeps every other module from adding silent handlers
-  (`tests/test_swallowed_errors.py`, `tests/swallow_budget.json`).
+- The activity log is `infra/logsetup.py`. Every broad exception handler logs what it
+  swallowed (`note_exception`) or gives a `swallow-ok` reason on its except line
+  (`tests/test_swallowed_errors.py`).
 
 ## The simulator
 

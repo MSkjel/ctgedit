@@ -22,8 +22,22 @@
 - Windows that stay open while the user works (Find and Replace, Page Checks, the Simulate
   window) are modeless and follow the page shown.
 - Dialogs and panels lay out for the window's text size; nothing is a fixed pixel size that
-  text does not fit.
-- `CTG_NO_MODAL_QUESTIONS=1` makes a modal question raise instead of waiting (tests).
+  text does not fit. tests/test_dialog_layout.py checks every dialog of tests/dialog_gallery.py
+  at 100 % and 150 % (a new dialog gets a builder there); `tools/dialog_gallery.py` saves their
+  screenshots.
+- A project is picked with `pick_fields.ProjectScopeField`; a dialog's other choices are kept
+  with `ui/remember` (`keep`, `keep_one_of`, `file_path`). Values of the object being edited are
+  loaded from it, not remembered.
+- A helper-process run in a dialog goes through `jobs/helper_job.DialogJob` (progress, Stop,
+  Open Log); a run of the window's, through `JobProgress`.
+- Questions and notices go through `ui/messages` (`confirm`, `choose`, `warn`, `inform`,
+  `ask_text`, `ask_item`); `CTG_NO_MODAL_QUESTIONS=1` makes one the test did not answer raise
+  instead of waiting.
+- Buttons: the dialog's own actions left (QDialogButtonBox ResetRole), OK / Cancel / Apply /
+  Close and Help together right; Enter is a default button; no two controls share an Alt
+  letter.
+- A widget class never hides one of Qt's getters (`style()`, `rect()`, `font()` ...) with a
+  method or attribute of its own (tests/test_widget_getters.py).
 
 ## State
 

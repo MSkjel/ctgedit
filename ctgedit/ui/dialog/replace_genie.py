@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from ...infra.paths import path_key
+
+from ..names import name_list, plural
+
 import contextlib
 import os
 from collections import OrderedDict
@@ -20,22 +24,11 @@ def _name(link: Link) -> str:
 
 
 def _names_of(links: Sequence[Link]) -> str:
-    return _names([_name(l) for l in links])
+    return name_list([_name(l) for l in links], 8)
 
 
 def _low(link: Link) -> Link:
     return link[0].lower(), link[1].lower()
-
-
-def _plural(n: int, word: str) -> str:
-    return "%d %s%s" % (n, word, "" if n == 1 else "s")
-
-
-def _names(items, k: int = 8) -> str:
-    """'a, b, c' (the first ``k``, then 'and n more')."""
-    items = list(items)
-    head = ", ".join(items[:k])
-    return head + (" and %d more" % (len(items) - k) if len(items) > k else "")
 
 
 class ReplaceGenieDialog(QtWidgets.QDialog):
@@ -87,9 +80,10 @@ class ReplaceGenieDialog(QtWidgets.QDialog):
             "What is not open is changed in the background and saved, "
             "backed up first (Tools > Restore Backup puts it back)"
         )
-        # the project and its includes: Find / Replace's choice
         self.scope = ProjectScopeField(
-            doc.path or "", what="The project whose pages and library genies are changed"
+            doc.path or "",
+            what="The project whose pages and library genies are changed",
+            remember="replace_genie",
         )
         self.cb_project, self.cb_includes = self.scope.combo, self.scope.includes
         self.rb_project.setEnabled(self.scope.has_projects())
@@ -315,24 +309,28 @@ class ReplaceGenieDialog(QtWidgets.QDialog):
             self.table.item(r, 2).setText(src)
         left = [p for p in self._old_params if p.lower() not in used]
         self.dropped.setText("Not carried over: %s." % ", ".join(left) if left else "")
-        why = ""
+        why, conflict = "", False
         olds, new = self.old_genies(), self.new_genie()
         if not olds:
             why = "Tick the genies to replace."
         elif new is None:
             why = "Choose the genie to put in their place."
         elif _low(new) in {_low(l) for l in olds}:
-            why = "The new genie is one of those ticked: untick it, or choose another."
+            why, conflict = "The new genie is one of those ticked: untick it, or choose another.", True
         elif self.rb_project.isChecked() and not self.project_dirs():
             why = "Choose a project."
         elif not self.rb_project.isChecked() and not self.targets():
             why = "None of the genies ticked is placed here. Choose All pages of the project."
+        from ..style.theme import set_note_role
+
+        # (what is still to choose is a hint; only a conflict is an error)
+        set_note_role(self.status, "danger" if conflict else "text_dim")
         self.status.setText(why)
         self.ok.setEnabled(not why)
 
 
 def _element_key(path: str, element: str) -> Tuple[str, str]:
-    return os.path.normcase(os.path.abspath(path)), element.lower()
+    return path_key(path), element.lower()
 
 
 def _doc_label(d) -> str:
@@ -481,14 +479,10 @@ class ProjectReplaceRun(QtCore.QObject):
         self.found = res
         # what is open in an editor is changed in its tab
         open_pages = open_page_docs(self.dirs)
-        open_page_keys = {os.path.normcase(os.path.abspath(d.path)) for _w, d in open_pages}
+        open_page_keys = {path_key(d.path) for _w, d in open_pages}
         open_els = open_element_docs(self.dirs)
         open_el_keys = {_element_key(d.path, getattr(d, "element_name", "")) for _w, d in open_els}
-        closed = [
-            p
-            for p in res.get("pages") or ()
-            if os.path.normcase(os.path.abspath(p["page"])) not in open_page_keys
-        ]
+        closed = [p for p in res.get("pages") or () if path_key(p["page"]) not in open_page_keys]
         closed_els = [
             e
             for e in res.get("elements") or ()
@@ -518,20 +512,20 @@ class ProjectReplaceRun(QtCore.QObject):
             if res.get("shipped"):
                 self.result_text += (
                     " What is supplied with Plant SCADA places it, and is "
-                    "never changed: %s." % _names(res["shipped"])
+                    "never changed: %s." % name_list(res["shipped"], 8)
                 )
             self.win.statusBar().showMessage(self.result_text, 8000)
             return
         where = []
         if n_pages:
-            where.append("on " + _plural(n_pages, "page"))
+            where.append("on " + plural(n_pages, "page"))
         if n_els:
-            where.append("in " + _plural(n_els, "library genie"))
-        text = "Replace %s %s with %s?" % (_plural(n_genies, "genie"), " and ".join(where), _name(self.new))
+            where.append("in " + plural(n_els, "library genie"))
+        text = "Replace %s %s with %s?" % (plural(n_genies, "genie"), " and ".join(where), _name(self.new))
         follow_p, follow_e = res.get("follow_pages") or [], res.get("follow_elements") or []
         if follow_p or follow_e:
-            parts = ([_plural(len(follow_e), "library genie")] if follow_e else []) + (
-                [_plural(len(follow_p), "page")] if follow_p else []
+            parts = ([plural(len(follow_e), "library genie")] if follow_e else []) + (
+                [plural(len(follow_p), "page")] if follow_p else []
             )
             text += " Then %s that use the changed library genies are brought up to date." % " and ".join(
                 parts
@@ -539,16 +533,16 @@ class ProjectReplaceRun(QtCore.QObject):
         if open_hits:
             one = len(open_hits) == 1
             text += " %s open in the editor %s changed in %s tab%s and not saved." % (
-                _plural(len(open_hits), "window"),
+                plural(len(open_hits), "window"),
                 "is" if one else "are",
                 "its" if one else "their",
                 "" if one else "s",
             )
         text += " Everything else is backed up first, then saved (Tools > Restore Backup puts it back)."
         if res.get("shipped"):
-            text += " Left (supplied with Plant SCADA): %s." % _names(res["shipped"])
+            text += " Left (supplied with Plant SCADA): %s." % name_list(res["shipped"], 8)
         if res.get("failed"):
-            text += " %s could not be read." % _plural(len(res["failed"]), "file")
+            text += " %s could not be read." % plural(len(res["failed"]), "file")
         details = "\n".join(
             ["Replaced: %s" % ", ".join(_name(l) for l in self.old)]
             + ["Library genie %s: %d" % (e["label"], e["count"]) for e in closed_els]
@@ -677,23 +671,23 @@ class ProjectReplaceRun(QtCore.QObject):
         n_open_pages = len(self.changed_open) - n_open_els
         done = []
         if upd or n_open_pages:
-            done.append("on %s" % _plural(len(upd) + n_open_pages, "page"))
+            done.append("on %s" % plural(len(upd) + n_open_pages, "page"))
         if els or n_open_els:
-            done.append("in %s" % _plural(len(els) + n_open_els, "library genie"))
+            done.append("in %s" % plural(len(els) + n_open_els, "library genie"))
         text = "Replaced %s with %s %s." % (
             _names_of(self.old),
             _name(self.new),
             " and ".join(done) if done else "nowhere",
         )
         if els:
-            text += " Library genies saved: %s." % _names(els)
+            text += " Library genies saved: %s." % name_list(els, 8)
         if chain_els or chain_pages:
-            parts = ([_plural(len(chain_els), "library genie")] if chain_els else []) + (
-                [_plural(len(chain_pages), "page")] if chain_pages else []
+            parts = ([plural(len(chain_els), "library genie")] if chain_els else []) + (
+                [plural(len(chain_pages), "page")] if chain_pages else []
             )
             text += " Brought up to date after them: %s." % " and ".join(parts)
         if self.changed_open:
-            text += " Open in the editor, not saved yet: %s." % _names(self.changed_open)
+            text += " Open in the editor, not saved yet: %s." % name_list(self.changed_open, 8)
             if n_open_els:
                 text += " Saving a library genie brings what uses it up to date."
         failed = list(res.get("failed") or []) + self.failed_open + list(res.get("chain_failed") or [])
@@ -708,13 +702,13 @@ class ProjectReplaceRun(QtCore.QObject):
             + [p for p in res.get("chain_open") or () if p not in self.changed_open]
         )
         if opened:
-            text += " Left (open in the editor): %s." % _names(opened)
+            text += " Left (open in the editor): %s." % name_list(opened, 8)
         if res.get("chain_unregistered"):
-            text += " Left (not registered in their project, as Update Pages leaves them): %s." % _names(
-                res["chain_unregistered"]
+            text += " Left (not registered in their project, as Update Pages leaves them): %s." % name_list(
+                res["chain_unregistered"], 8
             )
         if res.get("open_in_builder"):
-            text += " Left (open in the Graphics Builder): %s." % _names(res["open_in_builder"])
+            text += " Left (open in the Graphics Builder): %s." % name_list(res["open_in_builder"], 8)
         if res.get("stopped"):
             text = "Stopped. " + text
         self.result_text = text

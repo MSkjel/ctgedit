@@ -41,8 +41,8 @@ def _drop_win(w):
         if hasattr(d, "dirty"):
             d.dirty = False
     w.doc = None
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.close()
 
 
@@ -496,7 +496,7 @@ def test_simulate_reloads_once_after_the_editors_genie_update_landed(tmp_path, m
         with open(lib, "w") as fh:
             fh.write("bbb")
         pending["on"] = True
-        editing._LIBRARY_GENERATION[0] += 1
+        editing.LIBRARY_GENERATION[0] += 1
         wait_for(lambda: (win.tick(), False)[1], timeout=1.5)
         assert sim.reloads == []
         # the update lands (an automatic step of the editor's)

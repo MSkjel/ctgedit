@@ -1,5 +1,6 @@
 """Save chain links, against CtDraw captures."""
 
+from ctgedit.ui.main_window import MainWindow
 import os
 import shutil
 import sys
@@ -327,8 +328,8 @@ def test_the_open_in_a_tab_derives_the_markers_box_as_an_automatic_step(fx_insta
         assert "placeholder boxes" in [u.label for u in w.doc._undo]
     finally:
         w.doc.dirty = False
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.close()
         app.processEvents()
 
@@ -422,7 +423,7 @@ def test_update_pages_gives_the_templates_new_members_their_handles_first(fx_ins
     first. Update Pages and the open-tabs step give the same as the open."""
     from ctgedit.editing import EditableDocument
     from ctgedit.io import updatepages as U
-    from ctgedit.ui.window.library import LibraryCommands, OpenTabsUpdate
+    from ctgedit.ui.window.open_tabs import OpenTabsUpdate
 
     _put(_oracle("chain5", "order", "genie_changed", "library.ctm"), fx_install.file("FxLib", "fxgenie.ctm"))
     _put(
@@ -437,7 +438,7 @@ def test_update_pages_gives_the_templates_new_members_their_handles_first(fx_ins
     path2 = _write_page(fx_install, "FxOracleOrder2", "chain5", "order", "page_made")
     d = EditableDocument.open(path2)
     res = OpenTabsUpdate()
-    failed, _found = LibraryCommands._update_open_document(
+    failed, _found = MainWindow._update_open_document(
         d, {"genies": True, "templates": True, "symbols": True}, res
     )
     assert failed == []

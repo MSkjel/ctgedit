@@ -29,12 +29,12 @@ _U32 = struct.Struct("<I").unpack_from
 _ARRAYS = ((4, "sta_at", "sta_n", 8), (8, "arr_at", "arr_n", 8), (0x10, "thr_at", "thr_n", 11))
 
 
-def _lp_end(b: bytes, o: int) -> int:
+def lp_end(b: bytes, o: int) -> int:
     (n,) = _U16(b, o)
     return o + 2 + n
 
 
-def _bag_end(b: bytes, o: int) -> int:
+def bag_end(b: bytes, o: int) -> int:
     u16 = _U16
     (cnt,) = u16(b, o)
     o += 2
@@ -87,12 +87,12 @@ def _layout(b: bytes, fl: int) -> Optional[dict]:
             return None
         o = gh.end
         if fl & 1:
-            o = _lp_end(b, o)
+            o = lp_end(b, o)
         if fl & 8:
             u16 = _U16
             (n_ent,) = u16(b, o)
             o += 2
-            for _ in range((n_ent + 1) * 3):  # u16 size, then _bag_end (inline: the hot loop)
+            for _ in range((n_ent + 1) * 3):  # u16 size, then bag_end (inline: the hot loop)
                 (cnt,) = u16(b, o + 2)
                 o += 4
                 for _ in range(cnt):
@@ -101,11 +101,11 @@ def _layout(b: bytes, fl: int) -> Optional[dict]:
                     (n,) = u16(b, o)
                     o += 2 + n
         if fl & 0x40:
-            o = _lp_end(b, o) + 2 + 24
+            o = lp_end(b, o) + 2 + 24
         sec80 = None
         if fl & 0x80:
             sec80 = o  # a button's caption lpstr
-            o = _lp_end(b, o)
+            o = lp_end(b, o)
         L = {"at": o}
         if sec80 is not None:
             L["sec80_at"] = sec80
@@ -140,7 +140,7 @@ def _layout(b: bytes, fl: int) -> Optional[dict]:
         return None
 
 
-def _pair_at(b: bytes, o: int):
+def pair_at(b: bytes, o: int):
     return struct.unpack_from("<II", b, o)
 
 
@@ -160,7 +160,7 @@ def _scan_hex(s: str, at: int):
     return (-v if m.group(1) == "-" else v) & 0xFFFFFFFF, m.end()
 
 
-def _parse(s: str):
+def parse(s: str):
     """A "0x%x,0x%x" colour pair read as sscanf reads it, with the 0xff000000 defaults, so
     a value that is not '0x<hex>,0x<hex>' keeps the defaults for what did not match (a
     decimal '255,0' is two defaults, '0x1,x' one). The literals match exactly (no blank
@@ -216,7 +216,7 @@ def format_threshold(greater: bool, equal: bool, value: int, on: int, off: int) 
 
 def parse_threshold(s: str):
     """A COL_THR_<n> value -> (greater, equal, value, on, off), read the way
-    the saver does (_parse_thr: '>' anywhere in the comparison
+    the saver does (parse_thr: '>' anywhere in the comparison
     = greater, '=' = inclusive, C atoi / strtoul); None for an empty value."""
     if not s:
         return None
@@ -234,7 +234,7 @@ def _thr_colour(parts, k: int) -> int:
     return c_strtoul(parts[k]) if len(parts) > k else 0
 
 
-def _parse_thr(s: str) -> bytes:
+def parse_thr(s: str) -> bytes:
     """COL_THR_: "<cmp>,<thr>,<on>,<off>" -> (u8 flags, u16, u32, u32)."""
     parts = s.split(",")
     cmp_ = parts[0]
@@ -246,8 +246,8 @@ def _parse_thr(s: str) -> bytes:
 
 def state0_source(body: bytes, style_at: int):
     """The saver's state-0 pair: fill slot when fill_style != 0, else line."""
-    line = _pair_at(body, style_at + 6)
-    fill = _pair_at(body, style_at + 14)
+    line = pair_at(body, style_at + 6)
+    fill = pair_at(body, style_at + 14)
     return fill if body[style_at + 2] else line
 
 
@@ -261,7 +261,7 @@ def rebuild(po: PageObject) -> bool:
         return False
     b = po.body_raw
     props = po.raw_properties()
-    P = state0_source(b, L["style_at"]) if "style_at" in L else _pair_at(b, L["state0_at"])
+    P = state0_source(b, L["style_at"]) if "style_at" in L else pair_at(b, L["state0_at"])
     mx = props.get("COL_MAXON", "")
     flag = (
         1
@@ -274,21 +274,21 @@ def rebuild(po: PageObject) -> bool:
     )
     out = struct.pack("<I", flag) + struct.pack("<II", *P)
     if flag & 2:
-        out += struct.pack("<II", *_parse(mx))
+        out += struct.pack("<II", *parse(mx))
     if flag & 4:
         hi = max(i for i in range(32) if props.get("COL_STA_%d" % i, ""))  # the saver scans 31 .. 0
         out += struct.pack("<H", hi + 1) + struct.pack("<II", *P)
         for i in range(1, hi + 1):
-            out += struct.pack("<II", *_parse(props.get("COL_STA_%d" % i, "")))
+            out += struct.pack("<II", *parse(props.get("COL_STA_%d" % i, "")))
     if flag & 8:
         n_old = L.get("arr_n", 0)
         out += struct.pack("<H", 256) + struct.pack("<II", *P)
         for i in range(1, 256):
             v = props.get("COL_ARR_%d" % i, "")
             if v:
-                pair = _parse(v)
+                pair = parse(v)
             elif i < n_old:
-                pair = _pair_at(b, L["arr_at"] + 8 * i)
+                pair = pair_at(b, L["arr_at"] + 8 * i)
             else:
                 pair = array_default(i)
             out += struct.pack("<II", *pair)
@@ -298,12 +298,12 @@ def rebuild(po: PageObject) -> bool:
             v = props.get("COL_THR_%d" % i, "")
             if not v:
                 break
-            thr.append(_parse_thr(v))
+            thr.append(parse_thr(v))
         out += struct.pack("<H", len(thr)) + b"".join(thr)
     if flag & 0x20:
-        out += struct.pack("<II", *_parse(mx))
+        out += struct.pack("<II", *parse(mx))
     if flag & 0x40:
-        out += struct.pack("<II", *_parse(props.get("FILCOL", "")))
+        out += struct.pack("<II", *parse(props.get("FILCOL", "")))
     changed = out != b[L["at"] : L["end"]]
     if changed:
         po.body_raw = b[: L["at"]] + out + b[L["end"] :]
@@ -333,7 +333,7 @@ def flashing(po: PageObject, L: dict) -> bool:
     b = po.body_raw
     s = L["style_at"]
     fl = b[s : s + 6]
-    sl = [_pair_at(b, s + 6 + 8 * i) for i in range(6)]
+    sl = [pair_at(b, s + 6 + 8 * i) for i in range(6)]
     r = sl[0][0] != sl[0][1]
     if fl[2] & 0xF:
         r = r or sl[1][0] != sl[1][1]
@@ -368,10 +368,10 @@ def bitmap_flashing(po: PageObject) -> Optional[bool]:
         return None
     import zlib
     from . import geometry as G
-    from .symbols import _find_stream
+    from .symbols import find_stream
 
     gh = G.parse_geom_header(b)
-    hit = _find_stream(b, gh.end if gh else 0)
+    hit = find_stream(b, gh.end if gh else 0)
     if hit is None:
         return None
     off, raw = hit
@@ -617,7 +617,7 @@ def colour_channels(po: PageObject) -> Optional[dict]:
     s = L["style_at"]
 
     def slot(i):
-        return _pair_at(b, s + 6 + 8 * i)
+        return pair_at(b, s + 6 + 8 * i)
 
     if po.type_code == PIPE_TC:
         return {"class": slot(SLOT_HILIGHT)}

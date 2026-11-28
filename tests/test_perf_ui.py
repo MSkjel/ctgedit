@@ -1,5 +1,6 @@
 """UI speed-ups keep the same behaviour."""
 
+from ctgedit.format.symbols import SymbolResolver
 import os
 import shutil
 import threading
@@ -42,8 +43,8 @@ def win():
     yield w
     for e in w._docs:
         e["doc"].dirty = False
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.hide()
 
 
@@ -61,7 +62,6 @@ def _pump(until=None, timeout=15.0):
 def _page_pair(tmp_path, fx, monkeypatch):
     """A copy of FxShapes in a (stub) project with the .ctF the writer builds for it (in
     place of CtDraw's: a trusted pair); its libraries resolve in the fake install's FxMain."""
-    from ctgedit import editing as E
     from ctgedit.format import ctf as CTF
 
     monkeypatch.setenv("CTG_LIB_PATH", fx.MAIN)
@@ -69,7 +69,7 @@ def _page_pair(tmp_path, fx, monkeypatch):
     shutil.copyfile(fx.SMALL, g)
     (tmp_path / "pages.DBF").write_bytes(b"")
     f = tmp_path / "FxShapes.ctF"
-    f.write_bytes(CTF.build_ctf(g.read_bytes(), str(g), resolver=E._page_resolver(str(g))))
+    f.write_bytes(CTF.build_ctf(g.read_bytes(), str(g), resolver=SymbolResolver.for_page_env(str(g))))
     return str(g), str(f)
 
 
@@ -157,7 +157,7 @@ def test_ctf_check_runs_in_a_process_started_on_request(tmp_path, monkeypatch, f
         assert doc2.start_ctf_precheck() is False  # one check process at a time
     assert box["thread"].join() is True
     assert proc.returncode == 0
-    inproc = E._ctf_verdict(open(g, "rb").read(), open(f, "rb").read(), g, resolver=doc._resolver())
+    inproc = E.ctf_verdict(open(g, "rb").read(), open(f, "rb").read(), g, resolver=doc._resolver())
     assert inproc is True
     assert doc2.start_ctf_precheck()  # the next one may start now
     doc2.stop_ctf_precheck()
@@ -165,7 +165,7 @@ def test_ctf_check_runs_in_a_process_started_on_request(tmp_path, monkeypatch, f
     doc.create_object("rectangle", (10, 10, 60, 40), colour=0x2080FF)
     doc.save()
     assert "fast display rebuilt" in doc.save_report
-    res = E._page_resolver(g)
+    res = SymbolResolver.for_page_env(g)
     assert open(f, "rb").read() == CTF.build_ctf(open(g, "rb").read(), g, resolver=res)
 
 
@@ -293,7 +293,7 @@ def _session(paths, last):
 
 def test_restored_session_opens_only_the_active_page(win, fx):
     from ctgedit.editing import EditableDocument
-    from ctgedit.ui.main_window import _PendingPage
+    from ctgedit.ui.main_window import PendingPage
 
     _session([fx.LARGE, fx.COMPOSITES, fx.SMALL], fx.COMPOSITES)
     assert win.restore_session(reopen=True)
@@ -303,7 +303,7 @@ def test_restored_session_opens_only_the_active_page(win, fx):
         "FxShapes.ctg",
         "FxComposites.ctg",
     ]
-    assert [type(e["doc"]) for e in win._docs] == [_PendingPage, _PendingPage, EditableDocument]
+    assert [type(e["doc"]) for e in win._docs] == [PendingPage, PendingPage, EditableDocument]
     assert win.doc is win._docs[2]["doc"] and win.doc_tabs.currentIndex() == 2
     assert [win.doc_tabs.tabText(k) for k in range(3)] == ["FxLarge", "FxShapes", "FxComposites"]
     # a placeholder tab opens when shown
@@ -322,13 +322,13 @@ def test_restored_session_opens_only_the_active_page(win, fx):
 
 
 def test_a_placeholder_tab_closes_and_a_vanished_page_is_reported(win, tmp_path, monkeypatch, fx):
-    from ctgedit.ui.main_window import _PendingPage
+    from ctgedit.ui.main_window import PendingPage
 
     gone = tmp_path / "Gone.ctg"
     shutil.copyfile(fx.SMALL, gone)
     _session([str(gone), fx.LARGE], fx.LARGE)
     assert win.restore_session(reopen=True)
-    assert isinstance(win._docs[0]["doc"], _PendingPage)
+    assert isinstance(win._docs[0]["doc"], PendingPage)
     os.remove(gone)  # deleted while not yet opened
     seen = []
     monkeypatch.setattr(win, "report_open_failures", lambda f: seen.extend(f))
@@ -349,7 +349,7 @@ def test_a_placeholder_tab_closes_and_a_vanished_page_is_reported(win, tmp_path,
     finally:
         for e in other._docs:
             e["doc"].dirty = False
-        type(win)._instances.remove(other)
+        type(win).instances.remove(other)
 
 
 def test_app_start_shows_the_window_before_the_session_opens(monkeypatch, fx):
@@ -379,14 +379,14 @@ def test_app_start_shows_the_window_before_the_session_opens(monkeypatch, fx):
             assert not w2.start_page.isVisible()
             assert _pump(lambda: w2.doc is not None)
         finally:
-            MainWindow._instances.remove(w2)
+            MainWindow.instances.remove(w2)
             w2.hide()
     finally:
         for x in (w,):
             for e in x._docs:
                 e["doc"].dirty = False
-            if x in MainWindow._instances:
-                MainWindow._instances.remove(x)
+            if x in MainWindow.instances:
+                MainWindow.instances.remove(x)
             x.hide()
         app.processEvents()
 
@@ -423,7 +423,7 @@ def test_one_application_filter_runs_the_three_handlers(win, monkeypatch):
     names = [n for n in names if n != "SpacePanForwarder"]
     # the order Qt called them as three filters (the last installed first);
     # a standalone accessibility.install() of an earlier test keeps its own
-    assert names[-2:] == ["_F1Filter", "_WheelGuard"]
+    assert names[-2:] == ["_F1Filter", "WheelGuard"]
     assert app._ctg_wheel_guard in [h for h, _t in f._handlers]
     # the wheel guard: an unfocused spin box keeps its value
     box = QtWidgets.QWidget()
@@ -645,7 +645,7 @@ def test_open_pages_enumerates_nothing_without_a_builder_window(monkeypatch, tmp
     from ctgedit.backend import graphics_builder as gb
 
     monkeypatch.setattr(gb, "_builder_window", lambda: False)
-    monkeypatch.setattr(gb, "_ctdraw_pids", lambda: (_ for _ in ()).throw(AssertionError("enumerated")))
+    monkeypatch.setattr(gb, "ctdraw_pids", lambda: (_ for _ in ()).throw(AssertionError("enumerated")))
     assert gb.open_pages() == []
     assert gb.page_open_in_builder(str(tmp_path / "FxShapes.ctg")) is False
 
@@ -677,7 +677,7 @@ def _no_boxes(monkeypatch, win):
 def test_restore_shows_the_last_tab_when_the_active_page_is_gone(win, tmp_path, monkeypatch, defer, fx):
     """The active page no longer exists: the LAST remaining tab is shown (addTab alone would leave
     the FIRST tab current)."""
-    from ctgedit.ui.main_window import _PendingPage
+    from ctgedit.ui.main_window import PendingPage
 
     seen = _no_boxes(monkeypatch, win)
     gone = str(tmp_path / "Gone.ctg")
@@ -687,7 +687,7 @@ def test_restore_shows_the_last_tab_when_the_active_page_is_gone(win, tmp_path, 
     assert _pump(lambda: win.doc is not None and seen)
     assert os.path.basename(win.doc.path) == "FxShapes.ctg"
     assert win.doc_tabs.currentIndex() == 1
-    assert isinstance(win._docs[0]["doc"], _PendingPage)
+    assert isinstance(win._docs[0]["doc"], PendingPage)
     assert [os.path.basename(p) for p, _e in seen] == ["Gone.ctg"]
 
 
@@ -725,7 +725,7 @@ def test_closing_the_open_tab_beside_a_vanished_placeholder(win, tmp_path, monke
     finally:
         for e in other._docs:
             e["doc"].dirty = False
-        type(win)._instances.remove(other)
+        type(win).instances.remove(other)
 
 
 def test_objects_tree_selection_also_clears_rows_the_filter_hides(fx):
@@ -756,14 +756,14 @@ def test_element_save_opens_the_restored_tabs_that_place_it(win, fx):
     element (else it stays a placeholder). FxLarge places fxparts.fx_pipe and
     fxgenie.fx_pump."""
     from ctgedit.editing import EditableDocument
-    from ctgedit.ui.main_window import _PendingPage
+    from ctgedit.ui.main_window import PendingPage
 
     _session([fx.LARGE, fx.SMALL], fx.SMALL)
     win.restore_session(reopen=True)
-    assert isinstance(win._docs[0]["doc"], _PendingPage)
+    assert isinstance(win._docs[0]["doc"], PendingPage)
     assert b"fx_pump" in open(fx.LARGE, "rb").read().lower()
     win._open_pending_placing("no_such_element_zz")
-    assert isinstance(win._docs[0]["doc"], _PendingPage)
+    assert isinstance(win._docs[0]["doc"], PendingPage)
     win._open_pending_placing("FX_Pump")  # case-insensitive
     assert isinstance(win._docs[0]["doc"], EditableDocument)
     assert os.path.basename(win.doc.path) == "FxShapes.ctg"  # the tab shown stays
@@ -833,9 +833,9 @@ def test_a_failing_filter_handler_does_not_stop_the_next(monkeypatch):
     import sys
 
     _app()
-    from ctgedit.ui.main_window import _AppEventFilter
+    from ctgedit.ui.main_window import AppEventFilter
 
-    f = _AppEventFilter()
+    f = AppEventFilter()
     seen, errors = [], []
     monkeypatch.setattr(sys, "excepthook", lambda *a: errors.append(a[0]))
 

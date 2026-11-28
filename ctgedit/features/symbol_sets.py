@@ -7,7 +7,7 @@ from typing import List, Optional, Sequence, Tuple
 from ..format import symbolset as S
 from ..format import geometry as geom
 from ..format import writer
-from ..format.page import PageObject, _parse_object
+from ..format.page import PageObject, parse_object
 
 #: a state spec: None (empty), (library, element) or an int = the page index
 #: of an existing state record to keep unchanged (an embedded picture)
@@ -20,7 +20,7 @@ class SymbolSetError(ValueError):
 
 def _clone(po: PageObject) -> PageObject:
     blob = writer.object_payload(po)
-    return _parse_object(0, 0, len(blob), 0, blob)
+    return parse_object(0, 0, len(blob), 0, blob)
 
 
 def _same_symbol(a, b) -> bool:
@@ -343,9 +343,9 @@ class SymbolSetEditing:
         new = (order, probe.link_table_raw, probe.link_count, {a: bytes(objs[a].body_raw) for a in fit})
         if fit:
             self._rerender_page()
-        from ..editing import _Command
+        from ..editing import Command
 
-        self._push_step(_Command(label, lambda: apply(new), lambda: apply(old)))
+        self._push_step(Command(label, lambda: apply(new), lambda: apply(old)))
         return index
 
     def set_symbol_set_type(self, index: int, kind: int) -> int:

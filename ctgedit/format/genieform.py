@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from ..infra.paths import path_key
+
+from .fileio import find_ci
+
 import os
 import re
 from dataclasses import dataclass, field
@@ -438,7 +442,7 @@ def load_form_file(path: str) -> List[GenieForm]:
         sig = (st.st_mtime_ns, st.st_size)
     except OSError:
         return []
-    key = os.path.normcase(os.path.abspath(path))
+    key = path_key(path)
     hit = _FILE_CACHE.get(key)
     if hit is not None and hit[0] == sig:
         return hit[1]
@@ -464,7 +468,7 @@ def form_search_dirs(project_dir: str) -> List[str]:
     seen = set()
 
     def add(d: str) -> None:
-        key = os.path.normcase(os.path.abspath(d))
+        key = path_key(d)
         if key not in seen:
             seen.add(key)
             out.append(d)
@@ -475,7 +479,7 @@ def form_search_dirs(project_dir: str) -> List[str]:
     walking = set()
 
     def walk(d: str) -> None:
-        key = os.path.normcase(os.path.abspath(d))
+        key = path_key(d)
         if key in walking:  # an include cycle
             return
         walking.add(key)
@@ -490,17 +494,6 @@ def form_search_dirs(project_dir: str) -> List[str]:
     return out
 
 
-def _find_file(folder: str, name: str) -> Optional[str]:
-    low = name.lower()
-    try:
-        for f in os.listdir(folder):
-            if f.lower() == low:
-                return os.path.join(folder, f)
-    except OSError:
-        pass
-    return None
-
-
 def find_form(project_dir: str, library: str, element: str) -> Optional[GenieForm]:
     """The FORM CtDraw's genie dialog uses for ``library.element`` placed on
     a page of ``project_dir`` -- None means the default form (the genie's
@@ -508,7 +501,7 @@ def find_form(project_dir: str, library: str, element: str) -> Optional[GenieFor
     if not library or not element or not project_dir:
         return None
     for d in form_search_dirs(project_dir):
-        path = _find_file(d, library + ".frm")
+        path = find_ci(d, library + ".frm")
         if path is None:
             continue
         form = lookup_form(load_form_file(path), element)
@@ -526,7 +519,7 @@ def form_problems(project_dir: str, library: str, element: str) -> List[Tuple[st
         return out
     low = element.lower()
     for d in form_search_dirs(project_dir):
-        path = _find_file(d, library + ".frm")
+        path = find_ci(d, library + ".frm")
         if path is None:
             continue
         for f in load_form_file(path):
@@ -770,7 +763,7 @@ def form_file_for(lib_path: str) -> str:
     one there, whatever its case), else that name to create."""
     folder = os.path.dirname(os.path.abspath(lib_path))
     name = os.path.splitext(os.path.basename(lib_path))[0] + ".frm"
-    return _find_file(folder, name) or os.path.join(folder, name)
+    return find_ci(folder, name) or os.path.join(folder, name)
 
 
 def default_form(name: str, params: Sequence[str], title: str = "") -> GenieForm:

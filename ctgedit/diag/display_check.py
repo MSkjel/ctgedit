@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from ..infra import workers as _workers
+
 import contextlib
-import json
 import os
 import tempfile
 import time
@@ -11,6 +12,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 from . import render_digest as RD
+from ..infra.logsetup import note_exception as _note_exc
 
 
 def display_digest_command(
@@ -118,11 +120,14 @@ def outcome_of(page, result: dict, path: str, limit: int = 10) -> Outcome:
     )
 
 
-class DisplayCheck:
+class DisplayCheck(_workers.CheckProcess):
     """A fresh read of one page in its own process."""
 
+    KIND = "display"
+    FOLDER = "displaycheck"
     #: the check process now running (the editor starts the next when it ends)
     _running: List["DisplayCheck"] = []
+    _swept = False
     #: seconds before a check process is given up (killed)
     TIMEOUT = 180.0
 
@@ -148,11 +153,6 @@ class DisplayCheck:
         self.result: Optional[dict] = None
         self.started_at = 0.0
 
-    @classmethod
-    def busy(cls) -> bool:
-        cls._running[:] = [c for c in cls._running if c.proc is not None and c.proc.poll() is None]
-        return bool(cls._running)
-
     def started(self) -> bool:
         return self.proc is not None or self.result is not None
 
@@ -162,56 +162,32 @@ class DisplayCheck:
         result: {'error': ...})."""
         if self.started():
             return True
-        from ..infra import workers
 
-        if self.busy() or workers.others_busy("display"):
+        if not self.may_start():
             return False
-        from ..infra.paths import data_dir
-
-        folder = data_dir("displaycheck")
+        folder = ""
         try:
-            os.makedirs(folder, exist_ok=True)
-            self._sweep(folder)
-            fd, self.out = tempfile.mkstemp(prefix="%d-" % os.getpid(), suffix=".json", dir=folder)
-            os.close(fd)
-            os.remove(self.out)
+            self.out = self.answer_file()
+            folder = os.path.dirname(self.out)
             page, as_path = self.path, None
             if self.data is not None:
                 fd, self.inp = tempfile.mkstemp(prefix="%d-" % os.getpid(), suffix=".ctgbytes", dir=folder)
                 with os.fdopen(fd, "wb") as fh:
                     fh.write(self.data)
                 page, as_path = self.inp, self.path
-            self.proc = workers.track(
-                "display",
-                workers.start(
-                    display_digest_command(
-                        page, self.out, detail=self.detail, label_mode=self.label_mode, as_path=as_path
-                    )
-                ),
+            self.launch(
+                display_digest_command(
+                    page, self.out, detail=self.detail, label_mode=self.label_mode, as_path=as_path
+                )
             )
         except Exception as e:  # noqa: BLE001 -- the caller falls back in-process
+            _note_exc("display_check.DisplayCheck.start", folder=folder)
             self.proc = None
             self.result = {"error": "the check process could not start (%s: %s)" % (type(e).__name__, e)}
             self._cleanup()
             return True
         self.started_at = time.monotonic()
-        self._running.append(self)
         return True
-
-    _swept = False
-
-    @classmethod
-    def _sweep(cls, folder: str) -> None:
-        if cls._swept:
-            return
-        cls._swept = True
-        old = time.time() - 86400
-        with contextlib.suppress(OSError):
-            for name in os.listdir(folder):
-                p = os.path.join(folder, name)
-                with contextlib.suppress(OSError):
-                    if os.path.getmtime(p) < old:
-                        os.remove(p)
 
     def poll(self) -> Optional[dict]:
         """The result once the process ended (None while it runs)."""
@@ -225,10 +201,7 @@ class DisplayCheck:
                 self.result = {"error": "the check process took longer than %d s" % self.TIMEOUT}
                 return self.result
             return None
-        res = None
-        with contextlib.suppress(Exception):
-            with open(self.out, "rb") as fh:
-                res = json.loads(fh.read().decode("utf-8"))
+        res = self.read_answer()
         if not isinstance(res, dict):
             res = {"error": "the check process ended (exit code %s) without a result" % self.proc.returncode}
         self.result = res
@@ -252,10 +225,7 @@ class DisplayCheck:
             time.sleep(0.05)
 
     def cancel(self) -> None:
-        if self.proc is not None and self.proc.poll() is None:
-            with contextlib.suppress(Exception):
-                self.proc.kill()
-                self.proc.wait(5)
+        self.kill()
         self._cleanup()
 
     def _cleanup(self) -> None:
@@ -288,4 +258,5 @@ class DisplayCheck:
                 with contextlib.suppress(OSError):
                     os.remove(tmp)
         except Exception as e:  # noqa: BLE001 -- reported as no verdict
+            _note_exc("display_check.DisplayCheck.run_in_process")
             return {"error": "%s: %s" % (type(e).__name__, e), "where": "in-process"}

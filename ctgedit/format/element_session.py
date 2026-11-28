@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
 from .container import Block, Container
-from .page import PAGE_HEAD_SIZE, PageBlock, PageObject, ParsedCtg, parse_ctg_bytes, _parse_object
+from .page import PAGE_HEAD_SIZE, PageBlock, PageObject, ParsedCtg, parse_ctg_bytes, parse_object
 from . import writer, placement
 from . import geometry as G
 
@@ -30,7 +30,7 @@ CANVAS_MARGIN = 40
 
 def _clone(po: PageObject) -> PageObject:
     blob = writer.object_payload(po)
-    return _parse_object(0, 0, len(blob), 0, blob)
+    return parse_object(0, 0, len(blob), 0, blob)
 
 
 def forest_roots(objs: List[PageObject]) -> List[int]:
@@ -86,13 +86,13 @@ class ElementSession:
         return self.pe.origin
 
 
-def _attributes_block(identity: bytes, w: int, h: int, bg: Tuple[int, int], list1, list2) -> bytes:
+def attributes_block(identity: bytes, w: int, h: int, bg: Tuple[int, int], list1, list2) -> bytes:
     """A valid .ctg 'attributes' block (attributes.py layout) -- a page
     with one record: [u32 0][bg0][bg1][u32 type][u16 vw][u16 vh][u32 0]
     [list1 bag][list2 bag]."""
-    from .element import _bag_bytes
+    from .element import bag_bytes
 
-    l1, l2 = _bag_bytes(list1), _bag_bytes(list2)
+    l1, l2 = bag_bytes(list1), bag_bytes(list2)
     data_end = 0x54 + len(l1) + len(l2)
     head = bytearray(0x54)
     struct.pack_into("<II", head, 0x00, data_end - 0x34, 1)
@@ -167,7 +167,7 @@ def open_element_session(lib_path: str, element: str, library=None) -> Tuple[Ele
     pb.page_width, pb.page_height = cw, ch
     pb.thumbnail = b""
     page_data = writer.serialize_page_block(pb, pe.block.data)
-    attr_data = _attributes_block(pe.page.page_identity, cw, ch, bgpair, list1, list2)
+    attr_data = attributes_block(pe.page.page_identity, cw, ch, bgpair, list1, list2)
     lib = pe.library
     cont = Container(
         lib.version,
@@ -222,6 +222,113 @@ def set_root_origin(tree: List[PageObject], e: Tuple[int, int]) -> None:
     writer.refresh_object_bags(root)
 
 
+def _normalised_tree(
+    sess: ElementSession,
+    parsed: ParsedCtg,
+    tree,
+    resolver,
+    edited_handles,
+    instantiated,
+    e_new,
+    nested_only,
+    keep_stamps,
+) -> tuple:
+    """The element's records in CtDraw's engine-normal form (genie_norm) and its rebuilt
+    link table: (records, link entries, the stale nested genies, the nesting cycles)."""
+    from . import genie_norm as GN
+    from .genie_place import declares_parameters as _gp_declares
+
+    pe = sess.pe
+
+    def GP_declares(recs):
+        return _gp_declares(list(recs), placement.forest_parents(list(recs)))
+
+    if resolver is None:
+        try:
+            from ctgedit.format.symbols import SymbolResolver
+
+            resolver = SymbolResolver.for_page(pe.lib_path)
+        except Exception:  # noqa: BLE001
+            _note_exc("element_session._normalised_tree", lib=pe.lib_path)
+            resolver = None
+    edited = {k for k, o in enumerate(tree) if edited_handles and G.get_handle(o) in edited_handles}
+    convert = (not GN.is_genie_element(tree)) and not page_sized(pe) and GP_declares(tree)
+    if pe.ext == "ctt" and not GN.is_genie_element(tree):
+        # a template's first own parameter: a genie template now, every record of it
+        # with its level (genie_norm.convert_template_records)
+        convert = GN.template_declares(tree)
+    # an import-table-only edit (Attach Super Genies) normalises too: CtDraw's
+    # save writes the element's engine-normal records (it normalises on load)
+    norm_report: dict = {}
+    tree = GN.normalise_records(
+        tree,
+        ext=pe.ext,
+        convert=convert,
+        resolver=resolver,
+        lib_path=pe.lib_path,
+        edited=edited,
+        e=e_new,
+        page_like=page_sized(pe),
+        nested_only=nested_only,
+        stored_payloads=set(sess.session_payloads),
+        report=norm_report,
+    )
+    from ctgedit.format import links as _links
+
+    src_raw = parsed.page.link_table_raw if parsed.page.link_count else b""
+    lt = _links.parse_link_table(src_raw) if src_raw else None
+    # (a changed nested genie whose copy could not be composed again keeps its old
+    # stamp: the element stays out of date for it)
+    stale_nested = frozenset(norm_report.get("stale_nested", ()))
+    # (a nested genie that holds a copy of itself: genie_place.NestingCycle)
+    cycles = frozenset(norm_report.get("cycles", ()))
+    link_entries = (
+        lt[0] if lt else "    ",
+        GN.rebuild_link_table(
+            tree,
+            lt[1] if lt else [],
+            resolver,
+            instantiated=instantiated,
+            keep_stale=stale_nested | frozenset(keep_stamps or ()),
+            page_like=page_sized(pe),
+        ),
+    )
+    return tree, link_entries, stale_nested, cycles
+
+
+def _session_tree(
+    sess: ElementSession, objs: List[PageObject], changed: bool, moved: bool, refresh: bool
+) -> List[PageObject]:
+    """The element's records from the session's ``objs``: the stored ones when nothing
+    changed, else under one root."""
+    pe = sess.pe
+    roots = forest_roots(objs)
+    symbol = pe.ext == "ctl"
+    if not changed and not moved and not refresh:
+        tree = pe.tree
+    elif not changed:
+        tree = [_clone(o) for o in pe.tree]
+        if symbol:
+            # (CtDraw's load + save of a one-object symbol it does not keep bare: the
+            # group root, keeps_bare_root)
+            tree = wrapped_tree(tree, pe.origin)
+    elif sess.root is not None:
+        root = _clone(sess.root)
+        root.class_flag = len(roots)
+        _refit(root, objs, roots)
+        tree = [root] + objs
+    elif len(roots) == 1 and not (symbol and not keeps_bare_root(objs[0])):
+        tree = objs
+        if G.get_handle(objs[0]) != G.get_handle(pe.tree[0]):
+            # a new single root (the old one grouped, or replaced): the root's slots
+            # (I, T(-e), I) / Local o T(-e), the old root a member
+            _demote_former_root(pe, objs)
+            set_root_origin(tree, pe.origin)
+    else:
+        tree = [_new_root(pe, objs, roots)] + objs
+    return tree
+
+
 def session_to_content(
     sess: ElementSession,
     parsed: ParsedCtg,
@@ -268,30 +375,7 @@ def session_to_content(
         raise ValueError("a library element needs at least one object")
     e_new = tuple(int(v) for v in origin) if origin is not None else tuple(pe.origin)
     moved = e_new != tuple(pe.origin)
-    roots = forest_roots(objs)
-    symbol = pe.ext == "ctl"
-    if not changed and not moved and not refresh:
-        tree = pe.tree
-    elif not changed:
-        tree = [_clone(o) for o in pe.tree]
-        if symbol:
-            # (CtDraw's load + save of a one-object symbol it does not keep bare: the
-            # group root, keeps_bare_root)
-            tree = wrapped_tree(tree, pe.origin)
-    elif sess.root is not None:
-        root = _clone(sess.root)
-        root.class_flag = len(roots)
-        _refit(root, objs, roots)
-        tree = [root] + objs
-    elif len(roots) == 1 and not (symbol and not keeps_bare_root(objs[0])):
-        tree = objs
-        if G.get_handle(objs[0]) != G.get_handle(pe.tree[0]):
-            # a new single root (the old one grouped, or replaced): the root's slots
-            # (I, T(-e), I) / Local o T(-e), the old root a member
-            _demote_former_root(pe, objs)
-            set_root_origin(tree, pe.origin)
-    else:
-        tree = [_new_root(pe, objs, roots)] + objs
+    tree = _session_tree(sess, objs, changed, moved, refresh)
     if moved:
         set_root_origin(tree, e_new)
         changed = True
@@ -306,60 +390,8 @@ def session_to_content(
         instantiated
     )  # a created page: its bind takes a guid
     if (changed or links_edited or refresh) and normalise:
-        from . import genie_norm as GN
-        from .genie_place import declares_parameters as _gp_declares
-
-        def GP_declares(recs):
-            return _gp_declares(list(recs), placement.forest_parents(list(recs)))
-
-        if resolver is None:
-            try:
-                from ctgedit.format.symbols import SymbolResolver
-
-                resolver = SymbolResolver.for_page(pe.lib_path)
-            except Exception:  # noqa: BLE001
-                resolver = None
-        edited = {k for k, o in enumerate(tree) if edited_handles and G.get_handle(o) in edited_handles}
-        convert = (not GN.is_genie_element(tree)) and not page_sized(pe) and GP_declares(tree)
-        if pe.ext == "ctt" and not GN.is_genie_element(tree):
-            # a template's first own parameter: a genie template now, every record of it
-            # with its level (genie_norm.convert_template_records)
-            convert = GN.template_declares(tree)
-        # an import-table-only edit (Attach Super Genies) normalises too: CtDraw's
-        # save writes the element's engine-normal records (it normalises on load)
-        norm_report: dict = {}
-        tree = GN.normalise_records(
-            tree,
-            ext=pe.ext,
-            convert=convert,
-            resolver=resolver,
-            lib_path=pe.lib_path,
-            edited=edited,
-            e=e_new,
-            page_like=page_sized(pe),
-            nested_only=nested_only,
-            stored_payloads=set(sess.session_payloads),
-            report=norm_report,
-        )
-        from ctgedit.format import links as _links
-
-        src_raw = parsed.page.link_table_raw if parsed.page.link_count else b""
-        lt = _links.parse_link_table(src_raw) if src_raw else None
-        # (a changed nested genie whose copy could not be composed again keeps its old
-        # stamp: the element stays out of date for it)
-        stale_nested = frozenset(norm_report.get("stale_nested", ()))
-        # (a nested genie that holds a copy of itself: genie_place.NestingCycle)
-        cycles = frozenset(norm_report.get("cycles", ()))
-        link_entries = (
-            lt[0] if lt else "    ",
-            GN.rebuild_link_table(
-                tree,
-                lt[1] if lt else [],
-                resolver,
-                instantiated=instantiated,
-                keep_stale=stale_nested | frozenset(keep_stamps or ()),
-                page_like=page_sized(pe),
-            ),
+        tree, link_entries, stale_nested, cycles = _normalised_tree(
+            sess, parsed, tree, resolver, edited_handles, instantiated, e_new, nested_only, keep_stamps
         )
     if report is not None:
         report["stale_nested"] = stale_nested
@@ -584,7 +616,7 @@ def blank_session(
     pb = PageBlock(0, 0, 0, cw, ch, 0, ident, "    ", PAGE_HEAD_SIZE, PAGE_HEAD_SIZE, b"", [], b"")
     page_data = writer.serialize_page_block(pb, bytes(PAGE_HEAD_SIZE))
     bg = background or (NO_COLOUR, NO_COLOUR)
-    attr_data = _attributes_block(ident, cw, ch, bg, list(page_properties), list(associations))
+    attr_data = attributes_block(ident, cw, ch, bg, list(page_properties), list(associations))
     cont = Container(
         9,
         word2,

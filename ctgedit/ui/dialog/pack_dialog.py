@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import os
-from typing import Optional
+from typing import List
 
 from PySide6 import QtWidgets
 
@@ -19,51 +18,36 @@ class PackLibrariesDialog(QtWidgets.QDialog):
         "too (you are asked first)."
     )
     WHAT = "The project whose libraries are packed"
+    INCLUDES_WHAT = "the libraries"
 
-    def __init__(self, parent=None, current_dir: str = ""):
+    def __init__(self, parent=None, current_path: str = ""):
         super().__init__(parent)
         self.setWindowTitle(self.TITLE)
-        from .find_dialog import project_choices
-        from ..prefs.settings import app_settings
+        from ..pick_fields import ProjectScopeField
 
         lay = QtWidgets.QVBoxLayout(self)
         intro = QtWidgets.QLabel(self.INTRO)
         intro.setWordWrap(True)
         lay.addWidget(intro)
         form = QtWidgets.QFormLayout()
-        self.project = QtWidgets.QComboBox()
-        self.project.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
-        self.project.setToolTip(self.WHAT)
-        projects, here = project_choices(current_dir)
-        for name, folder in projects:
-            self.project.addItem(name, folder)
-        if current_dir and not here:
-            # (a page outside the listed projects: its own folder)
-            self.project.insertItem(0, os.path.basename(current_dir.rstrip("\\/")), current_dir)
-            here = self.project.itemText(0)
-        want = here or str(app_settings().value("updatepages/root", "") or "")
-        k = self.project.findText(want)
-        if k >= 0:
-            self.project.setCurrentIndex(k)
-        form.addRow("Project:", self.project)
+        self.scope = ProjectScopeField(
+            current_path, what=self.WHAT, includes_what=self.INCLUDES_WHAT, remember="pack"
+        )
+        form.addRow("Project:", self.scope)
         lay.addLayout(form)
-        self.includes = QtWidgets.QCheckBox("Include the included projects")
-        lay.addWidget(self.includes)
         bb = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
         ok = bb.button(QtWidgets.QDialogButtonBox.Ok)
         ok.setText("Pack")
-        ok.setEnabled(self.project.count() > 0)
+        from ..style.theme import enable
+
+        enable(ok, self.scope.has_projects(), "No project of this computer was found.")
         bb.button(QtWidgets.QDialogButtonBox.Cancel).setDefault(True)  # (it rewrites every library)
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
         lay.addWidget(bb)
 
-    def project_dir(self) -> Optional[str]:
-        d = self.project.currentData()
-        return str(d) if d else None
-
-    def include_chain(self) -> bool:
-        return self.includes.isChecked()
+    def project_dirs(self) -> List[str]:
+        return self.scope.project_dirs()
 
 
 class PackDatabaseDialog(PackLibrariesDialog):
@@ -75,3 +59,4 @@ class PackDatabaseDialog(PackLibrariesDialog):
         "again, as Studio's Pack does. Close Plant SCADA Studio and the Graphics Builder first."
     )
     WHAT = "The project whose database is packed"
+    INCLUDES_WHAT = "the database tables"

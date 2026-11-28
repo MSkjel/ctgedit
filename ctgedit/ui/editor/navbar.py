@@ -218,13 +218,9 @@ class ZoomField(QtWidgets.QLineEdit):
         if on == self._invalid:
             return
         self._invalid = on
-        self.setProperty("invalid", on)
-        if on:
-            from ..style.theme import COLORS
+        from ..style.theme import mark_invalid
 
-            self.setStyleSheet("QLineEdit#ZoomField { border: 1px solid %s; }" % COLORS["danger"])
-        else:
-            self.setStyleSheet("")
+        mark_invalid(self, "Not a zoom: type one, for example 150 %." if on else "")
 
     def invalid(self) -> bool:
         return self._invalid
@@ -636,7 +632,9 @@ class NavBar(QtWidgets.QFrame):
             pos = event.position().toPoint()
             g = self.geometry()
             buttons = event.buttons()
-            dragging = buttons != QtCore.Qt.NoButton and t != QtCore.QEvent.MouseButtonRelease
+            # (a drag is a move with a button held: a click leaves the bar as it is, its
+            # effect swapped would repaint the whole canvas twice)
+            dragging = buttons != QtCore.Qt.NoButton and t == QtCore.QEvent.MouseMove
             inside = g.contains(pos)
             from ..prefs import timing_options
 

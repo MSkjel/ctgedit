@@ -299,10 +299,10 @@ def test_factory_bitmap_stream_inflates_to_its_dib():
     are exactly CtDraw's needs the AVEVA zlib.dll at test time:
     tests_live/test_bag_synthesis.py checks that."""
     import zlib
-    from ctgedit.format.symbols import _find_stream
+    from ctgedit.format.symbols import find_stream
 
     po = factory.make_bitmap_record(925, (95, 95, 103, 103), bytes([255, 0, 0, 255]) * 64, 8, 8)
-    off, raw = _find_stream(po.body_raw, 0)
+    off, raw = find_stream(po.body_raw, 0)
     comp = struct.unpack_from("<I", po.body_raw, off - 4)[0]
     assert zlib.decompress(po.body_raw[off : off + comp]) == raw
     assert len(raw) >= 8 * 8 * 3
@@ -598,5 +598,5 @@ def test_property_sheet_cancel_after_apply_refreshes_the_window(fx_install, monk
         w._drop_stale_dialogs(all_objects=True)
         assert not refreshed and ("objprops", i) not in w._dialogs
     finally:
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)

@@ -237,5 +237,5 @@ def test_turning_every_object_patches_the_tree_and_equals_a_rebuild(fx_page, mon
             assert _selected(w.objects_dock) == _selected(fresh)
     finally:
         w.doc.dirty = False
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)

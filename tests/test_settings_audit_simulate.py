@@ -97,8 +97,8 @@ def env():
     sw.shut_down()
     sw.deleteLater()
     SW._WINDOWS.clear()
-    if editor in MainWindow._instances:
-        MainWindow._instances.remove(editor)
+    if editor in MainWindow.instances:
+        MainWindow.instances.remove(editor)
     editor.deleteLater()
     for k, v in saved.items():
         setattr(SimCanvas, k, v)
@@ -475,8 +475,8 @@ def docked():
         QtTest.QTest.keyRelease(editor.view, key, QtCore.Qt.NoModifier)
     editor.doc = None
     sw.release_host(editor)
-    if editor in MainWindow._instances:
-        MainWindow._instances.remove(editor)
+    if editor in MainWindow.instances:
+        MainWindow.instances.remove(editor)
     editor.close()
     sw.close()
     sw.deleteLater()

@@ -8,14 +8,15 @@ from PySide6 import QtCore, QtWidgets
 
 from ...format import geometry as G
 from ...format import vertexanim as VA
-from .fields import _Field, _Sub
+from .fields import Field, Sub
 from ..style.theme import set_note_role
+from ...infra.logsetup import note_exception as _note_exc
 
 #: the vertex keys (the sheet's key contract, objprops.sheet_keys); the page
 #: is a custom editor, the family is what Clear Property removes
-VERTICES = _Sub("Vertices", [], family=tuple("%s%s*" % (VA.PREFIX, n) for n in VA.NAMES))
+VERTICES = Sub("Vertices", [], family=tuple("%s%s*" % (VA.PREFIX, n) for n in VA.NAMES))
 SUBS = [VERTICES]
-FIELDS = [_Field("", "%s%s*" % (VA.PREFIX, n)) for n in VA.NAMES]
+FIELDS = [Field("", "%s%s*" % (VA.PREFIX, n)) for n in VA.NAMES]
 
 HELP_TOPIC = "properties#vertices"
 
@@ -77,7 +78,7 @@ class VerticesEditor:
             from ..help import set_help
 
             set_help(self.widget, HELP_TOPIC)
-        except Exception:  # noqa: BLE001
+        except RuntimeError:
             pass
 
     # -- widgets ----------------------------------------------------------------------
@@ -372,6 +373,7 @@ class VerticesEditor:
         try:
             ok = s._doc.reshape_nodes(s._index, nodes, "vertices")
         except Exception as exc:  # noqa: BLE001 -- reported in the sheet
+            _note_exc("objprops.vertices.apply")
             s._fail("The vertices could not be moved: %s" % exc, self.table)
             return False
         if not ok:

@@ -1,6 +1,8 @@
 """The browser's New mode (File > New)."""
 
 from __future__ import annotations
+
+from ...infra.paths import path_key
 from ..style.theme import sp as _sp  # (the spacing scale)
 
 import html
@@ -264,14 +266,14 @@ class NewMode:
         pdir = info.dir if info is not None else None
         if pdir is None:
             return
-        key = os.path.normcase(os.path.abspath(pdir))
+        key = path_key(pdir)
         if self.tpl_picker is not None and self._tpl_project == key:
             return
         want = {}
         if self.tpl_picker is not None:
             v = self.tpl_picker.value()
             want = {
-                "style": self.tpl_picker.style(),
+                "style": self.tpl_picker.style_name(),
                 "resolution": self.tpl_picker.resolution(),
                 "title_bar": self.tpl_picker.title_bar(),
                 "element": v[1] if v else "",
@@ -532,7 +534,7 @@ class NewMode:
                 self._key("template"),
                 "|".join(
                     (
-                        self.tpl_picker.style(),
+                        self.tpl_picker.style_name(),
                         v[1] if v else "",
                         self.tpl_picker.resolution(),
                         "1" if self.tpl_picker.title_bar() else "0",

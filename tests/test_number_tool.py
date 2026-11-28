@@ -21,8 +21,8 @@ def win(fx_page):
     w = MainWindow()
     w.open_document(fx_page("FxShapes"))
     yield w
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
 
 
 def _answer(monkeypatch, expr=None, fmt=""):

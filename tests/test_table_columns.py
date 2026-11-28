@@ -271,8 +271,8 @@ def test_every_header_in_the_app_is_resizable(page):
                 _pump()
     finally:
         w.hide()  # close() would ask to save the new objects
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.deleteLater()
         _pump()
     assert not problems, "\n".join(problems)

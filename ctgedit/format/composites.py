@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from ..infra.paths import lib_path_dirs, path_key
+
+
 import glob
 import os
 import re
@@ -467,7 +470,7 @@ def load_template(path: str) -> Optional[CompositeTemplate]:
     in ``.problems``; what can be read is read anyway."""
     try:
         st = os.stat(path)
-        key = (os.path.normcase(os.path.abspath(path)), st.st_mtime_ns, st.st_size)
+        key = (path_key(path), st.st_mtime_ns, st.st_size)
     except OSError:
         return None
     if key in _TEMPLATE_CACHE:
@@ -509,15 +512,15 @@ def parse_template(data: bytes, path: str = "") -> Optional[CompositeTemplate]:
     if not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", guid):
         at(root, "The template Guid '%s' is not a valid GUID." % root.get("Guid"))
     name = root.get("Name") or os.path.splitext(os.path.basename(path))[0]
-    params, pmap = _parse_params(root, at)
-    globals_ = _parse_globals(root, pmap, at)
+    params, pmap = parse_params(root, at)
+    globals_ = parse_globals(root, pmap, at)
     deps = _parse_dependencies(root, globals_, pmap, at)
     params = [replace(p, dependency=deps.get(p.name.lower())) for p in params]
     _check_rest(root, globals_, pmap, at)
     return CompositeTemplate(guid=guid, name=name, path=path, params=tuple(params), problems=tuple(problems))
 
 
-def _parse_params(root, at):
+def parse_params(root, at):
     params: List[TemplateParam] = []
     pmap: Dict[str, TemplateParam] = {}
     pnode = root.find("Parameters")
@@ -577,7 +580,7 @@ def _first_child(node):
     return None
 
 
-def _parse_globals(root, pmap, at) -> Dict[str, object]:
+def parse_globals(root, pmap, at) -> Dict[str, object]:
     globals_: Dict[str, object] = {}
     gnode = root.find("GlobalConditions")
     for g in gnode if gnode is not None else []:
@@ -740,7 +743,7 @@ def _project_roots(page_path: str) -> List[str]:
     from .projects import include_search_dirs
 
     proj = os.path.dirname(os.path.abspath(page_path))
-    extra = [p for p in os.environ.get("CTG_LIB_PATH", "").split(os.pathsep) if p]
+    extra = lib_path_dirs()
     roots = [proj] + extra
     out = list(roots)
     for r in roots:
@@ -750,7 +753,7 @@ def _project_roots(page_path: str) -> List[str]:
             _note_exc("composites._project_roots")
     seen, uniq = set(), []
     for d in out:
-        key = os.path.normcase(os.path.abspath(d))
+        key = path_key(d)
         if key not in seen:
             seen.add(key)
             uniq.append(d)
@@ -765,7 +768,7 @@ def _template_dirs(page_path: str) -> List[str]:
     seen, out = set(), []
     for d in roots:
         cand = os.path.join(d, "Composite Genies")
-        key = os.path.normcase(os.path.abspath(cand))
+        key = path_key(cand)
         if key not in seen and os.path.isdir(cand):
             seen.add(key)
             out.append(cand)
@@ -827,7 +830,7 @@ def instance_ref(ref_raw: str) -> Optional[Tuple[str, str]]:
 def in_composition_cache(path: str) -> bool:
     """``path`` lies in a project's ``_CompositionCaches`` folder (which only
     Plant SCADA's composer may write)."""
-    parts = os.path.normcase(os.path.abspath(path or "")).split(os.sep)
+    parts = path_key(path or "").split(os.sep)
     return "_compositioncaches" in parts
 
 

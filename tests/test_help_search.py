@@ -33,13 +33,15 @@ def win():
     yield w
     from ctgedit.ui.dialog.help_window import HelpWindow
 
+    import shiboken6
+
     hw = HelpWindow._inst
-    if hw is not None:
+    if hw is not None and shiboken6.isValid(hw):  # (it goes with the window it belongs to)
         hw.hide()
     for m in w.menuBar().findChildren(QtWidgets.QMenu):
         m.hide()
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.hide()
     w.deleteLater()
     _pump()

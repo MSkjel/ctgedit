@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..infra.paths import path_key
+
 import os
 import re
 import subprocess
@@ -12,7 +14,6 @@ from typing import Callable, List, Optional
 from . import winui
 
 IMAGE = "CtCmp32.exe"
-_LIST_ID = 111  # the progress dialog's error list box
 _MSG_RE = re.compile(
     r"^(?P<file>.*?)\((?P<line>\d*)\) : (?P<message>.*?) "
     r"\((?P<code>[A-Z]\d+)\)(?: :(?: (?P<context>.*))?)?\s*$"
@@ -111,14 +112,14 @@ def _registered_root(project_dir: str, user: str) -> Optional[str]:
     ``project_dir``, or None."""
     from ..format.projects import include_search_dirs, master_projects
 
-    target = os.path.normcase(os.path.abspath(project_dir))
+    target = path_key(project_dir)
     master = master_projects(user)
     for name in root_projects(user):
         path = master.get(name.lower()) or master.get(name)
         if not path:
             continue
         dirs = [path] + include_search_dirs(path)
-        if any(os.path.normcase(os.path.abspath(d)) == target for d in dirs):
+        if any(path_key(d) == target for d in dirs):
             return name
     return None
 
@@ -244,7 +245,7 @@ def compile_project(
         pdir = master_projects(live_user_dir() or "").get(project.lower())
         cs = os.path.join(pdir or "", "compilersummary.xml")
         summary_new = os.path.exists(cs) and os.path.getmtime(cs) >= t0 - 1
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- swallow-ok: no master project: no summary
         pass
     if outcome == "completed" and not rewritten:
         note = (note + " " if note else "") + (

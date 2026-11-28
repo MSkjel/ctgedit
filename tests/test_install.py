@@ -214,7 +214,7 @@ def test_ctf_deflate_without_the_install_zlib_is_pythons(monkeypatch):
     monkeypatch.setenv("CTG_SCADA_ROOT", "none")
     monkeypatch.delenv("CTG_SCADA_BIN", raising=False)
     raw = b"fx" * 500
-    assert ctf._compress(raw) == zlib.compress(raw, 5)
+    assert ctf.compress(raw) == zlib.compress(raw, 5)
 
 
 def test_ctf_deflate_takes_the_fake_install_zlib(fake):
@@ -223,7 +223,7 @@ def test_ctf_deflate_takes_the_fake_install_zlib(fake):
     from ctgedit.format import ctf
 
     raw = b"fx" * 500
-    assert ctf._compress(raw) == zlib.compress(raw, 5)
+    assert ctf.compress(raw) == zlib.compress(raw, 5)
     path = install.zlib_dll()
     assert path.startswith(fake) and ctf._ZLIB_LOADED.get(path) is False
 

@@ -3,15 +3,53 @@ pictures, Replace Genie)."""
 
 from __future__ import annotations
 
+from ..infra.paths import path_key
+
 import json
 import os
 import sys
 from typing import Callable, List, Optional, Tuple
 
 
+def write_json(path: str, obj) -> None:
+    """``obj`` as JSON into ``path`` through a temp file (a reader never sees half of it);
+    never raises: a progress or answer file the editor can do without."""
+    tmp = path + ".tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(obj, fh)
+        os.replace(tmp, path)
+    except OSError:  # swallow-ok: see above
+        try:
+            os.remove(tmp)
+        except OSError:  # swallow-ok: never made
+            pass
+
+
+def read_records(path: str) -> List[dict]:
+    """The complete JSON lines of a helper's records file (a line cut short by a helper
+    that died, or one that is not JSON, is left out)."""
+    out: List[dict] = []
+    try:
+        with open(path, encoding="utf-8") as fh:
+            for line in fh:
+                if not line.endswith("\n"):
+                    break  # (cut short: the helper died writing it)
+                try:
+                    rec = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(rec, dict):
+                    out.append(rec)
+    except OSError:
+        return out
+    return out
+
+
 def helper_main(argv, option: str, fmt: str, dispatch: Callable, memo: bool = False) -> int:
     """``ctgedit <option> <request.json> <answer.json>``: ``dispatch(req, progress,
-    skip_now)`` gives the answer (genie_worker.progress_and_skip from the request's files).
+    skip_now)`` gives the answer (genie_worker.progress_and_skip from the request's files;
+    ``req["request_path"]``: the request file, for data written beside it).
     ``memo``: the run's include chains and genie declarations are read once
     (infra/runmemo). Returns the exit code (2 for bad arguments)."""
     args = list(sys.argv[1:] if argv is None else argv)
@@ -32,6 +70,7 @@ def helper_main(argv, option: str, fmt: str, dispatch: Callable, memo: bool = Fa
             req = json.load(fh)
         if req.get("format") != fmt:
             raise ValueError("request format %r" % req.get("format"))
+        req["request_path"] = req_path
         stopped: list = []
         progress, skip_now = progress_and_skip(
             req.get("progress_file") or "", req.get("skip_file") or "", req.get("cancel_file") or "", stopped
@@ -53,10 +92,7 @@ def helper_main(argv, option: str, fmt: str, dispatch: Callable, memo: bool = Fa
             "error": "%s: %s" % (type(e).__name__, e),
             "trace": traceback.format_exc()[-4000:],
         }
-    tmp = ans_path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as fh:
-        json.dump(ans, fh)
-    os.replace(tmp, ans_path)
+    write_json(ans_path, ans)
     return 0
 
 
@@ -97,7 +133,7 @@ def edit_pages(
     from ..editing import PageChangedOnDisk, ProjectDatabaseInUse
     from ..format.projectlock import LockCancelled
 
-    skip = {os.path.normcase(os.path.abspath(p)) for p in req.get("skip") or ()}
+    skip = {path_key(p) for p in req.get("skip") or ()}
     in_builder = {(str(p).strip().lower(), str(n).strip().lower()) for p, n in req.get("builder_open") or ()}
     backup = req.get("backup")
     pages = list(pages)
@@ -107,7 +143,7 @@ def edit_pages(
         if progress is not None and progress(n, len(pages), name) is False:
             out["stopped"] = True
             break
-        if os.path.normcase(os.path.abspath(path)) in skip or (skip_now is not None and skip_now(path)):
+        if path_key(path) in skip or (skip_now is not None and skip_now(path)):
             out.setdefault("skipped_open", []).append(name)
             continue
         proj = os.path.basename(os.path.dirname(os.path.abspath(path))).lower()

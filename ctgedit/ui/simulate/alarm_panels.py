@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 from ..style.theme import sp as _sp
+from ...infra.logsetup import note_exception as _note_exc
 
 from typing import Any, Dict, Optional
 
@@ -138,6 +139,7 @@ class _ListPanel(QtWidgets.QWidget):
         try:
             return fn()
         except Exception:  # noqa: BLE001 -- a source problem must not break the view
+            _note_exc("sim.alarm_panels._note")
             return ""
 
     def refresh(self, force: bool = False) -> None:
@@ -204,6 +206,7 @@ class AlarmsPanel(_ListPanel):
         try:
             return _call(fn, self.search.text().strip(), self.page_only.isChecked(), regex=self.search.regex)
         except Exception:  # noqa: BLE001
+            _note_exc("sim.alarm_panels.alarm_rows")
             return None, 0
 
     def _refresh(self) -> None:
@@ -328,6 +331,7 @@ class EquipmentPanel(_ListPanel):
             try:
                 rows, total = _call(fn, self.search.text().strip(), regex=self.search.regex)
             except Exception:  # noqa: BLE001
+                _note_exc("sim.alarm_panels.equipment_rows")
                 rows, total = None, 0
         if rows is None:
             self.model.removeRows(0, self.model.rowCount())
@@ -342,6 +346,7 @@ class EquipmentPanel(_ListPanel):
                 try:
                     pe = pf()
                 except Exception:  # noqa: BLE001
+                    _note_exc("sim.alarm_panels.page_equipment")
                     pe = []
             keys = page_equipment_keys(pe)
             rows = [e for e in rows if _in_page(e["name"], keys)]

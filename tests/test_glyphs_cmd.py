@@ -44,12 +44,12 @@ def test_every_glyph_paints_at_every_size_and_ratio(size, dpr):
 
 def test_every_icon_name_the_window_uses_exists():
     from ctgedit.ui.style import glyphs_cmd, theme
-    from ctgedit.ui.main_window_base import _SPECIAL_TOOLS, _TOOLS
+    from ctgedit.ui.main_window_base import SPECIAL_TOOLS, TOOLS
 
     names = set(glyphs_cmd.ACTION_ICONS.values()) | set(glyphs_cmd.V34_ICONS.values())
     for group in glyphs_cmd.LIST_ICONS.values():
         names |= set(group)
-    names |= set(_SPECIAL_TOOLS.values()) | {ic for _t, _l, ic, _k in _TOOLS}
+    names |= set(SPECIAL_TOOLS.values()) | {ic for _t, _l, ic, _k in TOOLS}
     missing = sorted(n for n in names if n not in theme._GLYPHS)
     assert not missing, missing
 
@@ -65,10 +65,10 @@ def test_the_group_glyph_is_defined_once():
 def test_the_special_tools_have_their_own_icons():
     _app()
     from ctgedit.ui.style import theme
-    from ctgedit.ui.main_window_base import _SPECIAL_TOOLS
+    from ctgedit.ui.main_window_base import SPECIAL_TOOLS
 
-    four = [_SPECIAL_TOOLS[k] for k in ("process_analyst", "scheduler", "db_exchange", "pelco")]
-    assert len(set(four) | {_SPECIAL_TOOLS["activex"]}) == 5
+    four = [SPECIAL_TOOLS[k] for k in ("process_analyst", "scheduler", "db_exchange", "pelco")]
+    assert len(set(four) | {SPECIAL_TOOLS["activex"]}) == 5
     imgs = {n: theme.icon(n).pixmap(QtCore.QSize(32, 32)).toImage() for n in four + ["activex"]}
     keys = list(imgs)
     for i, a in enumerate(keys):

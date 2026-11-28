@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..infra.paths import path_key
+
 import copy as _copy
 import operator
 import os
@@ -18,11 +20,12 @@ from ctgedit.format import geometry as G
 from ctgedit.format import placement as P
 from ctgedit.format import colourstate as CS
 from ctgedit.format import textmetrics as TM
-from ctgedit.format.page import PageObject, _parse_object, _geom_name_len, parse_ctg
+from ctgedit.format.page import PageObject, parse_object, geom_name_len, parse_ctg
 from ctgedit.format.symbols import (
     LIBRARY_EXTENSIONS,
     SymbolResolver,
     library_version,
+    note_lookup,
     open_library,
     reference_from_object,
 )
@@ -137,7 +140,7 @@ _U16 = struct.Struct("<H").unpack_from
 _U16X2 = struct.Struct("<HH").unpack_from
 
 
-def _enc_lp(s) -> bytes:
+def enc_lp(s) -> bytes:
     b = s if isinstance(s, bytes) else _senc(s)
     return struct.pack("<H", len(b)) + b
 
@@ -154,7 +157,7 @@ def decode(po: PageObject, value_bag_only: bool = False) -> Rec:
     for a reader of that bag alone."""
     b = po.body_raw
     gh = G.parse_geom_header(b)
-    ne = _geom_name_len(b, 0)
+    ne = geom_name_len(b, 0)
     (s1, s2, s3), send = P.read_slots_of(po)
     o = gh.end
     dw = po.subtype_size
@@ -210,11 +213,11 @@ def decode(po: PageObject, value_bag_only: bool = False) -> Rec:
     s40 = s80 = None
     if dw & 0x40:
         st = o
-        o = CS._lp_end(b, o) + 2 + 24
+        o = CS.lp_end(b, o) + 2 + 24
         s40 = b[st:o]
     if dw & 0x80:
         st = o
-        o = CS._lp_end(b, o)
+        o = CS.lp_end(b, o)
         s80 = b[st:o]
     L = CS.layout(po)
     cs = b[L["at"] : L["end"]]
@@ -249,12 +252,12 @@ def decode(po: PageObject, value_bag_only: bool = False) -> Rec:
 def encode(r: Rec) -> bytes:
     """Payload bytes (prefix + body) in the saver's order."""
     an = _senc(r.an)
-    out = bytearray(struct.pack("<HII", r.cf, r.tc, r.dw) + _enc_lp(an))
-    out += r.res + struct.pack("<H", r.handle & 0xFFFF) + _enc_lp(r.name)
+    out = bytearray(struct.pack("<HII", r.cf, r.tc, r.dw) + enc_lp(an))
+    out += r.res + struct.pack("<H", r.handle & 0xFFFF) + enc_lp(r.name)
     out += r.raw_slots if r.slots is None else b"".join(P.encode_slot(m, x) for m, x in r.slots)
     out += struct.pack("<2h", *r.anchor) + struct.pack("<4h", *r.rect1) + struct.pack("<4h", *r.rect2)
     if r.dw & 1:
-        out += _enc_lp(r.link)
+        out += enc_lp(r.link)
     if r.dw & 8:
         out += struct.pack("<H", len(r.entries) - 1)
         for e in r.entries:
@@ -278,13 +281,13 @@ def encode(r: Rec) -> bytes:
 
 
 def to_po(payload: bytes) -> PageObject:
-    return _parse_object(0, 0, len(payload), 0, payload)
+    return parse_object(0, 0, len(payload), 0, payload)
 
 
 def _shell_po(payload: bytes) -> PageObject:
     """:func:`to_po` without the heuristic bag scan and the text extras (page._parse_object's
     prefix and body, the same fields): for a record that is only DECODED again -- decode reads
-    nothing but the prefix fields and the body. Never raises (like _parse_object)."""
+    nothing but the prefix fields and the body. Never raises (like parse_object)."""
     n = len(payload)
     class_flag = struct.unpack_from("<H", payload, 0x00)[0] if n >= 2 else 0
     type_code = struct.unpack_from("<I", payload, 0x02)[0] if n >= 6 else 0
@@ -783,14 +786,14 @@ class Element:
 #     recorded mtime (stat'ed before the resolver listed it; NTFS stamps a
 #     directory on create / delete / rename) and every library is current;
 #   * every SymbolResolver.for_page its nested loads built: the same search path;
-#   * every tag-format lookup its text measures made (textmetrics._tag_format,
+#   * every tag-format lookup its text measures made (textmetrics.installed_tag_format(),
 #     the editing layer's installed tag database): the same answers;
 #   * the refresh flag is part of the key.
 # (Inside symbols.held_libraries, "the version now" is the version the hold read: a copy
 # and the stamp a save or a page update writes for it come from one read of the library.)
 # Everything a load reads during one outermost call (an "operation", _Op) is
 # taken to be static; one resolver per library folder is shared by its nested
-# loads. ctgedit's own library writes bump editing._LIBRARY_GENERATION, which clears
+# loads. ctgedit's own library writes bump editing.LIBRARY_GENERATION, which clears
 # the memo (to keep memory low; the entries would fail their version checks anyway).
 # Callers get a copy of the Element with its own records list (the PageObjects are
 # shared: nothing mutates an Element's records in place).
@@ -881,7 +884,7 @@ class _Op:
         self.stats: dict = {}
         self.walks: dict = {}
         self.verdicts: dict = {}
-        self.tf_real = TM._tag_format
+        self.tf_real = TM.installed_tag_format()
         self.none_ctx = self.tf_real is None
         self.tf_rec = None
         #: id(nested element) -> (it, its description, its records, its twins, the digest of
@@ -995,7 +998,7 @@ def _op_open() -> _Op:
     """A new operation, made current (under _OP_LOCK, called by _op_enter only: the
     frame that called _op_enter owns it)."""
     m = sys.modules.get("ctgedit.editing")
-    gen = getattr(m, "_LIBRARY_GENERATION", [None])[0] if m is not None else None
+    gen = getattr(m, "LIBRARY_GENERATION", [None])[0] if m is not None else None
     if gen != _MEMO_GEN[0]:
         # a library was written here (a library the cache only dropped and read again keeps
         # the entries: they check each library by its file's version)
@@ -1005,7 +1008,7 @@ def _op_open() -> _Op:
     op.owner = sys._getframe(2)
     if op.tf_real is not None:
         op.tf_rec = _TagRecorder(op.tf_real, op)
-        TM._tag_format = op.tf_rec
+        TM.use_tag_formats(op.tf_rec)
     op.depth = 1
     _OP[0] = op  # (nothing that can fail after this)
     return op
@@ -1021,8 +1024,8 @@ def _op_leave(op: Optional[_Op]) -> None:
 
 
 def _op_close(op: _Op) -> None:
-    if op.tf_rec is not None and TM._tag_format is op.tf_rec:
-        TM._tag_format = op.tf_real
+    if op.tf_rec is not None and TM.installed_tag_format() is op.tf_rec:
+        TM.use_tag_formats(op.tf_real)
     if _OP[0] is op:
         _OP[0] = None
     op.owner = None
@@ -1206,6 +1209,10 @@ def _merge_deps(op: _Op, deps: _Deps, use, fresh_load: bool) -> None:
             _add_probe(op, use, (library, element, ext), w, virtual="fresh" if fresh_load else "passed")
         else:
             _add_probe(op, op.fresh_for_paths(paths), (library, element, ext), w, virtual="ctx")
+        # (a read held for its dependencies, Find's index: the lookups the reuse stands on)
+        sp = getattr(use, "search_paths", ()) if tag == "own" else paths
+        for x, _libs, _failed in w:
+            note_lookup(sp, library, x)
 
 
 def _frame_push(op: _Op, key, resolver, fresh_load: bool = False) -> _Frame:
@@ -1241,6 +1248,17 @@ def _memo_put(key, el: "Element", deps: _Deps) -> None:
     while _MEMO_RECORDS[0] > MEMO_RECORD_LIMIT and len(_MEMO) > 1:
         _k, e = _MEMO.popitem(last=False)
         _MEMO_RECORDS[0] -= e.size
+
+
+def own_memos(el: "Element") -> None:
+    """Let ``el``, a loaded element given records of its own, keep the memos of its records
+    (decodes, declared parameters, art twins) for itself and the copies made of it; the
+    memos it carried from the element it was copied from are dropped. Its records are then
+    never changed."""
+    d = el.__dict__
+    for k in ("_gp_dec", "_gp_decl", "_gp_twins"):
+        d.pop(k, None)
+    d["_gp_canon"] = el
 
 
 def _element_copy(el: "Element") -> "Element":
@@ -1312,7 +1330,7 @@ def _met_cycle(el, chain) -> None:
 
 
 def _load_key(lib_path: str, element: str) -> tuple:
-    return os.path.normcase(os.path.abspath(lib_path)), (element or "").lower()
+    return path_key(lib_path), (element or "").lower()
 
 
 def _element_label(lib_path: str, element: str) -> str:
@@ -1684,7 +1702,7 @@ def _values_within_templates(ent) -> None:
         ent[1] = Bag([(kk, v) for kk, v in ent[1].pairs if kk.lower() in have], ent[1].ov)
 
 
-def _merge_bag(
+def merge_bag(
     stale: "Bag", cur: "Bag", keep_sheet: bool = False, templated=frozenset(), sheet_values: bool = False
 ) -> "Bag":
     """Update a stale nested genie bag from the current element, as CtDraw does."""
@@ -1798,19 +1816,62 @@ def _rekey_copy(recs, k: int, end: int, sub_recs) -> int:
     return n
 
 
-def _refresh_nested(
-    el: "Element", resolver, op: Optional[_Op], compose: bool = False, only=None, merge_only=None
-) -> int:
-    if resolver is None:
-        try:
-            # one fresh resolver per library folder and operation (the same
-            # search path SymbolResolver.for_page builds for each call)
-            resolver = op.for_page(el.lib_path) if op is not None else SymbolResolver.for_page(el.lib_path)
-        except Exception:  # noqa: BLE001
-            _note_exc("genie_place._refresh_nested")
-            return 0
+def _load_nested_copy(el: "Element", po, resolver, op: Optional[_Op], compose: bool, only) -> tuple:
+    """The current element of the nested copy whose root is ``po``: (its reference, its
+    resolution, the element (None when it cannot be loaded), whether it is one of the
+    changed genies ``only``)."""
+    sub = ref = res = None
+    hit = False
+    try:
+        ref = reference_from_object(po)
+        res = resolver.resolve(ref) if ref is not None else None
+        if ref is not None:
+            _note(op, "probe", resolver, ref)
+        if res is not None:
+            # a changed genie's copy is composed in full (everything in it is its
+            # current definition); a genie that only NESTS one keeps the rest as stored
+            hit = only is not None and (ref.library.lower(), ref.element.lower()) in only
+            sub = load_element(res.library_path, ref.element, compose=compose, only=None if hit else only)
+    except NestingCycle as cyc:
+        # a genie that holds a copy of itself: this copy cannot be composed (it stays as
+        # stored), and the element says which cycle it met
+        _met_cycle(el, cyc.chain)
+        sub = None
+    except RecursionError:
+        raise  # (never a failed load: the caller says so)
+    except Exception:  # noqa: BLE001
+        _note_exc("genie_place._load_nested_copy")
+        sub = None
+    return ref, res, sub, hit
+
+
+def _composed_if_grown(el: "Element", ref, res, sub, hit: bool, only):
+    """The nested genie's element ``sub``, or its page composition when the genie's
+    records changed in number since the element was saved."""
+    # a copy of a genie that changed (or nests one) since the element was saved:
+    # when the genie's records changed in number (an object added to or removed
+    # from it, or from a genie it nests), its current definition is the one
+    # composed as a page takes it, so a genie between the two that was not saved
+    # again since still shows the change (fxnest.n2 over a stale n1 over n0)
+    try:
+        sub_c = load_element(res.library_path, ref.element, compose=True, only=None if hit else only)
+        if not _aligns(sub_c.records, sub.records, 0, len(sub.records)):
+            sub = sub_c
+    except NestingCycle as cyc:  # (the element's own load then)
+        _met_cycle(el, cyc.chain)
+    except RecursionError:
+        raise
+    except Exception:  # noqa: BLE001 -- the element's own load then
+        _note_exc("genie_place._composed_if_grown")
+    return sub
+
+
+def _nested_spans(el: "Element", resolver, op: Optional[_Op], compose: bool, only, merge_only) -> tuple:
+    """The element's outermost nested genie copies, each [start, end, its current element,
+    the kept geometry]: (the spans, per span whether it is a changed genie's own copy
+    (``only``), whether its bags are merged (``merge_only``), its genie's (library,
+    element) lower case)."""
     recs = el.records
-    patched = 0
     # the element's outermost nested genie copies: [k, end, current element]
     spans = []
     hits = []  # (only=) per span: a changed genie's own copy
@@ -1827,28 +1888,7 @@ def _refresh_nested(
             pending -= 1
             pending += recs[end].class_flag
             end += 1
-        sub = ref = res = None
-        hit = False
-        try:
-            ref = reference_from_object(po)
-            res = resolver.resolve(ref) if ref is not None else None
-            if ref is not None:
-                _note(op, "probe", resolver, ref)
-            if res is not None:
-                # a changed genie's copy is composed in full (everything in it is its
-                # current definition); a genie that only NESTS one keeps the rest as stored
-                hit = only is not None and (ref.library.lower(), ref.element.lower()) in only
-                sub = load_element(res.library_path, ref.element, compose=compose, only=None if hit else only)
-        except NestingCycle as cyc:
-            # a genie that holds a copy of itself: this copy cannot be composed (it stays as
-            # stored), and the element says which cycle it met
-            _met_cycle(el, cyc.chain)
-            sub = None
-        except RecursionError:
-            raise  # (never a failed load: the caller says so)
-        except Exception:  # noqa: BLE001
-            _note_exc("genie_place._refresh_nested/nested load")
-            sub = None
+        ref, res, sub, hit = _load_nested_copy(el, po, resolver, op, compose, only)
         if sub is not None:
             for chain in getattr(sub, "cycles", ()):
                 _met_cycle(el, chain)
@@ -1867,21 +1907,7 @@ def _refresh_nested(
             )
         )
         if not compose and merge_only is not None and flag and sub is not None and res is not None:
-            # a copy of a genie that changed (or nests one) since the element was saved:
-            # when the genie's records changed in number (an object added to or removed
-            # from it, or from a genie it nests), its current definition is the one
-            # composed as a page takes it, so a genie between the two that was not saved
-            # again since still shows the change (fxnest.n2 over a stale n1 over n0)
-            try:
-                sub_c = load_element(res.library_path, ref.element, compose=True, only=None if hit else only)
-                if not _aligns(sub_c.records, sub.records, 0, len(sub.records)):
-                    sub = sub_c
-            except NestingCycle as cyc:  # (the element's own load then)
-                _met_cycle(el, cyc.chain)
-            except RecursionError:
-                raise
-            except Exception:  # noqa: BLE001 -- the element's own load then
-                _note_exc("genie_place._refresh_nested/composed load")
+            sub = _composed_if_grown(el, ref, res, sub, hit, only)
         spans.append([k, end, sub, frozenset()])
         hits.append(
             only is not None and ref is not None and (ref.library.lower(), ref.element.lower()) in only
@@ -1889,34 +1915,355 @@ def _refresh_nested(
         bag_flags.append(flag)
         keys.append((ref.library.lower(), ref.element.lower()) if ref is not None else None)
         k = end
-    if not compose and merge_only is not None:
-        # an element load or save that composes only the changed genies: a copy of one
-        # whose records no longer line up with its current element (an object added to
-        # it or removed) is composed again from it structurally, as a page composition
-        # does, then refreshed like an aligned copy (else the import table takes the new
-        # stamp over the old copy, and the element reads as current).
-        which = {
-            i
-            for i, ((k0, e0, sub, _kp), b) in enumerate(zip(spans, bag_flags))
-            if b and sub is not None and not _aligns(sub.records, recs, k0, e0)
-        }
-        if which:
-            try:
-                patched += _recompose_nested_copies(el, spans, resolver, which=which, element_file=True)
-            except NestingCycle as cyc:  # (the stored copies stay)
-                _met_cycle(el, cyc.chain)
-            except RecursionError:
-                raise
-            except Exception:  # noqa: BLE001 -- keep the stored copies
-                _note_exc("genie_place._refresh_nested/recompose")
-        # the changed genies whose copy still does not line up (it could not be composed
-        # again), or whose library could not be read: the element's save keeps their old
-        # import-table stamps, so it stays reported as out of date
-        el.stale_nested = frozenset(
-            key
-            for (k0, e0, sub, _kp), b, key in zip(spans, bag_flags, keys)
-            if b and key is not None and (sub is None or not _aligns(sub.records, recs, k0, e0))
+    return spans, hits, bag_flags, keys
+
+
+def _recompose_unaligned(el: "Element", spans, bag_flags, keys, resolver) -> int:
+    """An element load or save: the copies of changed genies that no longer line up with
+    their element composed again; ``el.stale_nested`` = the changed genies whose copy
+    still does not. How many records changed."""
+    recs = el.records
+    patched = 0
+    # an element load or save that composes only the changed genies: a copy of one
+    # whose records no longer line up with its current element (an object added to
+    # it or removed) is composed again from it structurally, as a page composition
+    # does, then refreshed like an aligned copy (else the import table takes the new
+    # stamp over the old copy, and the element reads as current).
+    which = {
+        i
+        for i, ((k0, e0, sub, _kp), b) in enumerate(zip(spans, bag_flags))
+        if b and sub is not None and not _aligns(sub.records, recs, k0, e0)
+    }
+    if which:
+        try:
+            patched += _recompose_nested_copies(el, spans, resolver, which=which, element_file=True)
+        except NestingCycle as cyc:  # (the stored copies stay)
+            _met_cycle(el, cyc.chain)
+        except RecursionError:
+            raise
+        except Exception:  # noqa: BLE001 -- keep the stored copies
+            _note_exc("genie_place._recompose_unaligned")
+    # the changed genies whose copy still does not line up (it could not be composed
+    # again), or whose library could not be read: the element's save keeps their old
+    # import-table stamps, so it stays reported as out of date
+    el.stale_nested = frozenset(
+        key
+        for (k0, e0, sub, _kp), b, key in zip(spans, bag_flags, keys)
+        if b and key is not None and (sub is None or not _aligns(sub.records, recs, k0, e0))
+    )
+    return patched
+
+
+def _note_affected_spans(el: "Element", spans, hits) -> None:
+    """``el.affected`` / ``el.affected_spans``: the copies of the changed genies
+    themselves, at any depth."""
+    # the copies of the changed genies themselves, at any depth (record indexes of
+    # this element): a copy of a genie that only NESTS one keeps its other records as
+    # stored here -- older than what a page composed from their current definitions
+    # holds --, so a caller replaces just these
+    inner = []
+    for (k, end, sub, _keep), hit in zip(spans, hits):
+        if hit or sub is None:
+            inner.append((k, end))
+        elif end - k == len(sub.records):
+            inner += [(k + a, k + b) for a, b in getattr(sub, "affected_spans", ())]
+        else:
+            inner.append((k, end))
+    el.affected = bool(spans)
+    el.affected_spans = inner
+
+
+def _refresh_unchanged_copy(el: "Element", k: int, end: int, sub, resolver, keep_geom) -> int:
+    """The copy ``k``..``end`` of a nested genie that did not change: its bags as stored,
+    its DummyMarkers' boxes derived again. How many records changed."""
+    recs = el.records
+    # a copy of a genie that did not change: its bags as stored, its geometry
+    # derived again
+    if not hasattr(el, "nested_twins"):
+        el.nested_twins = {}
+    for j in range(1, end - k):
+        el.nested_twins.setdefault(k + j, sub.records[j])
+    try:
+        moved = _refresh_nested_geometry(
+            el,
+            k,
+            end,
+            sub,
+            resolver,
+            {},
+            keep=keep_geom,
+            matched=getattr(el, "recomposed_spans", {}).get(k),
         )
+    except _Unbuilt:
+        moved = {}
+    # (only a DummyMarker's box: CtDraw's load + save keeps the stored geometry of
+    # the quarter-turned members of an unchanged copy, LIVE)
+    moved = {j: b for j, b in moved.items() if recs[k + j].type_code == 0xFFFF}
+    for j in sorted(moved):
+        recs[k + j] = to_po(moved[j])
+    return len(moved)
+
+
+def _copy_form(el: "Element", k: int, r0, own_level: bool, decs: dict, merged: dict) -> tuple:
+    """The form of the nested copy at ``k`` (``r0``: its element root's decode): (the
+    levels a short record is padded to past its element record's, the copy's own last
+    levels the padding goes before, whether it is in the page form, how many records
+    changed). A root short of levels is padded into ``decs`` / ``merged``."""
+    recs = el.records
+    patched = 0
+    # a copy in the PAGE form (a template, a super genie page and an element without
+    # parameters keep it): its root has as many levels as the nested element's root
+    # (the placed level in place of the element's own), so has each member; in the
+    # element form one more (the host element's level after the binding level). A
+    # genie element keeps every copy in the element form (convert_page_form brought
+    # a copy pasted from a page to it): a copy of a genie that had no level when it
+    # was placed (CtDraw's paste gives each record the host's level only) and has one
+    # now is not in the page form for having as many levels as its genie's root
+    # (LIVE, the fixture oracle's chain4/param_gained: the copy took one more level)
+    host_ef = _copies_in_element_form(el)
+    # a record with fewer levels than its element record and the copy's own ones
+    # (``extra``: 1 in the element form, 0 in the page form) is padded; the missing
+    # levels go before the copy's own last ``after`` levels (its host element's
+    # level, when the copy has one)
+    extra = after = None
+    try:
+        ra = decode(recs[k])
+        if ra.entries is not None and r0.entries is not None:
+            if host_ef:
+                extra = 1
+                # (a copy placed with its bindings but without the host's level: placed
+                # in the page form before the element had parameters of its own. Its
+                # last level is the binding; the host's level goes after it)
+                top = ra.entries[-1]
+                bound_top = 2 <= len(ra.entries) <= len(r0.entries) and bool(top[1].pairs or top[2].pairs)
+                after = 0 if bound_top else 1
+            elif own_level and len(ra.entries) <= len(r0.entries):
+                extra = after = 0
+        if extra is not None and _pad_levels(ra, len(r0.entries) + extra, after):
+            # (a root placed before its genie had this many levels)
+            decs[0] = ra
+            merged[0] = encode(ra)
+            patched += 1
+        page_form = (
+            not host_ef and own_level and ra.entries is not None and len(ra.entries) == len(r0.entries)
+        )
+    except Exception:  # noqa: BLE001 -- the element form's rule then
+        _note_exc("genie_place._copy_form")
+        page_form = False
+    return extra, after, page_form, patched
+
+
+def _merge_copy_root(
+    el: "Element", k: int, sub, own_level: bool, page_form: bool, compose: bool, decs: dict, merged: dict
+) -> tuple:
+    """The nested copy root's own level defaults and, on an element load, its value bag
+    within its templates (into ``decs`` / ``merged``): (how many records changed, its
+    binding level, which a member that starts using a parameter takes its binding from)."""
+    recs = el.records
+    patched = 0
+    try:
+        a0 = decs[0] if 0 in decs else decode(recs[k])
+        if a0.entries is not None and len(a0.entries) >= 2 and own_level:
+            before = encode(a0)
+            _own_level_defaults(a0.entries[1], declared_params(sub), templates=not page_form)
+            if encode(a0) != before:
+                decs[0] = a0
+                merged[0] = encode(a0)
+                patched += 1
+    except Exception:  # noqa: BLE001 -- the stored level then
+        _note_exc("genie_place._merge_copy_root/level")
+    if not compose:
+        # an element load: the nested root's own value bag holds only the keys
+        # its template bag holds (as in the corpus libraries; LIVE, CtDraw's save
+        # of a genie drops a nested root's '!*' sheet keys that have no template)
+        a0 = decs[0] if 0 in decs else decode(recs[k])
+        if a0.entries is not None and len(a0.entries) >= 2:
+            before = encode(a0)
+            _values_within_templates(a0.entries[0])
+            decs[0] = a0
+            blob = encode(a0)
+            if blob != before:
+                merged[0] = blob
+                patched += 1
+    # the copy root's binding level (the host's binding of the nested genie), which
+    # a member that starts using a parameter takes its binding from
+    try:
+        r_root = decs[0] if 0 in decs else decode(recs[k])
+        root_level = r_root.entries[1] if r_root.entries is not None and len(r_root.entries) >= 2 else None
+    except Exception:  # noqa: BLE001 -- no binding to take then
+        _note_exc("genie_place._merge_copy_root/binding")
+        root_level = None
+    return patched, root_level
+
+
+def _merge_copy_member(
+    a, c, j: int, extra, after, kept, compose: bool, own_level: bool, page_form: bool, root_level
+):
+    """Member ``j`` of a nested copy (``a``) merged with its current element record
+    (``c``): its values, templates and binding levels. Its bytes before the merge."""
+    before = None
+    if extra is not None and (kept is None or j in kept):
+        # a member with fewer levels than its element record and the copy's own:
+        # the levels of the genies between are missing (a record a host saved
+        # while the genie between was out of date took the clone's levels; a
+        # copy placed before its genie had a level). Empty ones go in their
+        # place, and the merge below binds them as it binds the kept members.
+        # LIVE, the fixture oracle's chain5/stale_host: CtDraw's save of n2
+        # once n1 was saved gave the record its four levels, bound; and
+        # chain4/param_gained: n1's copy of n0's copy of a genie that gained a
+        # level took one more
+        before = encode(a)
+        _pad_levels(a, len(c.entries) + extra, after)
+    before = before if before is not None else encode(a)
+    a.entries[0][1] = merge_bag(a.entries[0][1], memory_values(c.entries), compose, sheet_values=True)
+    a.entries[0][2] = merge_bag(a.entries[0][2], c.entries[0][2], compose, sheet_values=True)
+    # the nested genie's own level: the sub element's last one, when the
+    # sub element has a level (a parameterless sub element that keeps its
+    # nested copies in the page form has none: every level of its records
+    # above e0 is an inner genie's, LIVE, a tab genie)
+    top = len(c.entries) - 1 if own_level else len(c.entries)
+    if top >= 2 and len(a.entries) == len(c.entries) + (0 if page_form else 1):
+        # a member of a genie nested INSIDE the nested genie: the levels
+        # below the nested genie's own are its element's too -- the inner
+        # genies' binding templates and declarations come from the CURRENT
+        # element (LIVE, a page as CtDraw composes it: the
+        # instrument TAG template of a large genie, its nested
+        # element's own prefix, where the row genie's stored
+        # copies had the filter's prefix); the nested genie's own
+        # bindings (level ``top``: values, templates) are the outer
+        # element's, its declarations the current ones
+        # An element load does the same (LIVE, CtDraw's save of a
+        # genie: the members of a tab genie nested in a nested genie took a
+        # PageFilter binding the middle element's copy holds, appended after
+        # their own). A level of the middle element still in the page form
+        # (values, no templates) gives its values as the templates.
+        # A copy in the PAGE form (its placed level at ``top``) takes them as a
+        # page does (EditableDocument._merge_instance, LIVE): each
+        # stored key stays in place, the element's or not, with the element's
+        # value, and its new keys after them; a templated value stays as
+        # stored, the levels are derived again from the placed one
+        # (genie_norm.normalise_records), so a copy whose bindings did not
+        # change is kept as stored.
+        for lvl in range(1, top):
+            ea, ec = a.entries[lvl], c.entries[lvl]
+            ea[0] = Bag(list(ec[0].pairs), ea[0].ov)
+            if page_form:
+                ea[2] = merge_bag(ea[2], ec[2], templated=bag_keys(ea[2]))
+                tk = bag_keys(ea[2])
+                cur = Bag([(kk, v) for kk, v in ec[1].pairs if kk.lower() not in tk])
+                ea[1] = merge_bag(ea[1], cur, templated=bag_keys(ea[1]))
+                continue
+            ea[2] = merge_bag(ea[2], top_level_templates(ec), True)
+            ea[1] = merge_bag(ea[1], ec[1], True, bag_keys(ea[2]))
+        if own_level:
+            a.entries[top][0] = Bag(list(c.entries[top][0].pairs), a.entries[top][0].ov)
+            _bind_declared(a.entries, top, root_level, page_form)
+            _level_defaults(a.entries[top], templates=not page_form)
+    elif len(a.entries) >= 2 and len(c.entries) >= 2:
+        a.entries[1][0] = Bag(list(c.entries[1][0].pairs), a.entries[1][0].ov)
+        if own_level and len(a.entries) == len(c.entries) + (0 if page_form else 1):
+            _bind_declared(a.entries, 1, root_level, page_form)
+        _level_defaults(
+            a.entries[1],
+            templates=not page_form and own_level and len(a.entries) == len(c.entries) + 1,
+        )
+    # (a MEMBER keeps the '!*' sheet keys of its value bag that its templates
+    # lack: LIVE, CtDraw's load + save of a table genie whose nested row genie
+    # had changed kept them; only the nested ROOT's value bag is cut to its
+    # templates)
+    # a stored METADATA bit and section whose values the merge took away go
+    # with them (kept, the Graphics Builder refuses the host); every other
+    # stored section is kept as stored
+    drop_stale_metadata(a)
+    return before
+
+
+def _merge_changed_copy(
+    el: "Element", k: int, end: int, sub, resolver, keep_geom, compose: bool, key, unbuilt: set
+) -> int:
+    """The copy ``k``..``end`` of a nested genie that changed: its bags merged with its
+    current element's, its geometry derived again (a copy whose geometry fails goes into
+    ``unbuilt``). How many records changed."""
+    recs = el.records
+    patched = 0
+    if not hasattr(el, "nested_twins"):
+        el.nested_twins = {}
+    # each member is decoded once for both steps: its bags merged here,
+    # its geometry grafted below; a changed record is parsed once, at
+    # the end (a Rec encodes to the bytes decode reads it back from, so
+    # this is what re-decoding the merged record gave)
+    decs: dict = {}
+    merged: dict = {}
+    r0 = _decoded(sub, 0)
+    own_level = r0.entries is not None and len(r0.entries) >= 2
+    extra, after, page_form, n = _copy_form(el, k, r0, own_level, decs, merged)
+    patched += n
+    # the records a page composition just gained (CtDraw's clones of their element
+    # records: their levels are those records' own, LIVE) keep their levels
+    kept = getattr(el, "recomposed_spans", {}).get(k) if compose else None
+    n, root_level = _merge_copy_root(el, k, sub, own_level, page_form, compose, decs, merged)
+    patched += n
+    blobs: dict = {}  # j -> encode(decs[j]) as the merge left it
+    for j in range(1, end - k):
+        el.nested_twins.setdefault(k + j, sub.records[j])
+        a, c = decode(recs[k + j]), _decoded(sub, j)
+        decs[j] = a
+        if a.entries is None or c.entries is None:
+            continue
+        before = _merge_copy_member(a, c, j, extra, after, kept, compose, own_level, page_form, root_level)
+        blob = encode(a)
+        blobs[j] = blob  # (the geometry memo's key takes it)
+        if blob != before:
+            merged[j] = blob
+            patched += 1
+    try:
+        moved = _refresh_nested_geometry(
+            el,
+            k,
+            end,
+            sub,
+            resolver,
+            decs,
+            keep=keep_geom,
+            matched=getattr(el, "recomposed_spans", {}).get(k),
+            dec_blobs=blobs,
+        )
+    except _Unbuilt:
+        # (its bags are merged; its geometry stays as stored, so its import-table
+        # stamp does too: the element stays out of date for this genie)
+        moved = {}
+        if key is not None:
+            unbuilt.add(key)
+    # a button's WIDTH / HEIGHT are its box, whatever the current element says
+    for j in range(1, end - k):
+        if recs[k + j].type_code != BUTTON_TC:
+            continue
+        blob = moved.get(j, merged.get(j))
+        rb = decode(to_po(blob)) if blob is not None else decode(recs[k + j])
+        if _button_box_size(rb):
+            moved[j] = encode(rb)
+    patched += len(moved)
+    for j in sorted(set(merged) | set(moved)):
+        recs[k + j] = to_po(moved[j] if j in moved else merged[j])
+    return patched
+
+
+def _refresh_nested(
+    el: "Element", resolver, op: Optional[_Op], compose: bool = False, only=None, merge_only=None
+) -> int:
+    if resolver is None:
+        try:
+            # one fresh resolver per library folder and operation (the same
+            # search path SymbolResolver.for_page builds for each call)
+            resolver = op.for_page(el.lib_path) if op is not None else SymbolResolver.for_page(el.lib_path)
+        except Exception:  # noqa: BLE001
+            _note_exc("genie_place._refresh_nested")
+            return 0
+    recs = el.records
+    patched = 0
+    spans, hits, bag_flags, keys = _nested_spans(el, resolver, op, compose, only, merge_only)
+    if not compose and merge_only is not None:
+        patched += _recompose_unaligned(el, spans, bag_flags, keys, resolver)
     if compose:
         # a PAGE composition: a copy older than its element (fewer records than its
         # current element stores: stale, not an element form; CtDraw's element save keeps
@@ -1937,260 +2284,16 @@ def _refresh_nested(
             # each member names the element record it is merged with
             patched += _rekey_copy(recs, k, end, sub.records)
         if sub is not None and _aligns(sub.records, recs, k, end) and not bags:
-            # a copy of a genie that did not change: its bags as stored, its geometry
-            # derived again
-            if not hasattr(el, "nested_twins"):
-                el.nested_twins = {}
-            for j in range(1, end - k):
-                el.nested_twins.setdefault(k + j, sub.records[j])
-            try:
-                moved = _refresh_nested_geometry(
-                    el,
-                    k,
-                    end,
-                    sub,
-                    resolver,
-                    {},
-                    keep=keep_geom,
-                    matched=getattr(el, "recomposed_spans", {}).get(k),
-                )
-            except _Unbuilt:
-                moved = {}
-            # (only a DummyMarker's box: CtDraw's load + save keeps the stored geometry of
-            # the quarter-turned members of an unchanged copy, LIVE)
-            moved = {j: b for j, b in moved.items() if recs[k + j].type_code == 0xFFFF}
-            patched += len(moved)
-            for j in sorted(moved):
-                recs[k + j] = to_po(moved[j])
+            patched += _refresh_unchanged_copy(el, k, end, sub, resolver, keep_geom)
             continue
         if sub is not None and _aligns(sub.records, recs, k, end):
-            if not hasattr(el, "nested_twins"):
-                el.nested_twins = {}
-            # each member is decoded once for both steps: its bags merged here,
-            # its geometry grafted below; a changed record is parsed once, at
-            # the end (a Rec encodes to the bytes decode reads it back from, so
-            # this is what re-decoding the merged record gave)
-            decs: dict = {}
-            merged: dict = {}
-            r0 = _decoded(sub, 0)
-            own_level = r0.entries is not None and len(r0.entries) >= 2
-            # a copy in the PAGE form (a template, a super genie page and an element without
-            # parameters keep it): its root has as many levels as the nested element's root
-            # (the placed level in place of the element's own), so has each member; in the
-            # element form one more (the host element's level after the binding level). A
-            # genie element keeps every copy in the element form (convert_page_form brought
-            # a copy pasted from a page to it): a copy of a genie that had no level when it
-            # was placed (CtDraw's paste gives each record the host's level only) and has one
-            # now is not in the page form for having as many levels as its genie's root
-            # (LIVE, the fixture oracle's chain4/param_gained: the copy took one more level)
-            host_ef = _copies_in_element_form(el)
-            # a record with fewer levels than its element record and the copy's own ones
-            # (``extra``: 1 in the element form, 0 in the page form) is padded; the missing
-            # levels go before the copy's own last ``after`` levels (its host element's
-            # level, when the copy has one)
-            extra = after = None
-            try:
-                ra = decode(recs[k])
-                if ra.entries is not None and r0.entries is not None:
-                    if host_ef:
-                        extra = 1
-                        # (a copy placed with its bindings but without the host's level: placed
-                        # in the page form before the element had parameters of its own. Its
-                        # last level is the binding; the host's level goes after it)
-                        top = ra.entries[-1]
-                        bound_top = 2 <= len(ra.entries) <= len(r0.entries) and bool(
-                            top[1].pairs or top[2].pairs
-                        )
-                        after = 0 if bound_top else 1
-                    elif own_level and len(ra.entries) <= len(r0.entries):
-                        extra = after = 0
-                if extra is not None and _pad_levels(ra, len(r0.entries) + extra, after):
-                    # (a root placed before its genie had this many levels)
-                    decs[0] = ra
-                    merged[0] = encode(ra)
-                    patched += 1
-                page_form = (
-                    not host_ef
-                    and own_level
-                    and ra.entries is not None
-                    and len(ra.entries) == len(r0.entries)
-                )
-            except Exception:  # noqa: BLE001 -- the element form's rule then
-                _note_exc("genie_place._refresh_nested/copy form")
-                page_form = False
-            # the records a page composition just gained (CtDraw's clones of their element
-            # records: their levels are those records' own, LIVE) keep their levels
-            kept = getattr(el, "recomposed_spans", {}).get(k) if compose else None
-            try:
-                a0 = decs[0] if 0 in decs else decode(recs[k])
-                if a0.entries is not None and len(a0.entries) >= 2 and own_level:
-                    before = encode(a0)
-                    _own_level_defaults(a0.entries[1], declared_params(sub), templates=not page_form)
-                    if encode(a0) != before:
-                        decs[0] = a0
-                        merged[0] = encode(a0)
-                        patched += 1
-            except Exception:  # noqa: BLE001 -- the stored level then
-                _note_exc("genie_place._refresh_nested/root level")
-            if not compose:
-                # an element load: the nested root's own value bag holds only the keys
-                # its template bag holds (as in the corpus libraries; LIVE, CtDraw's save
-                # of a genie drops a nested root's '!*' sheet keys that have no template)
-                a0 = decs[0] if 0 in decs else decode(recs[k])
-                if a0.entries is not None and len(a0.entries) >= 2:
-                    before = encode(a0)
-                    _values_within_templates(a0.entries[0])
-                    decs[0] = a0
-                    blob = encode(a0)
-                    if blob != before:
-                        merged[0] = blob
-                        patched += 1
-            # the copy root's binding level (the host's binding of the nested genie), which
-            # a member that starts using a parameter takes its binding from
-            try:
-                r_root = decs[0] if 0 in decs else decode(recs[k])
-                root_level = (
-                    r_root.entries[1] if r_root.entries is not None and len(r_root.entries) >= 2 else None
-                )
-            except Exception:  # noqa: BLE001 -- no binding to take then
-                _note_exc("genie_place._refresh_nested/root binding")
-                root_level = None
-            blobs: dict = {}  # j -> encode(decs[j]) as the merge left it
-            for j in range(1, end - k):
-                el.nested_twins.setdefault(k + j, sub.records[j])
-                a, c = decode(recs[k + j]), _decoded(sub, j)
-                decs[j] = a
-                if a.entries is None or c.entries is None:
-                    continue
-                before = None
-                if extra is not None and (kept is None or j in kept):
-                    # a member with fewer levels than its element record and the copy's own:
-                    # the levels of the genies between are missing (a record a host saved
-                    # while the genie between was out of date took the clone's levels; a
-                    # copy placed before its genie had a level). Empty ones go in their
-                    # place, and the merge below binds them as it binds the kept members.
-                    # LIVE, the fixture oracle's chain5/stale_host: CtDraw's save of n2
-                    # once n1 was saved gave the record its four levels, bound; and
-                    # chain4/param_gained: n1's copy of n0's copy of a genie that gained a
-                    # level took one more
-                    before = encode(a)
-                    _pad_levels(a, len(c.entries) + extra, after)
-                before = before if before is not None else encode(a)
-                a.entries[0][1] = _merge_bag(
-                    a.entries[0][1], memory_values(c.entries), compose, sheet_values=True
-                )
-                a.entries[0][2] = _merge_bag(a.entries[0][2], c.entries[0][2], compose, sheet_values=True)
-                # the nested genie's own level: the sub element's last one, when the
-                # sub element has a level (a parameterless sub element that keeps its
-                # nested copies in the page form has none: every level of its records
-                # above e0 is an inner genie's, LIVE, a tab genie)
-                top = len(c.entries) - 1 if own_level else len(c.entries)
-                if top >= 2 and len(a.entries) == len(c.entries) + (0 if page_form else 1):
-                    # a member of a genie nested INSIDE the nested genie: the levels
-                    # below the nested genie's own are its element's too -- the inner
-                    # genies' binding templates and declarations come from the CURRENT
-                    # element (LIVE, a page as CtDraw composes it: the
-                    # instrument TAG template of a large genie, its nested
-                    # element's own prefix, where the row genie's stored
-                    # copies had the filter's prefix); the nested genie's own
-                    # bindings (level ``top``: values, templates) are the outer
-                    # element's, its declarations the current ones
-                    # An element load does the same (LIVE, CtDraw's save of a
-                    # genie: the members of a tab genie nested in a nested genie took a
-                    # PageFilter binding the middle element's copy holds, appended after
-                    # their own). A level of the middle element still in the page form
-                    # (values, no templates) gives its values as the templates.
-                    # A copy in the PAGE form (its placed level at ``top``) takes them as a
-                    # page does (EditableDocument._merge_instance, LIVE): each
-                    # stored key stays in place, the element's or not, with the element's
-                    # value, and its new keys after them; a templated value stays as
-                    # stored, the levels are derived again from the placed one
-                    # (genie_norm.normalise_records), so a copy whose bindings did not
-                    # change is kept as stored.
-                    for lvl in range(1, top):
-                        ea, ec = a.entries[lvl], c.entries[lvl]
-                        ea[0] = Bag(list(ec[0].pairs), ea[0].ov)
-                        if page_form:
-                            ea[2] = _merge_bag(ea[2], ec[2], templated=bag_keys(ea[2]))
-                            tk = bag_keys(ea[2])
-                            cur = Bag([(kk, v) for kk, v in ec[1].pairs if kk.lower() not in tk])
-                            ea[1] = _merge_bag(ea[1], cur, templated=bag_keys(ea[1]))
-                            continue
-                        ea[2] = _merge_bag(ea[2], top_level_templates(ec), True)
-                        ea[1] = _merge_bag(ea[1], ec[1], True, bag_keys(ea[2]))
-                    if own_level:
-                        a.entries[top][0] = Bag(list(c.entries[top][0].pairs), a.entries[top][0].ov)
-                        _bind_declared(a.entries, top, root_level, page_form)
-                        _level_defaults(a.entries[top], templates=not page_form)
-                elif len(a.entries) >= 2 and len(c.entries) >= 2:
-                    a.entries[1][0] = Bag(list(c.entries[1][0].pairs), a.entries[1][0].ov)
-                    if own_level and len(a.entries) == len(c.entries) + (0 if page_form else 1):
-                        _bind_declared(a.entries, 1, root_level, page_form)
-                    _level_defaults(
-                        a.entries[1],
-                        templates=not page_form and own_level and len(a.entries) == len(c.entries) + 1,
-                    )
-                # (a MEMBER keeps the '!*' sheet keys of its value bag that its templates
-                # lack: LIVE, CtDraw's load + save of a table genie whose nested row genie
-                # had changed kept them; only the nested ROOT's value bag is cut to its
-                # templates)
-                # a stored METADATA bit and section whose values the merge took away go
-                # with them (kept, the Graphics Builder refuses the host); every other
-                # stored section is kept as stored
-                drop_stale_metadata(a)
-                blob = encode(a)
-                blobs[j] = blob  # (the geometry memo's key takes it)
-                if blob != before:
-                    merged[j] = blob
-                    patched += 1
-            try:
-                moved = _refresh_nested_geometry(
-                    el,
-                    k,
-                    end,
-                    sub,
-                    resolver,
-                    decs,
-                    keep=keep_geom,
-                    matched=getattr(el, "recomposed_spans", {}).get(k),
-                    dec_blobs=blobs,
-                )
-            except _Unbuilt:
-                # (its bags are merged; its geometry stays as stored, so its import-table
-                # stamp does too: the element stays out of date for this genie)
-                moved = {}
-                if key is not None:
-                    unbuilt.add(key)
-            # a button's WIDTH / HEIGHT are its box, whatever the current element says
-            for j in range(1, end - k):
-                if recs[k + j].type_code != BUTTON_TC:
-                    continue
-                blob = moved.get(j, merged.get(j))
-                rb = decode(to_po(blob)) if blob is not None else decode(recs[k + j])
-                if _button_box_size(rb):
-                    moved[j] = encode(rb)
-            patched += len(moved)
-            for j in sorted(set(merged) | set(moved)):
-                recs[k + j] = to_po(moved[j] if j in moved else merged[j])
+            patched += _merge_changed_copy(el, k, end, sub, resolver, keep_geom, compose, key, unbuilt)
     if unbuilt and not compose and merge_only is not None:
         # a changed genie whose copy lines up but whose geometry could not be derived
         # again keeps its old stamp too
         el.stale_nested = frozenset(getattr(el, "stale_nested", frozenset()) | unbuilt)
     if only is not None:
-        # the copies of the changed genies themselves, at any depth (record indexes of
-        # this element): a copy of a genie that only NESTS one keeps its other records as
-        # stored here -- older than what a page composed from their current definitions
-        # holds --, so a caller replaces just these
-        inner = []
-        for (k, end, sub, _keep), hit in zip(spans, hits):
-            if hit or sub is None:
-                inner.append((k, end))
-            elif end - k == len(sub.records):
-                inner += [(k + a, k + b) for a, b in getattr(sub, "affected_spans", ())]
-            else:
-                inner.append((k, end))
-        el.affected = bool(spans)
-        el.affected_spans = inner
+        _note_affected_spans(el, spans, hits)
     return patched
 
 
@@ -2514,7 +2617,7 @@ def _restructured_geometry(recs, k: int, end: int, rebuilt, decs, keep, own, sub
             slots = [_slot(src, 0), (m2, s2), (m3, tuple(s3))]
         new_slots[j] = slots
         bm, bt = _slot(b, 2)
-        D = P.affine_mul(slots[2][1] if slots[2][0] else P.IDENT, P._affine_inv(bt if bm else P.IDENT))
+        D = P.affine_mul(slots[2][1] if slots[2][0] else P.IDENT, P.affine_inv(bt if bm else P.IDENT))
         anchor, rect1, rect2 = b.anchor, b.rect1, b.rect2
         if any(abs(x - y) > 1e-9 for x, y in zip(D, P.IDENT)):
             ax = D[0] * anchor[0] + D[2] * anchor[1] + D[4]
@@ -2940,7 +3043,7 @@ def engine_root_extent(el: "Element") -> Tuple[int, int, int, int]:
                 # SUBSTITUTED bag e0.b1; the caption is the tail text (the
                 # %TEMPLATE% caption in a genie element)
                 bag = r.entries[0][1] if r.entries else Bag([])
-                s = TM.measured_string(_Props(bag), tail["text"])
+                s = TM.measured_string(Props(bag), tail["text"])
                 M = flip_total(po)
                 if s is not None and M is not None:
                     # a mirrored text: measured in its local frame (at its echo) and
@@ -3335,18 +3438,18 @@ def text_strings(values: Bag, caption: str) -> bytes:
     flag = {0: 3, 1: 5, 2: 9}.get(mode, 1)
     g = lambda k: values.get(k) or ""
     st = lambda v: "" if v == STATE_UNSET else v
-    out = struct.pack("<I", flag) + _enc_lp(g("TXT_OFF") or caption)
+    out = struct.pack("<I", flag) + enc_lp(g("TXT_OFF") or caption)
     if flag & 2:
-        out += _enc_lp(g("TXT_ON"))
+        out += enc_lp(g("TXT_ON"))
     if flag & 4:
         n = 0
         for i in range(32, -1, -1):
             if g("STATE_%d" % i):
                 n = i + 1
                 break
-        out += struct.pack("<H", n) + b"".join(_enc_lp(st(g("STATE_%d" % i))) for i in range(n))
+        out += struct.pack("<H", n) + b"".join(enc_lp(st(g("STATE_%d" % i))) for i in range(n))
     if flag & 8:
-        out += struct.pack("<H", 256) + b"".join(_enc_lp(st(g("ARRAY_%d" % i))) for i in range(256))
+        out += struct.pack("<H", 256) + b"".join(enc_lp(st(g("ARRAY_%d" % i))) for i in range(256))
     return out
 
 
@@ -3361,7 +3464,7 @@ def metadata_section(values: Bag) -> bytes:
         name, _, val = v.lstrip("=").partition("=")
         items.append((name, "*" + val))
         i += 1
-    return struct.pack("<H", len(items)) + b"".join(_enc_lp(a) + _enc_lp(b) for a, b in items)
+    return struct.pack("<H", len(items)) + b"".join(enc_lp(a) + enc_lp(b) for a, b in items)
 
 
 def has_metadata(values: Bag) -> bool:
@@ -3398,11 +3501,6 @@ def rederive_metadata(r: Rec) -> bool:
     r.cls = new + r.cls[old:]
     r.dw = dw
     return True
-
-
-#: string part (kept) lengths for classes whose string part is a fixed-size block;
-#: everything after it is the appearance section (stripped)
-_FIXED_42F = {SYMSET_TC: 4, 0xFFFF: None}
 
 
 def strip_class_section(r: Rec, values: Optional[Bag], caption: Optional[str], el_dw: int) -> bytes:
@@ -3449,16 +3547,14 @@ def rebuild_colour_state(
         return None
     b = el_po.body_raw
     props = {k: v for k, v in values.pairs}
-    P0 = CS.state0_source(b, L["style_at"]) if "style_at" in L else CS._pair_at(b, L["state0_at"])
+    P0 = CS.state0_source(b, L["style_at"]) if "style_at" in L else CS.pair_at(b, L["state0_at"])
     if p0_po is not None and p0_po is not el_po:
         # a member of a genie NESTED in the element: state-0 comes from the
         # CURRENT nested element definition (LIVE dpsalarm.DPSStateRow)
         L2 = CS.layout(p0_po)
         if L2 is not None:
             b2 = p0_po.body_raw
-            P0 = (
-                CS.state0_source(b2, L2["style_at"]) if "style_at" in L2 else CS._pair_at(b2, L2["state0_at"])
-            )
+            P0 = CS.state0_source(b2, L2["style_at"]) if "style_at" in L2 else CS.pair_at(b2, L2["state0_at"])
     mx = props.get("COL_MAXON", "")
     flag = (
         1
@@ -3471,21 +3567,21 @@ def rebuild_colour_state(
     )
     out = struct.pack("<I", flag) + struct.pack("<II", *P0)
     if flag & 2:
-        out += struct.pack("<II", *CS._parse(mx))
+        out += struct.pack("<II", *CS.parse(mx))
     if flag & 4:
         hi = max(i for i in range(256) if props.get("COL_STA_%d" % i, ""))
         out += struct.pack("<H", hi + 1) + struct.pack("<II", *P0)
         for i in range(1, hi + 1):
-            out += struct.pack("<II", *CS._parse(props.get("COL_STA_%d" % i, "")))
+            out += struct.pack("<II", *CS.parse(props.get("COL_STA_%d" % i, "")))
     if flag & 8:
         n_old = L.get("arr_n", 0)
         out += struct.pack("<H", 256) + struct.pack("<II", *P0)
         for i in range(1, 256):
             v = props.get("COL_ARR_%d" % i, "")
             if v:
-                pair = CS._parse(v)
+                pair = CS.parse(v)
             elif i < n_old:
-                pair = CS._pair_at(b, L["arr_at"] + 8 * i)
+                pair = CS.pair_at(b, L["arr_at"] + 8 * i)
             else:
                 # a NEW array: the palette default the saver writes (as
                 # colourstate.rebuild; NO_COLOUR would come back as transparent
@@ -3498,17 +3594,17 @@ def rebuild_colour_state(
             v = props.get("COL_THR_%d" % i, "")
             if not v:
                 break
-            thr.append(CS._parse_thr(v))
+            thr.append(CS.parse_thr(v))
         out += struct.pack("<H", len(thr)) + b"".join(thr)
     if flag & 0x20:
-        out += struct.pack("<II", *CS._parse(mx))
+        out += struct.pack("<II", *CS.parse(mx))
     if flag & 0x40:
-        out += struct.pack("<II", *CS._parse(props.get("FILCOL", "")))
+        out += struct.pack("<II", *CS.parse(props.get("FILCOL", "")))
     return out
 
 
 # =========================================================================== text extent
-class _Props:
+class Props:
     def __init__(self, bag: Bag):
         self._d = {k: v for k, v in bag.pairs}
 
@@ -3530,7 +3626,7 @@ def text_extent(el_po: PageObject, values: Bag, anchor, caption=None) -> Optiona
         return None
     attribs = el_po.body_raw[L["style_at"] + 3]
     cap = caption if caption is not None else (values.get("TXT_OFF") or tail["text"])
-    s = TM.measured_string(_Props(values), cap)
+    s = TM.measured_string(Props(values), cap)
     if s is None:
         return None
     return TM.extent(s, tail["face"], tail["size"], attribs, tail["orient"], tail["charset"], tuple(anchor))
@@ -3773,6 +3869,276 @@ def _build_recs(
     return _compose_geometry(captions, el, n, out_vals, parents, recs, twins, opts, resolver, member_locals)
 
 
+def _placed_depth(el, parents, k: int) -> int:
+    """The levels record ``k`` has with the placed level on top: 1 + the genie roots
+    nested in the element around it (``k`` included)."""
+    dk = 1
+    a = k
+    while a is not None and a != 0:
+        if el.records[a].class_flag and (el.records[a].subtype_size & 0x200):
+            dk += 1
+        a = parents[a]
+    return dk
+
+
+def _derive_unbound(ents, N: int, k: int, specials, untrimmed) -> None:
+    """Record ``k``'s levels without a placed one: each derived from the level above,
+    e0's values from level 1, left-trimmed."""
+    for lvl in range(N - 1, 0, -1):
+        subst_level(ents[lvl], ents[lvl + 1], specials)
+    e0, lv1 = ents[0], ents[1]
+    for key, tmpl in e0[2].pairs:
+        v = substitute(tmpl, lv1[1], lv1[0], key, specials)
+        e0[1].set(key, v)
+        if v[:1].isspace():
+            # the left trim of every derived value (below): a genie without
+            # parameters holding n2 placed with Name unbound would show ' L1'
+            # where its element and a placement of n2 show 'L1'
+            untrimmed.setdefault(k, {})[key.lower()] = v
+            low = key.lower()
+            e0[1].pairs = [(kk, vv.lstrip() if kk.lower() == low else vv) for kk, vv in e0[1].pairs]
+
+
+def _placed_member_values(top, P0, opts):
+    """A member's placed-level value bag: its declared names in the root bag's order
+    (``P0``), spelled as it declares them, an unset one at its default."""
+    vals = Bag([], top[1].ov)
+    decl = {nm.lower(): (nm, d) for nm, d in top[0].pairs}
+    # (the names come from the stored declaration bag only: a typed binding
+    # the level below's tokens reference without a declaration is NOT
+    # taken either -- Example !EquipControl's tabbar (CtDraw-authored) has
+    # no PageLabel on its placed level though typed and referenced; the
+    # PageFilter CtDraw's save of a genie added came from the middle
+    # element's own copy, refresh_nested's inner-level merge)
+    done = set()
+    if opts.recompose:
+        for name, dflt in top[0].pairs:
+            if dflt and dflt != "\n" and name.lower() not in done:
+                vals.pairs.append((name, dflt))
+                done.add(name.lower())
+        p0 = {pk.lower(): pv for pk, pv in P0.pairs}
+        for name, _dflt in top[0].pairs:
+            pv = p0.get(name.lower())
+            if pv:
+                vals.set(name, pv)
+    else:
+        for pk, pv in P0.pairs:
+            hit = decl.get(pk.lower())
+            if hit and pv and pk.lower() not in done:
+                vals.pairs.append((hit[0], pv))
+                done.add(pk.lower())
+        for name, dflt in top[0].pairs:
+            if name.lower() in done:
+                continue
+            v = "" if dflt == "\n" else dflt
+            if v:
+                vals.pairs.append((name, v))
+    return vals
+
+
+def _derive_placed(ents, N: int, k: int, el, el_po, P0, specials, untrimmed, opts) -> None:
+    """Record ``k``'s levels under the placed one (level ``N``, from the root bag
+    ``P0``): each derived top down, e0's values from level 1, left-trimmed."""
+    root = k == 0
+    top = ents[N]
+    if root:
+        top[1] = Bag(list(P0.pairs), top[1].ov)
+    else:
+        # LIVE (switches.MiniToggleSwitch): the member's level-N
+        # value bag lists its declared names in the ROOT BAG's
+        # order (P0), spelled as the member declares them;
+        # declared-but-unset names fall back to their default
+        top[1] = _placed_member_values(top, P0, opts)
+    if opts.into_genie_element:
+        # the typed bindings are TEMPLATES of the outer element: the value bag
+        # = their substitution with the outer element's unbound level
+        typed = Bag(list(top[1].pairs), 11)
+        vals = Bag([], 11)
+        for key, tmpl in typed.pairs:
+            v = substitute(tmpl, Bag([]), Bag([]), key, specials)
+            if v:
+                vals.pairs.append((key, v))
+        if root:
+            top[0] = Bag([(nm, d) for nm, d in declared_params(el).items() if d], 0)
+        top[1], top[2] = vals, typed
+    nested_root = bool(el_po.class_flag and (el_po.subtype_size & 0x200)) and not root
+    member_rule = opts.into_genie_element and not nested_root
+    # a member of the placed genie: each level under the placed one is its
+    # templates with the EFFECTIVE values above (the placed level's: its
+    # templates as typed), top_level_templates
+    eff = top_level_templates(ents[N]) if member_rule else None
+    for lvl in range(N - 1, 0, -1):
+        ent, outer = ents[lvl], ents[lvl + 1]
+        subst_level(ent, outer, specials, outer_vals=eff)
+        if eff is not None:
+            eff = ent[1]
+    e0, lv1 = ents[0], ents[1]
+    lv1_vals = eff if eff is not None else lv1[1]
+    for key, tmpl in e0[2].pairs:
+        v = substitute(tmpl, lv1_vals, lv1[0], key, specials)
+        e0[1].set(key, v)
+        if v[:1].isspace():
+            untrimmed.setdefault(k, {})[key.lower()] = v
+            # a value is left-trimmed after it is set, so one of only blanks
+            # stays as '' (LIVE: face1 '%TAG% @(Output to Auto)'; CtDraw's load
+            # of pages: COMMENT '%NAME%  ' and TXT_OFF '%header%' + CR LF under
+            # unbound tokens)
+            low = key.lower()
+            e0[1].pairs = [(kk, vv.lstrip() if kk.lower() == low else vv) for kk, vv in e0[1].pairs]
+
+
+def _level_size_words(ents, N: int, r, k: int, el, el_po, opts) -> None:
+    """The size words of record ``k``'s bags."""
+    root = k == 0
+    # LIVE: the placed root's level-N value bag always carries an
+    # 11-byte internal pair; a genie NESTED in the element carries
+    # it on its own level's value AND template bags
+    if N >= 1 and root:
+        ents[N][1].ov = 11
+    elif N >= 1 and el.records[k].class_flag and (el.records[k].subtype_size & 0x200):
+        # a nested genie root's OWN level is always level 1; its
+        # template bag carries the pair only when it holds templates
+        ents[1][1].ov = 11
+        ents[1][2].ov = 11 if ents[1][2].pairs else 0
+    # overshoots: e0.b1 keeps the class's internal pair, e0.b2 is rebuilt
+    if ents[0][1].ov > 11:
+        ents[0][1].ov = 11 if r.tc in _OV11_TCS else 10
+    # LIVE (B2/B3): the instance template bag
+    # carries the 10-byte internal pair only on a LINKED symbol
+    # member (element tc 7 with dwFlags 0x1); everything else 0
+    twin_dw = getattr(el, "nested_twins", {}).get(k, el_po).subtype_size
+    ents[0][2].ov = (
+        10
+        if (r.tc == BITMAP_TC and (twin_dw & 0x1 or el_po.subtype_size & 0x1) and opts.bitmap_b2_ov10)
+        else opts.ov_e0b2
+    )
+
+
+def _outer_element_level(ents, N: int, root: bool, has_placed: bool, opts) -> None:
+    """Pasted into a genie element: the outer element's level appended (the parameters
+    the record's bindings name; empty without a placed level)."""
+    if not opts.into_genie_element:
+        return
+    if N >= 1 and has_placed:
+        # the outer element's level: the outer parameters this record's bindings
+        # name (a nested root: none)
+        # (a nested root: the defaults its members' bindings name, LIVE
+        # '%Q=5%' -> Q = 5 on the root's element level, [] without a default)
+        decl = (
+            [(nm, d) for nm, d in template_decls(ents[N][2]).items() if d is not None]
+            if root
+            else [(nm, d if d is not None else NO_DEFAULT) for nm, d in template_decls(ents[N][2]).items()]
+        )
+        ents.append([Bag(decl, 0), Bag([], 0), Bag([], 0)])
+    else:
+        # a record without a placed level (every record of a genie without
+        # parameters; a member of a genie it nests bound with constants): the
+        # outer element's level all the same, empty. LIVE, the fixture oracle's
+        # chain4/param_gained: CtDraw's paste of fx_plain (its records e0 only)
+        # into n0 gave its root and members two levels, the second empty, and n1's
+        # copy of it three (with e0 only, a record the genie gains later would take
+        # one level more than its siblings)
+        ents.append([Bag([], 0), Bag([], 0), Bag([], 0)])
+
+
+def _bind_entries(
+    r, k: int, el, el_po, parents, recs, P0, specials, untrimmed, root_value_keys, opts, own_top
+):
+    """Record ``k``'s entries bound top down (its placed level from the root bag ``P0``),
+    into ``r.entries``. ``own_top``: whether a record short of the levels of the genies
+    between takes the placed level (None: not decided yet); returned, decided."""
+    root = k == 0
+    ents = [[b.copy() for b in e] for e in r.entries]
+    if not root and len(ents) >= 3:
+        # a member of a genie nested in the element starts from its values as
+        # CtDraw holds them in memory (the file has the save form): a key whose
+        # value the element leaves empty is set after the others (LIVE,
+        # CtDraw's load of pages: COMMENT after VISIBLE on a nested alarm
+        # member, COMMENT before TXT_STR where both were empty in the element)
+        ents[0][1] = memory_values(r.entries).copy()
+    N = len(ents) - 1
+    # genie levels this record would have with the PLACED level on
+    # top: 1 + the genie roots nested in the element around (and
+    # including) it. LIVE (servermon.list_cluster): a nested genie
+    # whose bindings are constants carries NO placed level -- its top
+    # level is its own and keeps the element's values.
+    dk = _placed_depth(el, parents, k)
+    has_placed = root or N >= dk
+    if not has_placed and N >= 1 and own_top is None:
+        own_top = (
+            not opts.into_genie_element
+            and recs[0].entries is not None
+            and len(recs[0].entries) >= 2
+            and _copies_in_element_form(el)
+        )
+    if not has_placed and N >= 1 and own_top:
+        # LIVE, the fixture oracle's chain6/stale_page: n2 placed with Name 'P2'
+        # (n0 gained '%Label% X', n1 saved, n2 not): CtDraw's page load + save and a
+        # new placement bind the gained text, its three levels n1's record's (Label
+        # 'P2 L1', Name 'P2'), 'P2 L1 X' 49 wide, the genie's box refit to it. An
+        # element save keeps such a record unbound (chain5/stale_host: the Label
+        # binding level empty, 'X')
+        has_placed = True
+    if root and N == 0 and P0.pairs and not opts.into_genie_element and not opts.recompose:
+        # a genie without a level of its own (it declares no parameter) PLACED with
+        # values: they go to the root's own value bag, set as sets
+        # them, and no member takes them (LIVE, the fixture oracle's
+        # chain6/paramless_copy same/page: fx_none placed with P and Label stored
+        # them in its root's e0.b1 only, every text unbound, the root not dynamic:
+        # dw 0x209). A genie form can ask for such values, so they are kept.
+        # (not on a composition again, the genie dialog's OK)
+        have = {kk.lower() for kk, _v in ents[0][1].pairs}
+        for key, v in P0.pairs:
+            ents[0][1].set(key, v)
+            if key.lower() not in have:
+                root_value_keys.add(key.lower())
+    if N >= 1 and not has_placed:
+        _derive_unbound(ents, N, k, specials, untrimmed)
+    if N >= 1 and has_placed:
+        _derive_placed(ents, N, k, el, el_po, P0, specials, untrimmed, opts)
+    _level_size_words(ents, N, r, k, el, el_po, opts)
+    if opts.add_an_name and r.name and not root and ents[0][1].get("__AN_NAME__") is None:
+        ents[0][1].pairs.append(("__AN_NAME__", r.name))
+    _outer_element_level(ents, N, root, has_placed, opts)
+    r.entries = ents
+    return own_top
+
+
+def _record_class_section(r, k: int, el, el_po, out_vals, captions, untrimmed, opts) -> None:
+    """Record ``k``'s class section, colour state, button caption and a root's header
+    name, from its substituted values; its caption into ``captions``."""
+    root = k == 0
+    # -- class section / button caption ---------------------------------------
+    caption = None
+    if r.tc == TEXT_TC:
+        t = G.parse_text_tail(el_po) if el_po.subtype_size & 2 else None
+        caption = t["text"] if t else None
+        # LIVE: when the template bag carries TXT_OFF the caption IS the
+        # substituted value -- '' when the parameter is unset (DPSStateRow
+        # '%StateName%', MonthPanel '%Calendar%': string section lpstr ''
+        # and the extent measured as ' '), never the twin's template text
+        if r.entries is not None and r.entries[0][2].get("TXT_OFF") is not None:
+            caption = out_vals[k].get("TXT_OFF") or ""
+            # (the string section keeps the caption as substituted, before the bag
+            # value's left trim: CR LF for '%header%' + CR LF under an unbound
+            # header, LIVE)
+            caption = untrimmed.get(k, {}).get("txt_off", caption)
+    captions[k] = caption
+    r.cls = strip_class_section(r, out_vals[k], caption, el_po.subtype_size)
+    if out_vals[k] is not None:
+        cs = rebuild_colour_state(el_po, out_vals[k], getattr(el, "nested_twins", {}).get(k))
+        if cs is not None:
+            r.cs = cs
+    if r.dw & 0x80 and out_vals[k] is not None and out_vals[k].get("TEXT") is not None:
+        r.s80 = enc_lp(out_vals[k].get("TEXT"))
+    r.style = None
+    # -- header name --------------------------------------------------------
+    if root and opts.root_name_from_bag and out_vals[k] is not None:
+        nm = out_vals[k].get("__AN_NAME__")
+        if nm:
+            r.name = nm
+
+
 def _bind_record_levels(
     P0, captions, el, new_h, out_vals, parents, recs, root_value_keys, specials, untrimmed, opts
 ):
@@ -3799,229 +4165,11 @@ def _bind_record_levels(
             r.link = None
         # -- bags: top-down substitution chain -----------------------------------
         if r.entries is not None:
-            ents = [[b.copy() for b in e] for e in r.entries]
-            if not root and len(ents) >= 3:
-                # a member of a genie nested in the element starts from its values as
-                # CtDraw holds them in memory (the file has the save form): a key whose
-                # value the element leaves empty is set after the others (LIVE,
-                # CtDraw's load of pages: COMMENT after VISIBLE on a nested alarm
-                # member, COMMENT before TXT_STR where both were empty in the element)
-                ents[0][1] = memory_values(r.entries).copy()
-            N = len(ents) - 1
-            # genie levels this record would have with the PLACED level on
-            # top: 1 + the genie roots nested in the element around (and
-            # including) it. LIVE (servermon.list_cluster): a nested genie
-            # whose bindings are constants carries NO placed level -- its top
-            # level is its own and keeps the element's values.
-            dk = 1
-            a = k
-            while a is not None and a != 0:
-                if el.records[a].class_flag and (el.records[a].subtype_size & 0x200):
-                    dk += 1
-                a = parents[a]
-            has_placed = root or N >= dk
-            if not has_placed and N >= 1 and own_top is None:
-                own_top = (
-                    not opts.into_genie_element
-                    and recs[0].entries is not None
-                    and len(recs[0].entries) >= 2
-                    and _copies_in_element_form(el)
-                )
-            if not has_placed and N >= 1 and own_top:
-                # LIVE, the fixture oracle's chain6/stale_page: n2 placed with Name 'P2'
-                # (n0 gained '%Label% X', n1 saved, n2 not): CtDraw's page load + save and a
-                # new placement bind the gained text, its three levels n1's record's (Label
-                # 'P2 L1', Name 'P2'), 'P2 L1 X' 49 wide, the genie's box refit to it. An
-                # element save keeps such a record unbound (chain5/stale_host: the Label
-                # binding level empty, 'X')
-                has_placed = True
-            if root and N == 0 and P0.pairs and not opts.into_genie_element and not opts.recompose:
-                # a genie without a level of its own (it declares no parameter) PLACED with
-                # values: they go to the root's own value bag, set as sets
-                # them, and no member takes them (LIVE, the fixture oracle's
-                # chain6/paramless_copy same/page: fx_none placed with P and Label stored
-                # them in its root's e0.b1 only, every text unbound, the root not dynamic:
-                # dw 0x209). A genie form can ask for such values, so they are kept.
-                # (not on a composition again, the genie dialog's OK)
-                have = {kk.lower() for kk, _v in ents[0][1].pairs}
-                for key, v in P0.pairs:
-                    ents[0][1].set(key, v)
-                    if key.lower() not in have:
-                        root_value_keys.add(key.lower())
-            if N >= 1 and not has_placed:
-                for lvl in range(N - 1, 0, -1):
-                    subst_level(ents[lvl], ents[lvl + 1], specials)
-                e0, lv1 = ents[0], ents[1]
-                for key, tmpl in e0[2].pairs:
-                    v = substitute(tmpl, lv1[1], lv1[0], key, specials)
-                    e0[1].set(key, v)
-                    if v[:1].isspace():
-                        # the left trim of every derived value (below): a genie without
-                        # parameters holding n2 placed with Name unbound would show ' L1'
-                        # where its element and a placement of n2 show 'L1'
-                        untrimmed.setdefault(k, {})[key.lower()] = v
-                        low = key.lower()
-                        e0[1].pairs = [
-                            (kk, vv.lstrip() if kk.lower() == low else vv) for kk, vv in e0[1].pairs
-                        ]
-            if N >= 1 and has_placed:
-                top = ents[N]
-                if root:
-                    top[1] = Bag(list(P0.pairs), top[1].ov)
-                else:
-                    # LIVE (switches.MiniToggleSwitch): the member's level-N
-                    # value bag lists its declared names in the ROOT BAG's
-                    # order (P0), spelled as the member declares them;
-                    # declared-but-unset names fall back to their default
-                    vals = Bag([], top[1].ov)
-                    decl = {nm.lower(): (nm, d) for nm, d in top[0].pairs}
-                    # (the names come from the stored declaration bag only: a typed binding
-                    # the level below's tokens reference without a declaration is NOT
-                    # taken either -- Example !EquipControl's tabbar (CtDraw-authored) has
-                    # no PageLabel on its placed level though typed and referenced; the
-                    # PageFilter CtDraw's save of a genie added came from the middle
-                    # element's own copy, refresh_nested's inner-level merge)
-                    done = set()
-                    if opts.recompose:
-                        for name, dflt in top[0].pairs:
-                            if dflt and dflt != "\n" and name.lower() not in done:
-                                vals.pairs.append((name, dflt))
-                                done.add(name.lower())
-                        p0 = {pk.lower(): pv for pk, pv in P0.pairs}
-                        for name, _dflt in top[0].pairs:
-                            pv = p0.get(name.lower())
-                            if pv:
-                                vals.set(name, pv)
-                    else:
-                        for pk, pv in P0.pairs:
-                            hit = decl.get(pk.lower())
-                            if hit and pv and pk.lower() not in done:
-                                vals.pairs.append((hit[0], pv))
-                                done.add(pk.lower())
-                        for name, dflt in top[0].pairs:
-                            if name.lower() in done:
-                                continue
-                            v = "" if dflt == "\n" else dflt
-                            if v:
-                                vals.pairs.append((name, v))
-                    top[1] = vals
-                if opts.into_genie_element:
-                    # the typed bindings are TEMPLATES of the outer element: the value bag
-                    # = their substitution with the outer element's unbound level
-                    typed = Bag(list(top[1].pairs), 11)
-                    vals = Bag([], 11)
-                    for key, tmpl in typed.pairs:
-                        v = substitute(tmpl, Bag([]), Bag([]), key, specials)
-                        if v:
-                            vals.pairs.append((key, v))
-                    if root:
-                        top[0] = Bag([(nm, d) for nm, d in declared_params(el).items() if d], 0)
-                    top[1], top[2] = vals, typed
-                nested_root = bool(el_po.class_flag and (el_po.subtype_size & 0x200)) and not root
-                member_rule = opts.into_genie_element and not nested_root
-                # a member of the placed genie: each level under the placed one is its
-                # templates with the EFFECTIVE values above (the placed level's: its
-                # templates as typed), top_level_templates
-                eff = top_level_templates(ents[N]) if member_rule else None
-                for lvl in range(N - 1, 0, -1):
-                    ent, outer = ents[lvl], ents[lvl + 1]
-                    subst_level(ent, outer, specials, outer_vals=eff)
-                    if eff is not None:
-                        eff = ent[1]
-                e0, lv1 = ents[0], ents[1]
-                lv1_vals = eff if eff is not None else lv1[1]
-                for key, tmpl in e0[2].pairs:
-                    v = substitute(tmpl, lv1_vals, lv1[0], key, specials)
-                    e0[1].set(key, v)
-                    if v[:1].isspace():
-                        untrimmed.setdefault(k, {})[key.lower()] = v
-                        # a value is left-trimmed after it is set, so one of only blanks
-                        # stays as '' (LIVE: face1 '%TAG% @(Output to Auto)'; CtDraw's load
-                        # of pages: COMMENT '%NAME%  ' and TXT_OFF '%header%' + CR LF under
-                        # unbound tokens)
-                        low = key.lower()
-                        e0[1].pairs = [
-                            (kk, vv.lstrip() if kk.lower() == low else vv) for kk, vv in e0[1].pairs
-                        ]
-            # LIVE: the placed root's level-N value bag always carries an
-            # 11-byte internal pair; a genie NESTED in the element carries
-            # it on its own level's value AND template bags
-            if N >= 1 and root:
-                ents[N][1].ov = 11
-            elif N >= 1 and el.records[k].class_flag and (el.records[k].subtype_size & 0x200):
-                # a nested genie root's OWN level is always level 1; its
-                # template bag carries the pair only when it holds templates
-                ents[1][1].ov = 11
-                ents[1][2].ov = 11 if ents[1][2].pairs else 0
-                ents[1][2].ov = 11 if ents[1][2].pairs else 0
-            # overshoots: e0.b1 keeps the class's internal pair, e0.b2 is rebuilt
-            if ents[0][1].ov > 11:
-                ents[0][1].ov = 11 if r.tc in _OV11_TCS else 10
-            # LIVE (B2/B3): the instance template bag
-            # carries the 10-byte internal pair only on a LINKED symbol
-            # member (element tc 7 with dwFlags 0x1); everything else 0
-            twin_dw = getattr(el, "nested_twins", {}).get(k, el_po).subtype_size
-            ents[0][2].ov = (
-                10
-                if (r.tc == BITMAP_TC and (twin_dw & 0x1 or el_po.subtype_size & 0x1) and opts.bitmap_b2_ov10)
-                else opts.ov_e0b2
+            own_top = _bind_entries(
+                r, k, el, el_po, parents, recs, P0, specials, untrimmed, root_value_keys, opts, own_top
             )
-            if opts.add_an_name and r.name and not root and ents[0][1].get("__AN_NAME__") is None:
-                ents[0][1].pairs.append(("__AN_NAME__", r.name))
-            if opts.into_genie_element and N >= 1 and has_placed:
-                # the outer element's level: the outer parameters this record's bindings
-                # name (a nested root: none)
-                # (a nested root: the defaults its members' bindings name, LIVE
-                # '%Q=5%' -> Q = 5 on the root's element level, [] without a default)
-                decl = (
-                    [(nm, d) for nm, d in template_decls(ents[N][2]).items() if d is not None]
-                    if root
-                    else [
-                        (nm, d if d is not None else NO_DEFAULT)
-                        for nm, d in template_decls(ents[N][2]).items()
-                    ]
-                )
-                ents.append([Bag(decl, 0), Bag([], 0), Bag([], 0)])
-            elif opts.into_genie_element:
-                # a record without a placed level (every record of a genie without
-                # parameters; a member of a genie it nests bound with constants): the
-                # outer element's level all the same, empty. LIVE, the fixture oracle's
-                # chain4/param_gained: CtDraw's paste of fx_plain (its records e0 only)
-                # into n0 gave its root and members two levels, the second empty, and n1's
-                # copy of it three (with e0 only, a record the genie gains later would take
-                # one level more than its siblings)
-                ents.append([Bag([], 0), Bag([], 0), Bag([], 0)])
-            r.entries = ents
-            out_vals[k] = ents[0][1]
-        # -- class section / button caption ---------------------------------------
-        caption = None
-        if r.tc == TEXT_TC:
-            t = G.parse_text_tail(el_po) if el_po.subtype_size & 2 else None
-            caption = t["text"] if t else None
-            # LIVE: when the template bag carries TXT_OFF the caption IS the
-            # substituted value -- '' when the parameter is unset (DPSStateRow
-            # '%StateName%', MonthPanel '%Calendar%': string section lpstr ''
-            # and the extent measured as ' '), never the twin's template text
-            if r.entries is not None and r.entries[0][2].get("TXT_OFF") is not None:
-                caption = out_vals[k].get("TXT_OFF") or ""
-                # (the string section keeps the caption as substituted, before the bag
-                # value's left trim: CR LF for '%header%' + CR LF under an unbound
-                # header, LIVE)
-                caption = untrimmed.get(k, {}).get("txt_off", caption)
-        captions[k] = caption
-        r.cls = strip_class_section(r, out_vals[k], caption, el_po.subtype_size)
-        if out_vals[k] is not None:
-            cs = rebuild_colour_state(el_po, out_vals[k], getattr(el, "nested_twins", {}).get(k))
-            if cs is not None:
-                r.cs = cs
-        if r.dw & 0x80 and out_vals[k] is not None and out_vals[k].get("TEXT") is not None:
-            r.s80 = _enc_lp(out_vals[k].get("TEXT"))
-        r.style = None
-        # -- header name --------------------------------------------------------
-        if root and opts.root_name_from_bag and out_vals[k] is not None:
-            nm = out_vals[k].get("__AN_NAME__")
-            if nm:
-                r.name = nm
+            out_vals[k] = r.entries[0][1]
+        _record_class_section(r, k, el, el_po, out_vals, captions, untrimmed, opts)
 
 
 def _set_dynamic_bits_and_slots(LOCAL, el, parents, recs, root_value_keys, parent_chain, member_locals):
@@ -4089,6 +4237,150 @@ def _set_dynamic_bits_and_slots(LOCAL, el, parents, recs, root_value_keys, paren
         r.slots[2] = (m3, s3)
 
 
+def _member_mapper(recs, k: int, el_po, member_locals: bool) -> tuple:
+    """(record ``k``'s element Total, its final Total, the mapper of its element
+    coordinates to the page's)."""
+    r = recs[k]
+    # element page -> the root's Total (live: Mixer genie 810; exact for integral AND
+    # fractional H,K); T0 = the library twin's Total (its slot 3)
+    T0 = P.read_slots(el_po.body_raw)[0][2]
+    T0 = T0[1] if T0[0] else P.IDENT
+    # each member through ITS element Total (back to its native integer coordinates)
+    # and its final Total = the root's Total o its element Total: CtDraw composes in
+    # memory from the natives, so a member whose element Total is fractional lands
+    # where trunc(final(native)) does, not where the element's truncated coordinate
+    # mapped again does (LIVE)
+    # (an element Total with a quarter turn keeps the element coordinate: its
+    # members match CtDraw's page composition that way, a page's instrument
+    # genie under a turned group with half-pixel offsets)
+    # (T1 = the member's final Total, its slot 3: the root's Total o its element Total,
+    # with a member Local kept on the way)
+    RT = recs[0].slots[2][1]
+    t3 = r.slots[2] if r.slots[2] is not None else (0, P.IDENT)
+    T1 = t3[1] if t3[0] else P.IDENT
+    if k and T0 != P.IDENT and not T0[1] and not T0[2]:
+        mp = _mapper(T0, T1)
+    elif k and member_locals:
+        mp = _mapper(P.IDENT, P.affine_mul(T1, P.affine_inv(T0)))
+    else:
+        mp = _mapper(P.IDENT, RT)
+    return T0, T1, mp
+
+
+def _container_geometry(r, k: int, kids_k, recs, el_po, T1, mp) -> None:
+    """A group's or a symbol set's box (the union of its children ``kids_k``, a set's
+    first state's) and its hotspot."""
+    kids = [c for c in kids_k if recs[c].tc not in UNION_SKIP] or kids_k
+    if r.tc == SYMSET_TC:  # extent/bounds = the FIRST state's
+        r1, r2 = recs[kids[0]].rect1, recs[kids[0]].rect2
+    else:
+        # (a DummyMarker counts in the Extent; the Bounds leave a zero-size child
+        # out, an empty text; LIVE a page's genie root: geometry.group_union)
+        r1, r2 = G.group_union([(recs[c].tc, recs[c].rect1, recs[c].rect2) for c in kids_k])
+    r.rect1, r.rect2 = r1, r2
+    if r.tc == GROUP_TC:
+        r.anchor = (r1[0], r1[3] - 1)  # group / genie hotspot
+    else:
+        # a symbol set: its Total's image of the hotspot its class part holds
+        # (symbolset.finish_set; LIVE, a two-thirds lamp state set of a genie)
+        hot = None
+        try:
+            from .symbolset import hotspot as _hotspot
+
+            hot = _hotspot(el_po)
+        except Exception:  # noqa: BLE001  # swallow-ok: the mapped anchor then
+            hot = None
+        if hot is not None and k:
+            A, B, C, D, H, K = T1
+            r.anchor = (int(A * hot[0] + C * hot[1] + H), int(B * hot[0] + D * hot[1] + K))
+        else:
+            r.anchor = mp(*r.anchor)
+
+
+def _marker_geometry(r, k: int, recs, parents, opts, T1, anchor, r1, r2) -> tuple:
+    """A DummyMarker's (anchor, extent, bounds); any other record's as they are."""
+    slot_marker = r.tc == 0xFFFF and r.slots[1] is not None and bool(r.slots[1][0])
+    if slot_marker and r.slots[2] is not None:
+        # a DummyMarker with a slot-2 point: its box is its Total's image of that
+        # point and of the point + (1, 1) (corpus pages; LIVE, CtDraw's load of a
+        # page placed one 1 x 1 where its element holds it at its Total's origin,
+        # 0 x 0)
+        A, B, C, D, H, K = r.slots[2][1] if r.slots[2][0] else P.IDENT
+        x0, y0 = r.slots[1][1][4], r.slots[1][1][5]
+        p0 = (int(A * x0 + C * y0 + H), int(B * x0 + D * y0 + K))
+        p1 = (int(A * (x0 + 1) + C * (y0 + 1) + H), int(B * (x0 + 1) + D * (y0 + 1) + K))
+        r1 = (min(p0[0], p1[0]), min(p0[1], p1[1]), max(p0[0], p1[0]), max(p0[1], p1[1]))
+        anchor = (r1[0], r1[1])
+        r2 = tuple(r1[i] + (r.rect2[i] - r.rect1[i]) for i in range(4))
+    elif (
+        r.tc == 0xFFFF
+        and k
+        and recs[parents[k]].tc != SYMSET_TC
+        and (opts.recompose or not _holds_library(r))
+    ):
+        # a free DummyMarker (a genie member, not a set state) without one: the empty
+        # rect at its Total's origin (LIVE, the fixture oracle: CtDraw's load of FxParts
+        # put both markers of each fxparts.fx_dummy copy there, empty, where the element
+        # holds them 1 high; a template's marker on its page likewise, compose_prefix).
+        # Every corpus marker is a state.
+        # A PLACEHOLDER genie's marker ('_Library') keeps its box mapped at a placement
+        # and takes this one at the page's load (LIVE, oracle chain5/element_placeholder)
+        A, B, C, D, H, K = T1
+        anchor, r1 = (int(H), int(K)), (int(H), int(K), int(H), int(K))
+        r2 = r1
+    elif r.tc == 0xFFFF and not (k and recs[parents[k]].tc != SYMSET_TC):
+        # a symbol-set state DummyMarker without one sits at the mapped point and keeps
+        # its twin's size (1x1, or 0x1: LIVE Mixer PLT_LINE)
+        x, y = r1[:2]
+        w, h = r.rect1[2] - r.rect1[0], r.rect1[3] - r.rect1[1]
+        anchor, r1 = (x, y), (x, y, x + w, y + h)
+        r2 = tuple(r1[i] + (r.rect2[i] - r.rect1[i]) for i in range(4))
+    return anchor, r1, r2
+
+
+def _text_geometry(r, k: int, el_po, twins, out_vals, captions, T1, anchor, r1, r2) -> tuple:
+    """A text's (extent, bounds) measured from its substituted caption."""
+    tw = twins[k] if twins[k].type_code == TEXT_TC else el_po
+    # (under a turned Total the text is measured in its twin's own frame and its box
+    # turned with it: the stripped-text rule above. The frame is the twin's: a
+    # twin with a Total of its own, a mirrored text in the genie (
+    # its box measured at its anchor) or a text of a turned symbol there, already
+    # holds that Total, so only the rest of T1 turns it; mapping it through T1
+    # would mirror or turn it twice)
+    tw_m = _twin_frame(T1, tw)
+    turned = bool(k and tuple(tw_m[:4]) != (1.0, 0.0, 0.0, 1.0))
+    at = G.parse_geom_header(tw.body_raw).anchor if turned else anchor
+    ext = text_extent(tw, out_vals[k], at, captions[k])
+    tmpl_off = (r.entries[0][2].get("TXT_OFF") or "") if r.entries else ""
+    if (captions[k] is not None and captions[k].strip() == "" and ("\r" in tmpl_off or "\n" in tmpl_off)) or (
+        ext is not None and tuple(ext) == (0, 0, 0, 0)
+    ):
+        # a multi-line caption trimmed to '' measures nothing: a zero box at its
+        # Total's origin (a single-line one is measured as ' '), and so does any
+        # string with no line to measure (a value of CR LF alone)
+        A, B, C, D, H, K = T1
+        ext, turned = None, False
+        r1 = r2 = (int(H), int(K), int(H), int(K))
+    # (a twin that mirrors in the genie, a Total of its own with a flip: measured in
+    # its local frame, at its echo, and mapped through the member's Total, so its box
+    # reaches left of its anchor as CtDraw's does, LIVE chain/mirror_back)
+    flipped = (
+        flipped_text_extent(tw, out_vals[k], T1, captions[k])
+        if k and ext is not None and flip_total(tw) is not None
+        else None
+    )
+    if flipped is not None:
+        r1, r2 = flipped
+    elif ext is not None:
+        flags = tw.body_raw[CS.layout(tw)["style_at"] :][:6]
+        b2 = tuple(G.predict_bounds(TEXT_TC, ext, flags, G.text_points(tw)) or ext)
+        if turned:
+            r1, r2 = _trunc_box(tw_m, ext), _trunc_box(tw_m, b2)
+        else:
+            r1, r2 = tuple(ext), b2
+    return r1, r2
+
+
 def _compose_geometry(captions, el, n, out_vals, parents, recs, twins, opts, resolver, member_locals):
     # -- geometry (bottom-up: containers are the union of their children) -------
     children = [[] for _ in range(n)]
@@ -4097,55 +4389,9 @@ def _compose_geometry(captions, el, n, out_vals, parents, recs, twins, opts, res
             children[parents[k]].append(k)
     for k in range(n - 1, -1, -1):
         r, el_po = recs[k], el.records[k]
-        # element page -> the root's Total (live: Mixer genie 810; exact for integral AND
-        # fractional H,K); T0 = the library twin's Total (its slot 3)
-        T0 = P.read_slots(el_po.body_raw)[0][2]
-        T0 = T0[1] if T0[0] else P.IDENT
-        # each member through ITS element Total (back to its native integer coordinates)
-        # and its final Total = the root's Total o its element Total: CtDraw composes in
-        # memory from the natives, so a member whose element Total is fractional lands
-        # where trunc(final(native)) does, not where the element's truncated coordinate
-        # mapped again does (LIVE)
-        # (an element Total with a quarter turn keeps the element coordinate: its
-        # members match CtDraw's page composition that way, a page's instrument
-        # genie under a turned group with half-pixel offsets)
-        # (T1 = the member's final Total, its slot 3: the root's Total o its element Total,
-        # with a member Local kept on the way)
-        RT = recs[0].slots[2][1]
-        t3 = r.slots[2] if r.slots[2] is not None else (0, P.IDENT)
-        T1 = t3[1] if t3[0] else P.IDENT
-        if k and T0 != P.IDENT and not T0[1] and not T0[2]:
-            mp = _mapper(T0, T1)
-        elif k and member_locals:
-            mp = _mapper(P.IDENT, P.affine_mul(T1, P._affine_inv(T0)))
-        else:
-            mp = _mapper(P.IDENT, RT)
+        T0, T1, mp = _member_mapper(recs, k, el_po, member_locals)
         if r.cf and children[k] and r.tc in (GROUP_TC, SYMSET_TC):
-            kids = [c for c in children[k] if recs[c].tc not in UNION_SKIP] or children[k]
-            if r.tc == SYMSET_TC:  # extent/bounds = the FIRST state's
-                r1, r2 = recs[kids[0]].rect1, recs[kids[0]].rect2
-            else:
-                # (a DummyMarker counts in the Extent; the Bounds leave a zero-size child
-                # out, an empty text; LIVE a page's genie root: geometry.group_union)
-                r1, r2 = G.group_union([(recs[c].tc, recs[c].rect1, recs[c].rect2) for c in children[k]])
-            r.rect1, r.rect2 = r1, r2
-            if r.tc == GROUP_TC:
-                r.anchor = (r1[0], r1[3] - 1)  # group / genie hotspot
-            else:
-                # a symbol set: its Total's image of the hotspot its class part holds
-                # (symbolset.finish_set; LIVE, a two-thirds lamp state set of a genie)
-                hot = None
-                try:
-                    from .symbolset import hotspot as _hotspot
-
-                    hot = _hotspot(el_po)
-                except Exception:  # noqa: BLE001  # swallow-ok: the mapped anchor then
-                    hot = None
-                if hot is not None and k:
-                    A, B, C, D, H, K = T1
-                    r.anchor = (int(A * hot[0] + C * hot[1] + H), int(B * hot[0] + D * hot[1] + K))
-                else:
-                    r.anchor = mp(*r.anchor)
+            _container_geometry(r, k, children[k], recs, el_po, T1, mp)
             continue
         # a member of a genie nested in the element whose nested twin (its record in the
         # nested element) carries no transform of its own: its native box IS the twin's,
@@ -4212,83 +4458,9 @@ def _compose_geometry(captions, el, n, out_vals, parents, recs, twins, opts, res
             d2 = r2[2] - r1[2]
             r1 = (r1[0], r1[1], r1[0] + w, r1[3])
             r2 = (r2[0], r2[1], r1[2] + d2, r2[3])
-        slot_marker = r.tc == 0xFFFF and r.slots[1] is not None and bool(r.slots[1][0])
-        if slot_marker and r.slots[2] is not None:
-            # a DummyMarker with a slot-2 point: its box is its Total's image of that
-            # point and of the point + (1, 1) (corpus pages; LIVE, CtDraw's load of a
-            # page placed one 1 x 1 where its element holds it at its Total's origin,
-            # 0 x 0)
-            A, B, C, D, H, K = r.slots[2][1] if r.slots[2][0] else P.IDENT
-            x0, y0 = r.slots[1][1][4], r.slots[1][1][5]
-            p0 = (int(A * x0 + C * y0 + H), int(B * x0 + D * y0 + K))
-            p1 = (int(A * (x0 + 1) + C * (y0 + 1) + H), int(B * (x0 + 1) + D * (y0 + 1) + K))
-            r1 = (min(p0[0], p1[0]), min(p0[1], p1[1]), max(p0[0], p1[0]), max(p0[1], p1[1]))
-            anchor = (r1[0], r1[1])
-            r2 = tuple(r1[i] + (r.rect2[i] - r.rect1[i]) for i in range(4))
-        elif (
-            r.tc == 0xFFFF
-            and k
-            and recs[parents[k]].tc != SYMSET_TC
-            and (opts.recompose or not _holds_library(r))
-        ):
-            # a free DummyMarker (a genie member, not a set state) without one: the empty
-            # rect at its Total's origin (LIVE, the fixture oracle: CtDraw's load of FxParts
-            # put both markers of each fxparts.fx_dummy copy there, empty, where the element
-            # holds them 1 high; a template's marker on its page likewise, compose_prefix).
-            # Every corpus marker is a state.
-            # A PLACEHOLDER genie's marker ('_Library') keeps its box mapped at a placement
-            # and takes this one at the page's load (LIVE, oracle chain5/element_placeholder)
-            A, B, C, D, H, K = T1
-            anchor, r1 = (int(H), int(K)), (int(H), int(K), int(H), int(K))
-            r2 = r1
-        elif r.tc == 0xFFFF and not (k and recs[parents[k]].tc != SYMSET_TC):
-            # a symbol-set state DummyMarker without one sits at the mapped point and keeps
-            # its twin's size (1x1, or 0x1: LIVE Mixer PLT_LINE)
-            x, y = r1[:2]
-            w, h = r.rect1[2] - r.rect1[0], r.rect1[3] - r.rect1[1]
-            anchor, r1 = (x, y), (x, y, x + w, y + h)
-            r2 = tuple(r1[i] + (r.rect2[i] - r.rect1[i]) for i in range(4))
+        anchor, r1, r2 = _marker_geometry(r, k, recs, parents, opts, T1, anchor, r1, r2)
         if r.tc == TEXT_TC and out_vals[k] is not None:
-            tw = twins[k] if twins[k].type_code == TEXT_TC else el_po
-            # (under a turned Total the text is measured in its twin's own frame and its box
-            # turned with it: the stripped-text rule above. The frame is the twin's: a
-            # twin with a Total of its own, a mirrored text in the genie (
-            # its box measured at its anchor) or a text of a turned symbol there, already
-            # holds that Total, so only the rest of T1 turns it; mapping it through T1
-            # would mirror or turn it twice)
-            tw_m = _twin_frame(T1, tw)
-            turned = bool(k and tuple(tw_m[:4]) != (1.0, 0.0, 0.0, 1.0))
-            at = G.parse_geom_header(tw.body_raw).anchor if turned else anchor
-            ext = text_extent(tw, out_vals[k], at, captions[k])
-            tmpl_off = (r.entries[0][2].get("TXT_OFF") or "") if r.entries else ""
-            if (
-                captions[k] is not None
-                and captions[k].strip() == ""
-                and ("\r" in tmpl_off or "\n" in tmpl_off)
-            ) or (ext is not None and tuple(ext) == (0, 0, 0, 0)):
-                # a multi-line caption trimmed to '' measures nothing: a zero box at its
-                # Total's origin (a single-line one is measured as ' '), and so does any
-                # string with no line to measure (a value of CR LF alone)
-                A, B, C, D, H, K = T1
-                ext, turned = None, False
-                r1 = r2 = (int(H), int(K), int(H), int(K))
-            # (a twin that mirrors in the genie, a Total of its own with a flip: measured in
-            # its local frame, at its echo, and mapped through the member's Total, so its box
-            # reaches left of its anchor as CtDraw's does, LIVE chain/mirror_back)
-            flipped = (
-                flipped_text_extent(tw, out_vals[k], T1, captions[k])
-                if k and ext is not None and flip_total(tw) is not None
-                else None
-            )
-            if flipped is not None:
-                r1, r2 = flipped
-            elif ext is not None:
-                flags = tw.body_raw[CS.layout(tw)["style_at"] :][:6]
-                b2 = tuple(G.predict_bounds(TEXT_TC, ext, flags, G.text_points(tw)) or ext)
-                if turned:
-                    r1, r2 = _trunc_box(tw_m, ext), _trunc_box(tw_m, b2)
-                else:
-                    r1, r2 = tuple(ext), b2
+            r1, r2 = _text_geometry(r, k, el_po, twins, out_vals, captions, T1, anchor, r1, r2)
         if r.tc in _ANCHOR_LB1:
             # a box class re-derives its anchor from its extent: bitmap
             # / metafile / ActiveX (l, b - 1), rectangle / button
@@ -4343,7 +4515,7 @@ def _twin_frame(T1, tw: PageObject):
     s3 = P.read_slots(tw.body_raw)[0][2]
     if not s3[0] or tuple(s3[1][:4]) == (1.0, 0.0, 0.0, 1.0) and not s3[1][4] and not s3[1][5]:
         return T1
-    M = P.affine_mul(T1, P._affine_inv(tuple(s3[1])))
+    M = P.affine_mul(T1, P.affine_inv(tuple(s3[1])))
     if all(abs(x - y) <= 1e-9 for x, y in zip(M[:4], (1.0, 0.0, 0.0, 1.0))):
         M = (1.0, 0.0, 0.0, 1.0, M[4], M[5])
     return M
@@ -4379,7 +4551,7 @@ def _untrunc(p: int, scale: float, off: float, guess: float) -> int:
 
 
 def _mapper(T0, T1):
-    ia, ib, ic, id_, ih, ik = P._affine_inv(T0)
+    ia, ib, ic, id_, ih, ik = P.affine_inv(T0)
     a0, b0, c0, d0, h0, k0 = T0
     a, b, c, d, h, k = T1
     ident0 = T0 == P.IDENT
@@ -4522,7 +4694,7 @@ def text_extent_now(po: PageObject) -> Optional[Tuple[Tuple[int, int, int, int],
             # box the mirror gives stays through its load + save)
             return None
     tmpl = r.entries[0][2].get("TXT_OFF") if len(r.entries[0]) > 2 else None
-    s = TM.measured_string(_Props(r.entries[0][1]), tail["text"] if tmpl is None else tmpl)
+    s = TM.measured_string(Props(r.entries[0][1]), tail["text"] if tmpl is None else tmpl)
     if s is None:
         return None
     L = CS.layout(po)
@@ -4625,7 +4797,7 @@ def _member_string(r: Rec, twin: PageObject, values: Bag) -> Optional[str]:
         cap = own if own is not None else ""
     elif not cap:
         cap = tail["text"]
-    s = TM.measured_string(_Props(values), cap)
+    s = TM.measured_string(Props(values), cap)
     if s is None:
         return None
     if not _tokens_as_typed(values, twin):
@@ -4847,7 +5019,6 @@ def link_table_entry(el: Element) -> Tuple[bytes, str]:
     return ident[4:20], "%s.%s.<%s#%08x" % (el.library, el.element, el.ext, stamp)
 
 
-_NATIVE = re.compile(r"@\(([^)]*)\)")
 LABEL_KEYS = ("TXT_OFF", "TXT_ON", "TXT_STR")
 #: a multi-state text's state captions and an array text's rows also carry labels
 _LABEL_ROW = re.compile(r"(?:STATE|ARRAY)_\d+$")
@@ -5568,7 +5739,7 @@ def place_on_page(page_path: str, out_path: str, placements) -> List[Tuple[int, 
         used |= {G.get_handle(po) for po in ex["records"]}
         spans.append((len(objs), len(ex["records"])))
         for blob in ex["payloads"]:
-            objs.append(_parse_object(len(objs), 0, len(blob), 0, blob))
+            objs.append(parse_object(len(objs), 0, len(blob), 0, blob))
         add_link_entries(pc.page, ex["link_entries"])
     pc.page.object_count = len(objs)
     blk = pc.container.block("page")
@@ -6036,7 +6207,7 @@ def _main(argv=None):
         used = {G.get_handle(po) for po in pc.page.objects if G.get_handle(po) is not None}
         ex = place_symbol(a.page, a.lib, a.element, int(a.x), int(a.y), used_handles=used)
         for blob in ex["payloads"]:
-            pc.page.objects.append(_parse_object(len(pc.page.objects), 0, len(blob), 0, blob))
+            pc.page.objects.append(parse_object(len(pc.page.objects), 0, len(blob), 0, blob))
         add_link_entries(pc.page, ex["link_entries"])
         pc.page.object_count = len(pc.page.objects)
         blk = pc.container.block("page")
@@ -6273,7 +6444,7 @@ def place_element_placeholders(el: "Element", resolver) -> int:
     stack = getattr(_PLACING, "keys", None)
     if stack is None:
         stack = _PLACING.keys = set()
-    me = (os.path.normcase(os.path.abspath(el.lib_path)), el.element.lower())
+    me = (path_key(el.lib_path), el.element.lower())
     if me in stack:
         return 0
     parents = P.forest_parents(recs)
@@ -6311,7 +6482,7 @@ def place_element_placeholders(el: "Element", resolver) -> int:
     try:
         subs = []
         for k, ref, local, path in hits:
-            key = (os.path.normcase(os.path.abspath(path)), ref.element.lower())
+            key = (path_key(path), ref.element.lower())
             cycle = nesting_chain(path, ref.element, el.lib_path, el.element, resolver)
             if cycle is not None:
                 # (the genie is this element, or holds a copy of it: the marker stays)

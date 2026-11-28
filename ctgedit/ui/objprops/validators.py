@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Callable, Iterable, List, Optional
 
 from ... import cicode_lex as L
+from ...infra.logsetup import note_exception as _note_exc
 
 ERROR, WARNING = "error", "warning"
 
@@ -83,7 +84,7 @@ def advice(text: str, field_kind: str = "expr", context=None) -> List[Problem]:
         try:
             out.extend(hook(text, field_kind, context) or [])
         except Exception:  # noqa: BLE001 -- advice must never break a sheet
-            pass
+            _note_exc("objprops.validators.advice")
     return out
 
 

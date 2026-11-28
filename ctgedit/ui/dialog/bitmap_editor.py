@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..dialog_buttons import dialog_buttons
+
 from typing import List, Optional, Tuple
 
 from PySide6 import QtCore, QtGui, QtWidgets
@@ -416,11 +418,7 @@ class BitmapSizeDialog(QtWidgets.QDialog):
         lay.addLayout(form)
         self._new = QtWidgets.QLabel()
         lay.addWidget(self._new)
-        self._bb = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
-        )
-        self._bb.accepted.connect(self.accept)
-        self._bb.rejected.connect(self.reject)
+        self._bb = dialog_buttons(self, ok="Resize")
         lay.addWidget(self._bb)
         self.grow.toggled.connect(self._update)
         self._update()
@@ -482,6 +480,18 @@ class BitmapEditorDialog(QtWidgets.QDialog):
         self._shift = (0, 0)
         lay = QtWidgets.QVBoxLayout(self)
 
+        self._build_tool_row(lay)
+        self._build_command_row(lay)
+        self._build_view_area(lay, primary, flash, note)
+        self._connect_signals(width, height)
+        self.apply_key_settings()
+        self._sync_colour()
+        self._update_label()
+        self.resize(760, 620)
+
+    def _build_tool_row(self, lay: QtWidgets.QVBoxLayout) -> None:
+        """The first row: the tools (Pen, Eraser, Fill, Eye Dropper, Select) and the drawing
+        colour."""
         bar = QtWidgets.QHBoxLayout()
         self._tools = QtWidgets.QButtonGroup(self)
         self._tool_buttons = {}
@@ -509,6 +519,9 @@ class BitmapEditorDialog(QtWidgets.QDialog):
         bar.addStretch(1)
         lay.addLayout(bar)
 
+    def _build_command_row(self, lay: QtWidgets.QVBoxLayout) -> None:
+        """The second row: Undo, Redo, the zoom, Bitmap Size, Crop, Trim, Rotate and Flip,
+        and the state shown."""
         bar2 = QtWidgets.QHBoxLayout()
         from ..style.theme import icon
 
@@ -569,7 +582,14 @@ class BitmapEditorDialog(QtWidgets.QDialog):
         bar2.addWidget(self.view)
         bar2.addStretch(1)
         lay.addLayout(bar2)
+        b_size.clicked.connect(self._bitmap_size)
+        for tb, op in turns:
+            tb.clicked.connect(self.trim if op == "trim" else (lambda _=False, o=op: self.turn(o)))
 
+    def _build_view_area(
+        self, lay: QtWidgets.QVBoxLayout, primary: QtGui.QImage, flash: QtGui.QImage, note: str
+    ) -> None:
+        """The picture in its scroll area, the notes under it and the buttons."""
         self._scroll = QtWidgets.QScrollArea()
         self._scroll.setBackgroundRole(QtGui.QPalette.Dark)
         # a picture smaller than the area sits in its middle
@@ -607,15 +627,14 @@ class BitmapEditorDialog(QtWidgets.QDialog):
         buttons.rejected.connect(self.reject)
         lay.addWidget(buttons)
 
+    def _connect_signals(self, width: int, height: int) -> None:
+        """The starting zoom, the commands and the canvas wired, and the keys."""
         # a zoom that shows the whole picture (at most 32x, at least 1x)
         fit = min(640 // max(1, width), 480 // max(1, height))
         self._canvas.set_zoom(max(1, min(MAX_ZOOM, fit, 16)))
-        b_in.clicked.connect(lambda: self._zoom(2))
-        b_out.clicked.connect(lambda: self._zoom(0.5))
-        b_size.clicked.connect(self._bitmap_size)
+        self._b_in.clicked.connect(lambda: self._zoom(2))
+        self._b_out.clicked.connect(lambda: self._zoom(0.5))
         self._b_crop.clicked.connect(self.crop)
-        for tb, op in turns:
-            tb.clicked.connect(self.trim if op == "trim" else (lambda _=False, o=op: self.turn(o)))
         self._canvas.selectionChanged.connect(
             lambda: self._b_crop.setEnabled(self._canvas.selection is not None)
         )
@@ -647,10 +666,6 @@ class BitmapEditorDialog(QtWidgets.QDialog):
                 ("-", lambda: self._zoom(0.5)),
             )
         ]
-        self.apply_key_settings()
-        self._sync_colour()
-        self._update_label()
-        self.resize(760, 620)
 
     def apply_key_settings(self) -> None:
         """Settings > Keyboard > "Plus and minus zoom in the Bitmap Editor and the magnifier"."""
@@ -890,14 +905,9 @@ class BitmapEditorDialog(QtWidgets.QDialog):
     # -- results --------------------------------------------------------------------
     def reject(self) -> None:
         if self.modified() and self.isVisible() and not getattr(self, "_ctg_dropped", False):
-            ans = QtWidgets.QMessageBox.question(
-                self,
-                "Bitmap Editor",
-                "Discard your changes to this bitmap?",
-                QtWidgets.QMessageBox.Discard | QtWidgets.QMessageBox.Cancel,
-                QtWidgets.QMessageBox.Cancel,
-            )
-            if ans != QtWidgets.QMessageBox.Discard:
+            from ..messages import confirm
+
+            if not confirm(self, "Bitmap Editor", "Discard your changes to this bitmap?", "Discard"):
                 return
         super().reject()
 

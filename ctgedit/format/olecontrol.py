@@ -95,7 +95,7 @@ def rebuild_list(po: PageObject, props=None) -> bool:
 
 # --------------------------------------------------------------------------- the saved state
 #: the OLE compound file signature the control's saved state starts with
-CFB_SIGNATURE = bytes.fromhex("d0cf11e0a1b11ae1")
+from .cfb import SIGNATURE as CFB_SIGNATURE  # noqa: E402
 
 
 def storage_span(po: PageObject) -> Optional[Tuple[int, int]]:

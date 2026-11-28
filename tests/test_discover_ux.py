@@ -1,5 +1,6 @@
 """Messages offer the next step."""
 
+from ctgedit.ui.main_window import MainWindow
 import glob
 import os
 import re
@@ -38,8 +39,8 @@ def win(fx_install):
     yield w
     for e in getattr(w, "_docs", []):
         e["doc"].dirty = False
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.hide()
     w.deleteLater()
 
@@ -89,11 +90,11 @@ def test_a_find_failure_puts_open_log_beside_the_status_line(win):
 
     dlg = FindReplaceDialog(win.doc, win, replace_mode=True)
     try:
-        assert dlg._b_log.isHidden() and dlg._b_backup.isHidden()
+        assert dlg._helper.log_button.isHidden() and dlg._b_backup.isHidden()
         dlg._set_closed_note("The closed pages could not be searched.", log=True)
-        assert not dlg._b_log.isHidden() and "see the log" not in dlg._closed_note
+        assert not dlg._helper.log_button.isHidden() and "see the log" not in dlg._closed_note
         dlg._set_closed_note("")
-        assert dlg._b_log.isHidden()
+        assert dlg._helper.log_button.isHidden()
     finally:
         dlg.deleteLater()
 
@@ -101,9 +102,9 @@ def test_a_find_failure_puts_open_log_beside_the_status_line(win):
 def test_a_users_update_that_could_not_start_offers_the_log(win, monkeypatch):
     _open(win)
     from ctgedit.ui import notify
-    from ctgedit.ui.window import library as L
+    from ctgedit.ui.window import users_chain
 
-    monkeypatch.setattr(L, "_write_text", lambda *a, **k: (_ for _ in ()).throw(OSError("x")))
+    monkeypatch.setattr(users_chain, "write_text", lambda *a, **k: (_ for _ in ()).throw(OSError("x")))
     assert win._start_users_run("pumps.ctl", "pump1", "pumps.pump1") is False
     msg = notify.centre(win).newest_first()[0]
     assert msg.level == "error" and "see the log" not in msg.text
@@ -144,8 +145,6 @@ def test_the_update_pages_result_offers_compile_and_the_backup_folder(win, tmp_p
 
 
 def test_the_update_pages_summary_says_registered_not_rows():
-    from ctgedit.ui.window.library import LibraryCommands
-
     rep = types.SimpleNamespace(
         pages=2,
         projects=["A"],
@@ -174,7 +173,7 @@ def test_the_update_pages_summary_says_registered_not_rows():
         links_dropped=[],
         unchanged=[],
     )
-    text = "\n".join(LibraryCommands._update_pages_summary(rep, None, (0, 0, 0, 0)))
+    text = "\n".join(MainWindow._update_pages_summary(rep, None, (0, 0, 0, 0)))
     assert "not registered in their project yet" in text and "p1" in text
     assert "Registered in their project now" in text and "p2" in text
 
@@ -182,19 +181,19 @@ def test_the_update_pages_summary_says_registered_not_rows():
 def test_the_pack_result_names_the_backup_and_offers_it(tmp_path):
     """Pack Libraries' lines (its results window gets Open Backup Folder from the folder)
     name the backup folder and Tools > Restore Backup, and the files left as they were."""
-    from ctgedit.ui.window.library import LibraryCommands
+    from ctgedit.ui.main_window import MainWindow
 
     folder = str(tmp_path / "pack-1")
-    text = "\n".join(LibraryCommands._pack_result_lines(2, 10, 1, True, folder, []))
+    text = "\n".join(MainWindow._pack_result_lines(2, 10, 1, True, folder, []))
     assert text.startswith("2 library files packed, 10 bytes reclaimed.")
     assert folder in text and "Restore Backup" in text
     assert "1 unused composite genie instance deleted" in text
     text = "\n".join(
-        LibraryCommands._pack_result_lines(1, 5, 0, True, folder, [(str(tmp_path / "B.ctl"), "in use")])
+        MainWindow._pack_result_lines(1, 5, 0, True, folder, [(str(tmp_path / "B.ctl"), "in use")])
     )
     assert "left as they were" in text and "B.ctl: in use" in text and folder in text
     # nothing packed: no backup to name
-    text = "\n".join(LibraryCommands._pack_result_lines(0, 0, 0, False, folder, []))
+    text = "\n".join(MainWindow._pack_result_lines(0, 0, 0, False, folder, []))
     assert "backup" not in text.lower() and folder not in text
 
 
@@ -218,15 +217,14 @@ def test_restore_backup_with_none_names_their_folder_and_opens_it(win, boxes, mo
 def test_the_restore_result_offers_compile_project(tmp_path):
     """Restore Backup's lines and whether its results window offers Compile Project."""
     from ctgedit.infra.backups import BackupInfo
-    from ctgedit.ui.window.library import LibraryCommands
 
     folder = tmp_path / "update-pages-2"
     folder.mkdir()
     b = BackupInfo(str(folder), "update-pages", time.time(), [{"page": "P"}])
-    lines, offer = LibraryCommands._restore_result_lines(b, ["P"], [])
+    lines, offer = MainWindow._restore_result_lines(b, ["P"], [])
     assert offer and "Compile the project" in "\n".join(lines) and "P" in lines[0]
     # a pack backup: nothing to compile
-    lines, offer = LibraryCommands._restore_result_lines(
+    lines, offer = MainWindow._restore_result_lines(
         BackupInfo(str(folder), "pack", time.time(), []), ["A.ctl"], ["B.ctl: in use"]
     )
     assert not offer and "Not restored:" in lines and "Compile" not in "\n".join(lines)
@@ -468,7 +466,7 @@ def test_update_pages_tips_name_the_backup_folder_and_automatic(fx_install):
         assert backups.backups_root() in dlg._backup.toolTip()
         assert "Restore Backup" in dlg._backup.toolTip()
         tip = dlg._procs.toolTip()
-        assert tip.startswith("Automatic:") and "at most 4" in tip
+        assert "Automatic: half the processors, at most 4" in tip
         assert "%d MB" % HELPER_MB in tip and "pages" in tip
     finally:
         dlg.deleteLater()
@@ -542,10 +540,8 @@ def test_replace_all_in_closed_pages_names_the_backup_folder(win, tmp_path, monk
         folder.mkdir()
         dlg._ed_find.setText("zzz-not-on-the-page")
         dlg._backup_folder = str(folder)
-        job = object()
-        dlg._job = job
         monkeypatch.setattr(FR, "replace_all", lambda *a, **k: FR.ReplaceReport())
-        dlg._replaced_closed(job, {"updated": ["p1", "p2"], "replaced": 2}, dlg.options())
+        dlg._replaced_closed({"updated": ["p1", "p2"], "replaced": 2}, dlg.options())
         text = dlg._status.text()
         assert str(folder) in text and "Restore Backup" in text
         assert not dlg._b_backup.isHidden()

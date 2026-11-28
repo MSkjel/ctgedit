@@ -20,7 +20,7 @@ from ..sim.state import (
     ObjectState,
     PageState,
 )
-from .scene import AI_PART_ROLE, PAGE_INDEX_ROLE, SIM_CHILD_ROLE, TREND_PART_ROLE
+from .scene import AI_PART_ROLE, PAGE_INDEX_ROLE, SIM_CHILD_ROLE, TREND_PART_ROLE, walk_items
 from . import sim_alarmlists as _alm
 from ..infra.logsetup import note_exception as _note_exc
 from ..format import codes as _codes
@@ -208,7 +208,7 @@ def _is_transparent(c) -> bool:
     return c is not None and ((int(c) >> 24) & 0xFF) == 0xFF
 
 
-def _qcolour(c) -> Optional[QtGui.QColor]:
+def qcolour(c) -> Optional[QtGui.QColor]:
     """A packed 0x00RRGGBB colour; None for transparent (high byte 0xFF)."""
     if c is None or _is_transparent(c):
         return None
@@ -270,25 +270,14 @@ def _other_half(c: QtGui.QColor, slots) -> Optional[QtGui.QColor]:
             continue
         for mine, other in ((a, b), (b, a)):
             if not _is_transparent(mine) and (int(mine) & 0xFFFFFF) == rgb:
-                q = _qcolour(other)
+                q = qcolour(other)
                 return q if q is not None else QtGui.QColor(0, 0, 0, 0)
     return None
 
 
-def _walk(item) -> list:
-    """``item`` and every descendant item (childItems() returns a list: no ownership side
-    effect, unlike parentItem())."""
-    out, stack = [], [item]
-    while stack:
-        it = stack.pop()
-        out.append(it)
-        stack.extend(it.childItems())
-    return out
-
-
 def _stamp(item, index: int) -> None:
     item.setData(0, index)
-    for it in _walk(item):
+    for it in walk_items(item):
         it.setData(PAGE_INDEX_ROLE, index)
 
 
@@ -752,7 +741,7 @@ class SimLayer:
             self._nudged = {}
             return
         for i, top in self._scene._items.items():
-            for it in _walk(top):
+            for it in walk_items(top):
                 key = (i, id(it))
                 if key in self._nudged:
                     continue
@@ -799,7 +788,7 @@ class SimLayer:
         if ids:
             for i, top in sc._items.items():
                 if 0 <= i < len(objs) and objs[i].children:
-                    for it in _walk(top):
+                    for it in walk_items(top):
                         if it.data(SIM_CHILD_ROLE) in ids:
                             out.extend(it.childItems())
         return out
@@ -811,7 +800,7 @@ class SimLayer:
         for top in self._scene._items.values():
             if not isinstance(top, QtWidgets.QGraphicsItemGroup):
                 continue
-            for it in _walk(top):
+            for it in walk_items(top):
                 if it.data(TREND_PART_ROLE) == "design":
                     out.append(it)
         return out
@@ -893,7 +882,7 @@ class SimLayer:
                     stack.extend(c.children)
         if kids:
             for top in sc._items.values():
-                for it in _walk(top):
+                for it in walk_items(top):
                     c = kids.get(it.data(SIM_CHILD_ROLE))
                     if c is not None and isinstance(it, QtWidgets.QGraphicsPixmapItem):
                         self._add_flashing(it, c)
@@ -1520,7 +1509,7 @@ class SimLayer:
         if root is None or not robj.children:
             return out
         by_id = {}
-        for it in _walk(root):
+        for it in walk_items(root):
             k = it.data(SIM_CHILD_ROLE)
             if isinstance(k, int) and k not in by_id:
                 by_id[k] = it
@@ -1633,7 +1622,7 @@ class SimLayer:
         if abs(a.m11() - 1.0) < 1e-9 and abs(a.m22() - 1.0) < 1e-9:
             return False  # a move: the transform keeps the pen anyway
         item = s.item
-        items = _walk(item)
+        items = walk_items(item)
         kinds = (
             QtWidgets.QGraphicsRectItem,
             QtWidgets.QGraphicsEllipseItem,
@@ -1692,7 +1681,7 @@ class SimLayer:
 
     # -- text --------------------------------------------------------------------
     @staticmethod
-    def _text_parts(obj: GraphicObject, item):
+    def text_parts(obj: GraphicObject, item):
         """(main text item, its 3D copies, mode) of a text / number record's item."""
         if obj.kind is ObjectKind.TEXT:
             if isinstance(item, QtWidgets.QGraphicsSimpleTextItem):
@@ -1707,7 +1696,7 @@ class SimLayer:
         return None, [], None
 
     def _apply_text(self, s: _Snap, obj: GraphicObject, text: Optional[str]) -> None:
-        main, ghosts, mode = self._text_parts(obj, s.item)
+        main, ghosts, mode = self.text_parts(obj, s.item)
         if main is None:
             return
         if s.texts is None:
@@ -1751,7 +1740,7 @@ class SimLayer:
             return
         old = QtCore.QPointF(main.pos())
         main.setText(text)
-        turned = PageScene._layout_text(main, obj, x, y, ex, ey)
+        turned = PageScene.layout_text(main, obj, x, y, ex, ey)
         w = main.boundingRect().width()
         if not turned and w > ex:
             # wider than the record's box: the runtime lays a text out from its ANCHOR by the
@@ -1818,7 +1807,7 @@ class SimLayer:
 
     # -- colour and fill level ----------------------------------------------------
     @staticmethod
-    def _channel(obj: GraphicObject, item) -> Optional[str]:
+    def channel(obj: GraphicObject, item) -> Optional[str]:
         k = obj.kind
         if k is ObjectKind.LINE:
             return "pen"
@@ -1861,7 +1850,7 @@ class SimLayer:
         piped = set()
         if obj.kind is ObjectKind.PIPE and own is not None:
             piped = self._flash_pipe(s, obj, own, saved)
-        for it in _walk(s.item):
+        for it in walk_items(s.item):
             if id(it) in piped:
                 continue
             r = it.data(SIM_CHILD_ROLE)
@@ -1948,10 +1937,10 @@ class SimLayer:
         if colour is None and level is None:
             return
         item = s.item
-        ch = self._channel(obj, item)
+        ch = self.channel(obj, item)
         if ch is None:
             return
-        qc = _qcolour(colour)
+        qc = qcolour(colour)
         if ch in ("fill", "pen"):
             s.fill = (QtGui.QPen(item.pen()), QtGui.QBrush(item.brush()))
             if colour is not None:
@@ -1967,7 +1956,7 @@ class SimLayer:
             if level is not None and obj.kind in _CLOSED_KINDS:
                 self._add_level(i, s, obj, ch, colour, level)
         elif ch == "text" and colour is not None:
-            main, _g, _m = self._text_parts(obj, item)
+            main, _g, _m = self.text_parts(obj, item)
             if main is not None:
                 s.text_brush = (main, QtGui.QBrush(main.brush()))
                 main.setBrush(QtGui.QBrush(qc if qc is not None else QtGui.QColor(0, 0, 0, 0)))
@@ -1987,17 +1976,17 @@ class SimLayer:
             fill = _brush_colour(item.brush())
         else:
             fill = (
-                _qcolour(colour)
+                qcolour(colour)
                 if colour is not None
                 else (
-                    _qcolour(obj.style.fill_colour)
+                    qcolour(obj.style.fill_colour)
                     if obj.style.fill_colour is not None
                     else QtGui.QColor(item.pen().color())
                 )
             )
         none = QtGui.QColor(0, 0, 0, 0)
         fill = fill if fill is not None else none
-        rest = _qcolour(bg)
+        rest = qcolour(bg)
         rest = rest if rest is not None else none
         if fraction >= 1.0:
             item.setBrush(QtGui.QBrush(fill) if fill.alpha() else QtGui.QBrush(QtCore.Qt.NoBrush))
@@ -2084,7 +2073,7 @@ class SimLayer:
         if s.tips is None:
             if tip is None:
                 return
-            s.tips = [(it, it.toolTip()) for it in _walk(s.item)]
+            s.tips = [(it, it.toolTip()) for it in walk_items(s.item)]
         for it, base in s.tips:
             it.setToolTip(base if tip is None else str(tip))
         if tip is None:
@@ -2095,7 +2084,7 @@ class SimLayer:
     def _apply_trend(item, obj: GraphicObject, trend: Optional[tuple]) -> None:
         """Draw the engine's samples on a trend's pen lines."""
         box, lines = None, []
-        for it in _walk(item):
+        for it in walk_items(item):
             role = it.data(TREND_PART_ROLE)
             if role == "box":
                 box = it
@@ -2124,7 +2113,7 @@ class SimLayer:
                     colour = int(own[num - 1][1])
                 except TypeError, ValueError, IndexError:
                     colour = None
-            qc = _qcolour(colour) if colour is not None else QtGui.QColor(0, 0, 0)
+            qc = qcolour(colour) if colour is not None else QtGui.QColor(0, 0, 0)
             if qc is None:  # a 'no colour' pen draws nothing
                 line.setVisible(False)
                 line.setPath(QtGui.QPainterPath())
@@ -2155,7 +2144,7 @@ class SimLayer:
         """Draw a trend's markers (DspMarkerMove): a vertical line at its offset in samples
         from the left edge, a horizontal one at offset / 32000 of the height from the bottom."""
         box, lines = None, []
-        for it in _walk(item):
+        for it in walk_items(item):
             role = it.data(TREND_PART_ROLE)
             if role == "box":
                 box = it
@@ -2174,7 +2163,7 @@ class SimLayer:
         samples, shown = markers if markers is not None else (1.0, ())
         for k, line in enumerate(lines):
             m = shown[k] if k < len(shown) else None
-            qc = _qcolour(m[1]) if m is not None and m[1] is not None else None
+            qc = qcolour(m[1]) if m is not None and m[1] is not None else None
             if m is None or (m[1] is not None and qc is None):  # (a transparent marker)
                 line.setVisible(False)
                 continue
@@ -2215,7 +2204,7 @@ class SimLayer:
         pr, _state, colour, _flash = alarm
         rows = self._priorities()
         row = next((r for r in rows if r[0] == pr), None)
-        qc = _qcolour(colour) if colour is not None else None
+        qc = qcolour(colour) if colour is not None else None
         if qc is None and row is not None and row[1] is not None:
             qc = QtGui.QColor(*row[1])
         for it, brush in brushes:
@@ -2265,7 +2254,7 @@ class SimLayer:
                     else None,
                     QtCore.QPointF(it.pos()),
                 )
-                for it in _walk(ai)
+                for it in walk_items(ai)
                 if it is not ai
             ]
         U = None
@@ -2424,7 +2413,7 @@ class SimLayer:
             self._resolver = reader.build_resolver(path) if path else None
             self._resolver_path = path
         try:
-            flag = reader._ai_flag_object(
+            flag = reader.ai_flag_object(
                 path,
                 self._resolver,
                 int(d.get("flag_loc", 0)),
@@ -2472,7 +2461,7 @@ class SimLayer:
             self._swap_inside[id(item)] = top
             item.setParentItem(inside)
             item.setData(0, None)
-            for it in _walk(item):
+            for it in walk_items(item):
                 it.setData(PAGE_INDEX_ROLE, top)
                 it.setData(SIM_RECORD_ROLE, i)
         else:
@@ -2621,9 +2610,7 @@ class SimLayer:
 
     # -- a group's level background ---------------------------------------------------
     def _apply_bg(self, i: int, obj: GraphicObject, look: _Look, prev: _Look, force) -> None:
-        want = (
-            look.level is not None and obj.kind not in _CLOSED_KINDS and _qcolour(look.level[2]) is not None
-        )
+        want = look.level is not None and obj.kind not in _CLOSED_KINDS and qcolour(look.level[2]) is not None
         it = self._bg_items.get(i)
         if not want:
             if it is not None:
@@ -2652,7 +2639,7 @@ class SimLayer:
                 self._apply_matrix(self._snaps[(i, "bg")], None)
                 self._snaps.pop((i, "bg"), None)
             it.setPath(rest)
-            it.setBrush(QtGui.QBrush(_qcolour(look.level[2])))
+            it.setBrush(QtGui.QBrush(qcolour(look.level[2])))
         s = self._snap(i, "bg", it)
         self._apply_matrix(s, look.matrix)
         it.setData(QtCore.Qt.UserRole + 7, 1)

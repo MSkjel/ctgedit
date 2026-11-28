@@ -39,8 +39,8 @@ def mixer_win(fx_page):
     w.view.reset_zoom()
     _pump()
     yield w
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.hide()
     w.deleteLater()
     _pump()

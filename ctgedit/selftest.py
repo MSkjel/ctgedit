@@ -10,6 +10,7 @@ import tempfile
 import time
 import traceback
 from typing import List, Optional
+from .infra.logsetup import note_exception as _note_exc
 
 MOVE = 8
 
@@ -162,7 +163,7 @@ def _smoke_page(win, src: str, workdir: str, seen: list) -> dict:
         res["ok"] = True
     except SmokeError as e:
         res["error"] = str(e)
-    except Exception as e:  # noqa: BLE001 -- reported, the run goes on
+    except Exception as e:  # noqa: BLE001 -- swallow-ok: reported with its traceback; the run goes on
         res["error"] = "%s: %s" % (type(e).__name__, e)
         res["traceback"] = traceback.format_exc()
     res["dialogs"] = seen[before_dialogs:]
@@ -172,7 +173,7 @@ def _smoke_page(win, src: str, workdir: str, seen: list) -> dict:
             win.doc.dirty = False
             win.close_current_document()
     except Exception:  # noqa: BLE001
-        pass
+        _note_exc("selftest._smoke_page")
     return res
 
 
@@ -211,10 +212,10 @@ def run(pages: List[str], report: Optional[str] = None) -> int:
             os.makedirs(work, exist_ok=True)
             out["pages"].append(_smoke_page(win, src, work, seen))
         win.close()
-        if win in MainWindow._instances:
-            MainWindow._instances.remove(win)
+        if win in MainWindow.instances:
+            MainWindow.instances.remove(win)
         app.processEvents()
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001 -- swallow-ok: reported with its traceback
         out["error"] = "%s: %s" % (type(e).__name__, e)
         out["traceback"] = traceback.format_exc()
     finally:

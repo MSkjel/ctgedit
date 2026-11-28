@@ -834,8 +834,8 @@ def win():
 
     w = MainWindow()
     yield w
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
 
 
 def test_new_page_command_creates_registered_page(fx_page, new_project, monkeypatch, win):

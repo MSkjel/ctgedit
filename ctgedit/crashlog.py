@@ -11,6 +11,8 @@ import sys
 import traceback
 from typing import List, Optional
 
+from .infra.paths import pid_alive
+
 MAX_LOG_BYTES = 1 << 20  # errors.log / output.log roll over at 1 MB
 KEEP_REPORTS = 10  # crash reports kept
 
@@ -32,7 +34,7 @@ def _identity() -> str:
         from .buildinfo import version_string
 
         return "ctgedit " + version_string()
-    except Exception:  # noqa: BLE001 -- a log header must never fail
+    except Exception:  # noqa: BLE001 -- swallow-ok: a log header must never fail
         return "ctgedit"
 
 
@@ -48,28 +50,6 @@ def _roll(path: str) -> None:
         pass
 
 
-def _pid_alive(pid: int) -> bool:
-    if pid == os.getpid():
-        return True
-    if sys.platform == "win32":
-        import ctypes
-
-        k32 = ctypes.windll.kernel32
-        h = k32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
-        if not h:
-            return False
-        try:
-            code = ctypes.c_ulong()
-            return bool(k32.GetExitCodeProcess(h, ctypes.byref(code))) and code.value == 259
-        finally:
-            k32.CloseHandle(h)
-    try:
-        os.kill(pid, 0)
-    except OSError:
-        return False
-    return True
-
-
 def collect_previous_crashes() -> List[str]:
     """Crash files left by runs that ended without a clean exit, renamed to
     ``crash-<time>-<pid>.txt``; returns those report paths (newest last). A left-over
@@ -79,7 +59,7 @@ def collect_previous_crashes() -> List[str]:
     found = []
     for path in sorted(glob.glob(os.path.join(d, "crash-*-*.log"))):
         m = _REPORT_RX.search(os.path.basename(path))
-        if not m or int(m.group(2)) == os.getpid() or _pid_alive(int(m.group(2))):
+        if not m or int(m.group(2)) == os.getpid() or pid_alive(int(m.group(2))):
             continue
         try:
             with open(path, encoding="utf-8", errors="replace") as fh:
@@ -153,7 +133,7 @@ def uninstall() -> None:
         return
     try:
         faulthandler.disable()
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- swallow-ok: faulthandler was not on
         pass
     try:
         fh.close()

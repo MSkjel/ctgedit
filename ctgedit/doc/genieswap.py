@@ -8,7 +8,7 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 from ..editing_base import (  # noqa: F401
     PageObject,
-    _parse_object,
+    parse_object,
     geom,
     guard_text,
     writer,
@@ -269,7 +269,7 @@ class GenieSwapEdits:
         from ..format import genie_place as GP
         from ..format import placement
 
-        root = _parse_object(0, 0, 0, 0, writer.object_payload(inst[0]))
+        root = parse_object(0, 0, 0, 0, writer.object_payload(inst[0]))
         if not writer.set_body_reference(root, ref):
             raise ValueError("The genie's link could not be rewritten.")
         # the new bindings: every old one dropped, each new parameter mapped or defaulted
@@ -310,6 +310,6 @@ class GenieSwapEdits:
         # (refresh_instance keeps the stored one, right for the same element only)
         h = geom.get_handle(el.records[0]) if el.records else None
         if h is not None and new[0].an_str != str(h):
-            new[0] = _parse_object(0, 0, 0, 0, writer.object_payload(new[0]))
+            new[0] = parse_object(0, 0, 0, 0, writer.object_payload(new[0]))
             new[0].an_str = str(h)
         return self._regrow_alarm_root(list(new))

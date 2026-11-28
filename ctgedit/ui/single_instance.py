@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..infra.paths import path_key
+
 import contextlib
 import getpass
 import hashlib
@@ -25,7 +27,7 @@ def _session_id() -> int:
         sid = ctypes.c_ulong(0)
         if ctypes.windll.kernel32.ProcessIdToSessionId(os.getpid(), ctypes.byref(sid)):
             return int(sid.value)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # swallow-ok: feature probe, no session id then
         pass
     return 0
 
@@ -36,10 +38,10 @@ def server_name() -> str:
     user's, and each session of the user has its own editor."""
     try:
         who = getpass.getuser()
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # swallow-ok: no user name, the environment's then
         who = os.environ.get("USERNAME", "user")
     ini = os.environ.get("CTG_SETTINGS_INI")
-    store = os.path.normcase(os.path.abspath(ini)) if ini else "registry"
+    store = path_key(ini) if ini else "registry"
     digest = hashlib.sha1(("%s|%s|%d" % (who.lower(), store, _session_id())).encode("utf-8")).hexdigest()
     return "ctgedit-" + digest[:16]
 
@@ -68,7 +70,7 @@ def _allow_foreground() -> None:
             import ctypes
 
             ctypes.windll.user32.AllowSetForegroundWindow(ctypes.c_ulong(0xFFFFFFFF))  # ASFW_ANY
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001  # swallow-ok: a convenience, the window may stay behind
             pass
 
 

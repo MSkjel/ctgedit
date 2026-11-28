@@ -1,6 +1,9 @@
 """The Simulate Inputs and Outputs panels."""
 
 from __future__ import annotations
+
+from ..names import plural
+from ...infra.logsetup import note_exception as _note_exc
 from ...format.cnum import is_digits
 from ..style.theme import sp as _sp
 
@@ -26,15 +29,8 @@ from .sources import (
     tag_matches,
 )
 
-#: rows the Inputs panel lists at most (type to narrow): the default of Settings > Simulate >
-#: Inputs > Tags listed at most (options.tag_rows)
-MAX_TAG_ROWS = 2000
-#: log lines the Outputs panel keeps: the default of Log lines kept (options.log_lines, any
-#: value of its span)
-MAX_LOG_ROWS = 5000
 
 _NAME_ROLE = QtCore.Qt.UserRole + 1
-_NO_EQUIPMENT = "(no equipment)"
 #: the group of the tags the page reads that the project does not define
 UNDEFINED_GROUP = "Not defined in the project"
 PAGE_VARS_GROUP = "Page variables"
@@ -65,7 +61,7 @@ def simulate_undefined_setting() -> bool:
         from ..prefs.settings import app_settings
 
         return bool(app_settings().value(SIMULATE_UNDEFINED_SETTING, False, type=bool))
-    except Exception:  # noqa: BLE001 -- a setting is a convenience only
+    except Exception:  # noqa: BLE001  # swallow-ok: a setting is a convenience
         return False
 
 
@@ -74,7 +70,7 @@ def _set_simulate_undefined_setting(on: bool) -> None:
         from ..prefs.settings import app_settings
 
         app_settings().setValue(SIMULATE_UNDEFINED_SETTING, bool(on))
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # swallow-ok: a setting is a convenience
         pass
 
 
@@ -1061,6 +1057,7 @@ def details_text(e, expressions=None) -> str:
             try:
                 found = expressions(an, getattr(e, "source", "")) or []
             except Exception:  # noqa: BLE001 -- the details still show the rest
+                _note_exc("sim.panels.details_text")
                 found = []
             for x in found:
                 lines.append("  %s" % x)
@@ -1458,6 +1455,34 @@ class OutputsPanel(QtWidgets.QWidget):
         lv = QtWidgets.QVBoxLayout(log)
         lv.setContentsMargins(_sp(1), _sp(1), _sp(1), _sp(1))
         lv.setSpacing(_sp(1))
+        self._build_log_bar(lv)
+        self._build_log_view(lv)
+        self.tabs.addTab(log, "Log")
+        self._build_not_simulated()
+        self.log.currentItemChanged.connect(lambda *_a: self._show_details())
+        self.log.itemDoubleClicked.connect(self._double_clicked)
+        self.log.itemExpanded.connect(self._fill_occurrences)
+        self.not_sim.currentItemChanged.connect(lambda *_a: self._show_not_sim_details())
+        self._calls: Dict[str, QtWidgets.QTreeWidgetItem] = {}
+        # every line (the flat view, and a rebuild), and the groups in the order they began
+        from .options import log_lines
+
+        # (Log lines kept, any value of its span; apply_settings resizes it)
+        self._all: "collections.deque" = collections.deque(maxlen=log_lines())
+        self._groups: "collections.OrderedDict[tuple, _Group]" = collections.OrderedDict()
+        # what the filters leave out: types turned off, messages hidden (remembered)
+        self._types_off = {t.strip() for t in str(options.get("log_types_off")).split(",") if t.strip()}
+        self._hidden: List[dict] = self._load_hidden()
+        self.search.searchChanged.connect(lambda _t: self._apply_filter())
+        self.group_box.toggled.connect(self._group_toggled)
+        self.clear_button.clicked.connect(self.clear_by_user)
+        self._show_summary()
+
+    def _build_log_bar(self, lv: QtWidgets.QVBoxLayout) -> None:
+        """The log's bar: a toggle per severity with its count, Types, the search, Hidden,
+        Group repeats, Show on Page and Clear Log."""
+        from . import options
+
         # (wraps onto a second row when the panel is narrow, so it never sets the Simulate
         # window's least width)
         from ..flow_layout import FlowLayout
@@ -1520,6 +1545,9 @@ class OutputsPanel(QtWidgets.QWidget):
         )
         bar.addWidget(self.clear_button)
         lv.addLayout(bar)
+
+    def _build_log_view(self, lv: QtWidgets.QVBoxLayout) -> None:
+        """The log's summary, its lines and the details of the selected line."""
         self.summary = QtWidgets.QLabel("")
         theme.set_note_role(self.summary)
         self.summary.setTextFormat(QtCore.Qt.RichText)
@@ -1556,7 +1584,10 @@ class OutputsPanel(QtWidgets.QWidget):
         #: the row the details show (a line that comes into the list leaves them as they are)
         self._details_of = None
         lv.addWidget(split, 1)
-        self.tabs.addTab(log, "Log")
+
+    def _build_not_simulated(self) -> None:
+        """The Not Simulated tab: the functions and fields the simulator does not simulate,
+        and the details of the selected one."""
         ns = QtWidgets.QWidget()
         nv = QtWidgets.QVBoxLayout(ns)
         nv.setContentsMargins(_sp(1), _sp(1), _sp(1), _sp(1))
@@ -1577,24 +1608,6 @@ class OutputsPanel(QtWidgets.QWidget):
         self.not_sim_details.under(nsplit)
         nv.addWidget(nsplit, 1)
         self.tabs.addTab(ns, "Not Simulated")
-        self.log.currentItemChanged.connect(lambda *_a: self._show_details())
-        self.log.itemDoubleClicked.connect(self._double_clicked)
-        self.log.itemExpanded.connect(self._fill_occurrences)
-        self.not_sim.currentItemChanged.connect(lambda *_a: self._show_not_sim_details())
-        self._calls: Dict[str, QtWidgets.QTreeWidgetItem] = {}
-        # every line (the flat view, and a rebuild), and the groups in the order they began
-        from .options import log_lines
-
-        # (Log lines kept, any value of its span; apply_settings resizes it)
-        self._all: "collections.deque" = collections.deque(maxlen=log_lines())
-        self._groups: "collections.OrderedDict[tuple, _Group]" = collections.OrderedDict()
-        # what the filters leave out: types turned off, messages hidden (remembered)
-        self._types_off = {t.strip() for t in str(options.get("log_types_off")).split(",") if t.strip()}
-        self._hidden: List[dict] = self._load_hidden()
-        self.search.searchChanged.connect(lambda _t: self._apply_filter())
-        self.group_box.toggled.connect(self._group_toggled)
-        self.clear_button.clicked.connect(self.clear_by_user)
-        self._show_summary()
 
     def _theme_changed(self) -> None:
         """Another theme (theme._retheme_widgets calls it): the error and warning lines in its
@@ -2149,9 +2162,9 @@ class OutputsPanel(QtWidgets.QWidget):
             return
         hidden_lines = sum(why.values())
         if not hidden_lines:
-            what = "%d line%s" % (total, "" if total == 1 else "s")
+            what = plural(total, "line")
             if self.grouped and rows_total < total:
-                what += " in %d row%s" % (rows_total, "" if rows_total == 1 else "s")
+                what += " in %s" % (plural(rows_total, "row"))
             self.summary.setText("Showing everything: %s." % what)
             return
         reasons = []
@@ -2159,7 +2172,7 @@ class OutputsPanel(QtWidgets.QWidget):
         if why.get("severity"):
             reasons.append("%s off" % " and ".join(off_sev))
         if why.get("type"):
-            reasons.append("%d type%s off" % (off, "" if off == 1 else "s"))
+            reasons.append("%s off" % (plural(off, "type")))
         if why.get("hidden"):
             reasons.append("%d hidden message%s" % (n_hidden, "" if n_hidden == 1 else "s"))
         if why.get("filter"):

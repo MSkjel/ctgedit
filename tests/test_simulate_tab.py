@@ -461,8 +461,8 @@ def test_editor_tools_simulate_page_opens_the_page(big):
         sw.close()
     finally:
         w.doc = None
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.close()
         QtWidgets.QApplication.processEvents()
         gc.collect()
@@ -628,8 +628,8 @@ def test_edit_in_editor_opens_the_object_in_the_editor(big):
         sw = SW.simulate_window(create=False)
         if sw is not None:
             sw.shut_down()
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.close()
 
 

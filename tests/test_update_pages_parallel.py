@@ -1,5 +1,6 @@
 """Update Pages in parallel helper processes."""
 
+from ctgedit.format.fileio import find_ci
 import collections
 import glob
 import json
@@ -133,14 +134,13 @@ def _bad_indexes(proj) -> list:
     """The project's .NDX files whose entries are not their table's records (recnos 1..n,
     each key its record's field)."""
     from ctgedit.format.dbf import Dbf, Ndx
-    from ctgedit.io import pgregister as PR
 
     bad = []
     for fn in os.listdir(proj):
         low = fn.lower()
         if not low.endswith(".ndx"):
             continue
-        dp = PR._find_file(proj, fn[:-4] + ".DBF")
+        dp = find_ci(proj, fn[:-4] + ".DBF")
         if dp is None:
             continue
         with Dbf(dp, writable=False) as d, Ndx(os.path.join(proj, fn), writable=False) as nx:
@@ -225,11 +225,10 @@ def run_update(dirs, parts, backup=None, on_poll=None, timeout=900):
 def table_rows(proj):
     """{(table, page): [the page's live rows in record order]}."""
     from ctgedit.format.dbf import Dbf
-    from ctgedit.io import pgregister as PR
 
     out = {}
     for t in TABLES:
-        p = PR._find_file(proj, t + ".DBF")
+        p = find_ci(proj, t + ".DBF")
         if not p:
             continue
         with Dbf(p, writable=False) as d:
@@ -245,9 +244,8 @@ def table_rows(proj):
 
 def natives(proj):
     from ctgedit.format.dbf import Dbf
-    from ctgedit.io import pgregister as PR
 
-    p = PR._find_file(proj, "pglang.DBF")
+    p = find_ci(proj, "pglang.DBF")
     if not p:
         return set()
     with Dbf(p, writable=False) as d:
@@ -259,16 +257,15 @@ def changes(proj, src):
     the whole log of ``src``, FxMain, first); each 'pages' entry's RECORD_NO names a live
     pages.DBF row of that page."""
     from ctgedit.format.dbf import Dbf
-    from ctgedit.io import pgregister as PR
 
-    with Dbf(PR._find_file(src, "changes.DBF"), writable=False) as d:
+    with Dbf(find_ci(src, "changes.DBF"), writable=False) as d:
         since = d.nrec
-    with Dbf(PR._find_file(proj, "pages.DBF"), writable=False) as pg:
+    with Dbf(find_ci(proj, "pages.DBF"), writable=False) as pg:
         names = {
             i + 1: pg.field(pg.read(i), "NAME").lower() for i in range(pg.nrec) if pg.read(i)[:1] != b"*"
         }
     out = collections.Counter()
-    with Dbf(PR._find_file(proj, "changes.DBF"), writable=False) as d:
+    with Dbf(find_ci(proj, "changes.DBF"), writable=False) as d:
         for i in range(since, d.nrec):
             r = d.read(i)
             if r[:1] == b"*":

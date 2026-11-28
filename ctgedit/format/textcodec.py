@@ -49,7 +49,7 @@ def _detect_codepage() -> int:
             cp = int(ctypes.windll.kernel32.GetACP())
             if cp in _SINGLE_BYTE or cp in _DOUBLE_BYTE:
                 return cp
-        except Exception:
+        except Exception:  # noqa: BLE001 -- swallow-ok: not Windows: the default code page
             pass
     return 1252
 

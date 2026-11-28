@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from ...infra.paths import path_key
+
+from ..names import plural
+
 import os
 import string
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
@@ -127,6 +131,7 @@ class RenamePagesDialog(QtWidgets.QDialog):
         hold: Optional[Callable] = None,
         moved: Optional[Callable] = None,
         check_references: Optional[Callable] = None,
+        fixed: bool = False,
     ):
         super().__init__(parent)
         self.setWindowTitle("Rename Pages")
@@ -134,7 +139,6 @@ class RenamePagesDialog(QtWidgets.QDialog):
         self._hold = hold
         #: moved([(old path, new path)], held paths): the window's tabs follow the renames
         self._moved = moved
-        self._job = None
         #: check_references(project folder, includes, {old: new}): opens Check Project
         self._check_references = check_references
         self._pairs: List[Pair] = []
@@ -144,25 +148,52 @@ class RenamePagesDialog(QtWidgets.QDialog):
         self._undo: List[Pair] = []
         #: the last rename, {old lower case: new}
         self._last_names: Dict[str, str] = {}
-        from ..pick_fields import ProjectScopeField
-        from ..style.theme import SearchField, note_label
 
         lay = QtWidgets.QVBoxLayout(self)
+        self._build_scope_rows(lay, project_dir, fixed)
+        self._build_preview(lay)
+
+        self.naming = NamingPanel(
+            self.SETTINGS,
+            "{name} the page's name, {title} its title, {n} the number in the list ({n:02}: two digits)",
+            defaults={"pattern": "{name}", "mode": 1, "links": True, "names": True},
+        )
+        lay.addWidget(self.naming)
+        nm = self.naming
+        self._mode, self._pattern, self._start, self._step = nm.mode, nm.pattern, nm.start, nm.step
+        self._find, self._repl, self._case = nm.find, nm.repl, nm.case
+
+        self._build_options(lay, nm)
+
+        B = QtWidgets.QDialogButtonBox
+        self._buttons = B(self)
+        self._ok = self._buttons.addButton("Rename", B.AcceptRole)
+        self._ok.setDefault(True)
+        self._buttons.addButton(B.Close)
+        self._buttons.accepted.connect(self.rename)
+        self._buttons.rejected.connect(self.reject)
+        lay.addWidget(self._buttons)
+
+        self._connect_signals(nm)
+        self.resize(700, 600)
+        d = path_key(project_dir) if project_dir else ""
+        self._load(ticked={(d, p.lower()) for p in pages})
+
+    def _build_scope_rows(self, lay: QtWidgets.QVBoxLayout, project_dir: str, fixed: bool) -> None:
+        """The project and the filter of the pages shown."""
+        from ..pick_fields import ProjectScopeField
+        from ..style.theme import SearchField
+
         top = QtWidgets.QFormLayout()
         self._scope = ProjectScopeField(
             os.path.join(project_dir, "_") if project_dir else "",
             what="The project whose pages are renamed",
             horizontal=True,
+            remember="rename_pages",
+            fixed=fixed,
         )
-        if project_dir and not self._scope.here:
-            # a folder the install does not list
-            self._own_dir = project_dir
-            self._scope.combo.addItem(_project(project_dir))
-            self._scope.combo.setCurrentText(_project(project_dir))
-        else:
-            self._own_dir = ""
         top.addRow("Project:", self._scope)
-        self._filter = SearchField("Filter pages", regex_key="Rename Pages filter")
+        self._filter = SearchField("Filter pages", regex_key="Rename Pages filter", enter_filters=True)
         self._filter.setToolTip("Show only the pages whose name, title or project contains this")
         self._only_ticked = QtWidgets.QCheckBox("Only ticked")
         self._only_ticked.setToolTip("Show only the pages ticked for renaming")
@@ -172,6 +203,9 @@ class RenamePagesDialog(QtWidgets.QDialog):
         top.addRow("Show:", show)
         lay.addLayout(top)
 
+    def _build_preview(self, lay: QtWidgets.QVBoxLayout) -> None:
+        """The preview of the pages and their new names, Tick Shown, Untick All and the
+        count."""
         self._table = QtWidgets.QTableWidget(0, 4, self)
         self._table.setObjectName("renamePagesPreview")
         self._table.setHorizontalHeaderLabels(["Page", "Project", "Title", "New name"])
@@ -197,15 +231,10 @@ class RenamePagesDialog(QtWidgets.QDialog):
         row.addWidget(self._count, 1)
         lay.addLayout(row)
 
-        self.naming = NamingPanel(
-            self.SETTINGS,
-            "{name} the page's name, {title} its title, {n} the number in the list ({n:02}: two digits)",
-            defaults={"pattern": "{name}", "mode": 1, "links": True, "names": True},
-        )
-        lay.addWidget(self.naming)
-        nm = self.naming
-        self._mode, self._pattern, self._start, self._step = nm.mode, nm.pattern, nm.start, nm.step
-        self._find, self._repl, self._case = nm.find, nm.repl, nm.case
+    def _build_options(self, lay: QtWidgets.QVBoxLayout, nm) -> None:
+        """What else takes the new names (the links, the project's tables), the status, and
+        Check References, Undo Rename and the helper's buttons."""
+        from ..style.theme import note_label
 
         self._links = QtWidgets.QCheckBox("Update the pages that link to them")
         self._links.setToolTip(
@@ -236,25 +265,21 @@ class RenamePagesDialog(QtWidgets.QDialog):
         self._b_undo.setText("Undo Rename")
         self._b_undo.setAutoRaise(True)
         self._b_undo.setToolTip("Give the pages renamed last their old names again")
-        self._b_stop = QtWidgets.QToolButton()
-        self._b_stop.setText("Stop")
-        self._b_stop.setToolTip("Stop: the project being renamed keeps its old names")
-        self._b_stop.clicked.connect(self.stop)
-        for b in (self._b_refs, self._b_undo, self._b_stop):
+
+        for b in (self._b_refs, self._b_undo):
             b.setVisible(False)
             after.addWidget(b)
+        from ..jobs.helper_job import DialogJob
+
+        self._helper = DialogJob(self._status, "Stop: the project being renamed keeps its old names")
+        after.addWidget(self._helper.stop_button)
+        after.addWidget(self._helper.log_button)
         after.addStretch(1)
         lay.addLayout(after)
 
-        B = QtWidgets.QDialogButtonBox
-        self._buttons = B(self)
-        self._ok = self._buttons.addButton("Rename", B.AcceptRole)
-        self._ok.setDefault(True)
-        self._buttons.addButton(B.Close)
-        self._buttons.accepted.connect(self.rename)
-        self._buttons.rejected.connect(self.reject)
-        lay.addWidget(self._buttons)
-
+    def _connect_signals(self, nm) -> None:
+        """The preview follows the naming after a pause in typing; the filter, the ticks,
+        the buttons and the project wired."""
         self._typing = QtCore.QTimer(self)
         self._typing.setSingleShot(True)
         self._typing.setInterval(self.TYPING_MS)
@@ -270,20 +295,15 @@ class RenamePagesDialog(QtWidgets.QDialog):
         self._b_refs.clicked.connect(self.check_references)
         self._b_undo.clicked.connect(self.undo_rename)
         self._scope.changed.connect(lambda: self._load(ticked=self._ticked_keys()))
-        self.resize(700, 600)
-        d = os.path.normcase(os.path.abspath(project_dir)) if project_dir else ""
-        self._load(ticked={(d, p.lower()) for p in pages})
 
     # -- the pages -----------------------------------------------------------------------------
     def project_dirs(self) -> List[str]:
         """The project's folder, and with 'And the projects it includes' theirs."""
-        if self._own_dir and self._scope.project() == _project(self._own_dir):
-            return [self._own_dir]
         return self._scope.project_dirs()
 
     @staticmethod
     def _key(d: str, name: str) -> Tuple[str, str]:
-        return os.path.normcase(os.path.abspath(d)), name.lower()
+        return path_key(d), name.lower()
 
     def _ticked_keys(self) -> set:
         return {self._key(self._pages[r][0], self._pages[r][1]) for r in self._ticked_rows()}
@@ -386,7 +406,7 @@ class RenamePagesDialog(QtWidgets.QDialog):
 
     def _preview(self, *_a) -> None:
         self._typing.stop()
-        from ..style.theme import COLORS, set_note_role
+        from ..style.theme import COLORS
 
         try:
             pairs, error = self.new_names(), ""
@@ -410,14 +430,14 @@ class RenamePagesDialog(QtWidgets.QDialog):
         self._pairs = [p for p in pairs if p[2] != p[1]]
         changes = len(self._pairs)
         ticked = len(pairs)
-        self._count.setText(
-            "%d of %d page%s ticked" % (ticked, len(self._pages), "" if len(self._pages) == 1 else "s")
-        )
+        self._count.setText("%d of %s ticked" % (ticked, plural(len(self._pages), "page")))
         if error:
             msg = error
         elif problems:
             k = len(problems)
-            msg = "%d name%s cannot be used. %s" % (k, "" if k == 1 else "s", next(iter(problems.values())))
+            msg = "%s cannot be used. %s" % (plural(k, "name"), next(iter(problems.values())))
+        elif not self._pages:
+            msg = "This project has no pages."
         elif not ticked:
             msg = "Tick the pages to rename."
         elif not changes:
@@ -425,9 +445,8 @@ class RenamePagesDialog(QtWidgets.QDialog):
         else:
             msg = ""
         if msg or not self._undo:
-            self._status.setText(msg)
-            set_note_role(self._status, "danger" if (error or problems) else "text_dim")
-        self._ok.setEnabled(bool(changes) and not error and not problems and self._job is None)
+            self._helper.say(msg, failed=bool(error or problems), log=False)
+        self._ok.setEnabled(bool(changes) and not error and not problems and not self._helper.running())
 
     # -- renaming ------------------------------------------------------------------------------
     def rename(self) -> bool:
@@ -444,26 +463,23 @@ class RenamePagesDialog(QtWidgets.QDialog):
     def undo_rename(self) -> bool:
         """Give the pages renamed last their old names again (Undo Rename)."""
         pairs = [(d, new, old) for d, old, new in self._undo]
-        if not pairs or self._job is not None:
+        if not pairs or self._helper.running():
             return False
         return self._run(pairs, undo=True)
 
     def renaming(self) -> bool:
-        return self._job is not None
+        return self._helper.running()
 
     def stop(self) -> None:
-        if self._job is not None:
-            self._job.stop()
-            self._status.setText("Stopping…")
+        self._helper.stop()
 
-    def finish(self, seconds: float = 60) -> None:
+    def finish(self) -> None:
         """Wait for the rename running and take its answer now."""
-        if self._job is not None:
-            self._job.finish_now(seconds)
+        if self._helper.job is not None:
+            self._helper.job.finish_now()
 
     def _sync_busy(self) -> None:
-        busy = self._job is not None
-        self._b_stop.setVisible(busy)
+        busy = self._helper.running()
         self._b_undo.setEnabled(not busy)
         if busy:
             self._ok.setEnabled(False)
@@ -472,17 +488,17 @@ class RenamePagesDialog(QtWidgets.QDialog):
         from ...infra.paths import data_dir
         from ...workers import rename_worker as RW
         from ..jobs.helper_job import HelperJob
-        from ..style.theme import set_note_role
 
-        if self._job is not None:
+        if self._helper.running():
             return False
         busy = [o for d, o, _n in pairs if _in_builder(os.path.join(d, o + ".ctg"))]
         if busy:
-            self._status.setText(
+            self._helper.say(
                 "Open in the Graphics Builder: %s. Close %s there first, or its next save writes the "
-                "old name back." % (", ".join(busy[:5]), "it" if len(busy) == 1 else "them")
+                "old name back." % (", ".join(busy[:5]), "it" if len(busy) == 1 else "them"),
+                failed=True,
+                log=False,
             )
-            set_note_role(self._status, "danger")
             return False
         held = [os.path.join(d, o + ".ctg") for d, o, _n in pairs]
         req = {
@@ -493,29 +509,24 @@ class RenamePagesDialog(QtWidgets.QDialog):
             "link_dirs": self.project_dirs(),
         }
         job = HelperJob(self, RW.command, req, data_dir("rename"), label="Rename Pages")
-        job.progress.connect(lambda _i, _n, what: self._status.setText("Renaming pages (%s)…" % what))
-        job.finished.connect(lambda res: self._renamed(job, res, pairs, held, undo))
         if self._hold is not None:
             self._hold(held)
-        if not job.start():
+        if not self._helper.run(
+            job,
+            finished=lambda res: self._renamed(res, pairs, held, undo),
+            failed="The pages could not be renamed.",
+            progress=lambda _i, _n, what: "Renaming pages (%s)…" % what,
+        ):
             if self._moved is not None:
                 self._moved([], held)
-            self._status.setText("The pages could not be renamed: the helper process did not start.")
-            set_note_role(self._status, "danger")
             return False
-        self._job = job
-        self._status.setText("Renaming pages…")
-        set_note_role(self._status, "text_dim")
+        self._helper.say("Renaming pages…")
         self._sync_busy()
         return True
 
-    def _renamed(self, job, res: dict, pairs: List[Pair], held: List[str], undo: bool) -> None:
-        from ..style.theme import set_note_role
+    def _renamed(self, res: dict, pairs: List[Pair], held: List[str], undo: bool) -> None:
         from .. import lifecycle
 
-        if job is not self._job:
-            return
-        self._job = None
         done: List[Pair] = [(d, o, n) for d, o, n in res.get("done") or ()]
         failed = list(res.get("failed") or ()) + list(res.get("errors") or ())
         if res.get("error"):
@@ -568,22 +579,18 @@ class RenamePagesDialog(QtWidgets.QDialog):
             parts.append("Stopped: the pages not renamed keep their names.")
         if failed:
             parts.append("Not renamed: %s." % "; ".join(failed[:3]))
-        self._status.setText(" ".join(parts) or "Nothing was renamed.")
-        set_note_role(self._status, "danger" if failed else "text_dim")
+        self._helper.say(" ".join(parts) or "Nothing was renamed.", failed=bool(failed))
         self._b_undo.setVisible(bool(self._undo))
         self._b_refs.setVisible(bool(self._last_names) and self._check_references is not None)
         self._sync_busy()
 
     def done(self, r) -> None:
-        if self._job is not None:
-            self._job.stop()
-            self.finish()
+        self._helper.close(wait=True)  # (the pages renamed so far: the window's tabs follow them)
         super().done(r)
 
     def check_references(self) -> None:
         """Check Project over the pages renamed, with their new names to give the references."""
         if self._check_references is not None and self._last_names:
-            from ..pick_fields import project_dirs
-
-            own = self._own_dir or next(iter(project_dirs(self._scope.project(), False)), "")
-            self._check_references(own, self._scope.includes.isChecked(), dict(self._last_names))
+            self._check_references(
+                self._scope.project_dir(), self._scope.includes.isChecked(), dict(self._last_names)
+            )

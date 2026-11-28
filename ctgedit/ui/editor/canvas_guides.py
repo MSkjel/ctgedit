@@ -183,6 +183,7 @@ class SmartGuides:
     def _paint_smart_guides(self, painter, rect, z, accent) -> None:
         """Live alignment lines while dragging; a move held on one axis
         draws a thin dashed line through its start along that axis."""
+        rect = self._line_span(rect)
         if self._constrain is not None and self._moving:
             axis, p = self._constrain
             pen = QtGui.QPen(accent)

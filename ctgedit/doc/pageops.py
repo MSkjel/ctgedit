@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from ..infra.logsetup import note_exception as _note_exc
 
 if TYPE_CHECKING:
     from collections import OrderedDict
@@ -220,6 +221,7 @@ class PageEdits:
         try:
             return bool(self.path) and self._page_project().has_page_table()
         except Exception:  # noqa: BLE001
+            _note_exc("pageops.PageEdits.page_record_available", path=self.path)
             return False
 
     def page_keyboard_available(self) -> bool:
@@ -228,10 +230,11 @@ class PageEdits:
         if not self.page_record_available():
             return False
         try:
-            from ..io import pgregister
+            from ..format.fileio import find_ci
 
-            return pgregister._find_file(os.path.dirname(os.path.abspath(self.path)), "pgkey.DBF") is not None
+            return find_ci(os.path.dirname(os.path.abspath(self.path)), "pgkey.DBF") is not None
         except Exception:  # noqa: BLE001
+            _note_exc("pageops.PageEdits.page_keyboard_available", path=self.path)
             return False
 
     def page_record_on_disk(self) -> Optional[dict]:
@@ -242,6 +245,7 @@ class PageEdits:
         try:
             return self._page_project().page_record(self._page_record_name())
         except Exception:  # noqa: BLE001
+            _note_exc("pageops.PageEdits.page_record_on_disk", path=self.path)
             return None
 
     def page_record_staged(self) -> dict:
@@ -269,6 +273,7 @@ class PageEdits:
         try:
             return self._page_project().page_field_widths()
         except Exception:  # noqa: BLE001
+            _note_exc("pageops.PageEdits.page_record_widths", path=self.path)
             return {}
 
     def page_record_problem(self, column: str, value: str) -> Optional[str]:
@@ -469,6 +474,7 @@ class PageEdits:
             try:
                 ref = reference_from_object(po)
             except Exception:  # noqa: BLE001
+                _note_exc("pageops.PageEdits.template_reference")
                 continue
             if ref is not None and ref.ext == "ctt":
                 return i, ref
@@ -603,7 +609,7 @@ class PageEdits:
                 from ..io.citect_config import template_update_enabled
 
                 page_properties = template_update_enabled()
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001 -- swallow-ok: no install or an unreadable ini: the default
                 page_properties = False
         size = bg = props = None
         if page_properties:

@@ -76,7 +76,7 @@ def _rows_one_by_one(dock, page):
         look = dock._row_look(page, index, obj)
         item.setData(0, QtCore.Qt.UserRole, index)
         item.setText(0, look.text)
-        item.setIcon(0, icon(look.icon, 16))
+        item.setIcon(0, icon(look.icon))
         for m in obj.members:
             if not page.objects[m].raw.get("_non_drawable"):
                 add(m, item)
@@ -215,8 +215,8 @@ def _close(w):
 
     for e in w._docs:
         e["doc"].dirty = False
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.hide()
 
 

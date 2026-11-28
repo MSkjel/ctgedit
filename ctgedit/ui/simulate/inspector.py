@@ -1,6 +1,8 @@
 """The Simulate Inspector: what the running page is made of and uses."""
 
 from __future__ import annotations
+
+from ..names import name_list, plural
 from ..style.theme import sp as _sp
 
 import re
@@ -13,14 +15,16 @@ from ..style import theme
 from ...infra.logsetup import note_exception as _note_exc
 from . import options
 
+#: Qt's roles, read once (an attribute of QtCore.Qt costs about 1 us)
+_DISPLAY_ROLE = QtCore.Qt.DisplayRole
+_TOOLTIP_ROLE = QtCore.Qt.ToolTipRole
+_USER_ROLE = QtCore.Qt.UserRole
+#: a cell's sort value (:meth:`RowsModel._sort_key`)
+_SORT_ROLE = QtCore.Qt.UserRole + 1
 #: a name an expression may use: a tag, a function, Equip.Item
 _WORD = re.compile(r"[A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)*")
 #: an association reference: ?name? (also ?INT 1?)
 _ASS = re.compile(r"\?([^?\n]{1,64})\?")
-
-#: the default of Settings > Simulate > Inspector and Watch > Inspector refreshes every
-#: (options.inspector_refresh_ms)
-REFRESH_MS = 500
 
 
 def _text(v: Any) -> str:
@@ -49,20 +53,21 @@ class RowsModel(QtCore.QAbstractTableModel):
     def columnCount(self, parent=QtCore.QModelIndex()) -> int:  # noqa: N802
         return 0 if parent.isValid() else len(self.headers)
 
-    def data(self, index, role=QtCore.Qt.DisplayRole):
+    def data(self, index, role=_DISPLAY_ROLE):
+        # (a paint asks every cell shown for every role: the others answer at once)
+        if role != _DISPLAY_ROLE and role != _TOOLTIP_ROLE and role != _USER_ROLE and role != _SORT_ROLE:
+            return None
         if not index.isValid():
             return None
         r, c = index.row(), index.column()
-        if role in (QtCore.Qt.DisplayRole, QtCore.Qt.ToolTipRole):
+        if role == _DISPLAY_ROLE or role == _TOOLTIP_ROLE:
             v = self.rows[r][c] if c < len(self.rows[r]) else ""
-            if role == QtCore.Qt.ToolTipRole:
+            if role == _TOOLTIP_ROLE:
                 return v if len(v) > 40 else None
             return v
-        if role == QtCore.Qt.UserRole:
+        if role == _USER_ROLE:
             return self.data_of[r]
-        if role == QtCore.Qt.UserRole + 1:
-            return self._sort_key(r, c)
-        return None
+        return self._sort_key(r, c)
 
     def _sort_key(self, r: int, c: int):
         # (sorting: numbers as numbers)
@@ -198,17 +203,12 @@ class _Table(QtWidgets.QWidget):
 
     def copy_rows(self, all_rows: bool = False) -> int:
         """The selected rows (all shown ones when none is selected) to the clipboard, tab
-        separated with the column names first."""
-        rows = sorted({ix.row() for ix in self.view.selectionModel().selectedRows()})
-        if all_rows or not rows:
-            rows = range(self.proxy.rowCount())
-        out = ["\t".join(self.model.headers)]
-        for r in rows:
-            out.append(
-                "\t".join(str(self.proxy.index(r, c).data() or "") for c in range(self.proxy.columnCount()))
-            )
-        QtGui.QGuiApplication.clipboard().setText("\n".join(out))
-        return len(out) - 1
+        separated with the column names first; how many."""
+        from ..tables import selected_rows_text
+
+        text = selected_rows_text(self.view, headers=True, all_rows=all_rows, all_if_none=True)
+        QtGui.QGuiApplication.clipboard().setText(text)
+        return text.count("\n")
 
     def _menu(self, pos) -> None:
         menu = QtWidgets.QMenu(self)
@@ -428,11 +428,7 @@ class PageIndex:
 
 
 def _ans_text(ans: Sequence[int], most: int = 6) -> str:
-    ans = list(ans)
-    if not ans:
-        return ""
-    text = ", ".join(str(a) for a in ans[:most])
-    return text + (" and %d more" % (len(ans) - most) if len(ans) > most else "")
+    return name_list(ans, most)
 
 
 class PageInspector(QtWidgets.QWidget):
@@ -895,16 +891,12 @@ class PageInspector(QtWidgets.QWidget):
             self.count.setText(self.perf.count_text())
             return
         total, shown = t.model.rowCount(), t.shown_count()
-        self.count.setText(
-            "%d of %d rows" % (shown, total)
-            if shown != total
-            else "%d row%s" % (total, "" if total == 1 else "s")
-        )
+        self.count.setText("%d of %d rows" % (shown, total) if shown != total else plural(total, "row"))
 
     def _copy(self) -> None:
         t = self._current_table()
         n = t.copy_rows() if t is not None else self.perf.copy_rows()
-        self._set_note("Copied %d row%s." % (n, "" if n == 1 else "s"))
+        self._set_note("Copied %s." % (plural(n, "row")))
 
     # -- the data --------------------------------------------------------------------------
     def _page_index(self, sp) -> Optional[PageIndex]:

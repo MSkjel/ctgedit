@@ -33,6 +33,14 @@ def environment() -> dict:
     return env
 
 
+def environment_signature() -> tuple:
+    """What of this process's environment a helper reads pages and libraries with: the
+    ctgedit switches (CTG_* and GP_*: Settings > Pages and libraries sets the nested-copies
+    mode, the extra library folders, the sibling libraries and the text replacement there,
+    ui/prefs/settings.apply_library_folders)."""
+    return tuple(sorted((k, v) for k, v in os.environ.items() if k.upper().startswith(("CTG_", "GP_"))))
+
+
 def start(
     cmd: List[str],
     stdin=subprocess.DEVNULL,
@@ -79,7 +87,7 @@ class KillOnClose:
                     wintypes.HANDLE(h), wintypes.HANDLE(int(proc._handle))
                 )
             )
-        except Exception:  # noqa: BLE001 -- a safety net only
+        except Exception:  # noqa: BLE001 -- swallow-ok: a safety net only
             return False
 
     @staticmethod
@@ -134,7 +142,7 @@ class KillOnClose:
                 k32.CloseHandle(wintypes.HANDLE(h))
                 return None
             return h
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 -- swallow-ok: no job object: no safety net
             return None
 
 
@@ -214,5 +222,93 @@ def free_memory_mb() -> Optional[int]:
         if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(st)):
             return None
         return int(st.ullAvailPhys // (1024 * 1024))
-    except Exception:  # noqa: BLE001 -- a hint only
+    except Exception:  # noqa: BLE001 -- swallow-ok: a hint only
         return None
+
+
+class CheckProcess:
+    """A check run in a helper process, one of its kind at a time: its answer is a JSON file
+    in the folder ``data_dir(FOLDER)``. A subclass names ``KIND`` (the workers' kind),
+    ``FOLDER`` and ``SWEEP_SUFFIX`` (the files a sweep removes; '' = every file) and keeps
+    its own ``_running`` list and ``_swept`` flag."""
+
+    KIND = ""
+    FOLDER = ""
+    SWEEP_SUFFIX = ""
+    _running: list = []
+    _swept = False
+
+    proc = None
+    out: Optional[str] = None
+
+    @classmethod
+    def busy(cls) -> bool:
+        """A check process of this kind is running (none is started beside it)."""
+        cls._running[:] = [c for c in cls._running if c.proc is not None and c.proc.poll() is None]
+        return bool(cls._running)
+
+    @classmethod
+    def cancel_all(cls) -> None:
+        """Stop every check process of this kind (the editor quits)."""
+        for check in list(cls._running):
+            check.cancel()
+
+    def may_start(self) -> bool:
+        """No check of this kind, and no other job that waits for one, runs now."""
+        return not self.busy() and not others_busy(self.KIND)
+
+    def answer_file(self) -> str:
+        """A new answer file name in the kind's folder (swept of day-old files once a run)."""
+        import tempfile
+
+        from .paths import data_dir
+
+        folder = data_dir(self.FOLDER)
+        os.makedirs(folder, exist_ok=True)
+        self._sweep(folder)
+        fd, path = tempfile.mkstemp(prefix="%d-" % os.getpid(), suffix=".json", dir=folder)
+        os.close(fd)
+        os.remove(path)
+        return path
+
+    def launch(self, cmd: List[str]) -> None:
+        """Start ``cmd`` as this kind's process (listed as running)."""
+        self.proc = track(self.KIND, start(cmd))
+        self._running.append(self)
+
+    def kill(self) -> None:
+        """Stop the process when it still runs."""
+        import contextlib
+
+        if self.proc is not None and self.proc.poll() is None:
+            with contextlib.suppress(Exception):
+                self.proc.kill()
+                self.proc.wait(5)
+
+    def read_answer(self):
+        """The answer file's JSON (None when there is none or it is unreadable)."""
+        import contextlib
+        import json
+
+        with contextlib.suppress(Exception):
+            with open(self.out, "rb") as fh:
+                return json.loads(fh.read().decode("utf-8"))
+        return None
+
+    @classmethod
+    def _sweep(cls, folder: str) -> None:
+        """Once per run: remove the files of the folder older than a day (a check nobody
+        asked for the answer of)."""
+        import contextlib
+        import time
+
+        if cls._swept:
+            return
+        cls._swept = True
+        old = time.time() - 86400
+        with contextlib.suppress(OSError):
+            for name in os.listdir(folder):
+                p = os.path.join(folder, name)
+                with contextlib.suppress(OSError):
+                    if name.endswith(cls.SWEEP_SUFFIX) and os.path.getmtime(p) < old:
+                        os.remove(p)

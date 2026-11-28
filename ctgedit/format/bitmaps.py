@@ -9,6 +9,7 @@ from typing import Callable, Optional, Tuple
 
 from .zstream import inflate
 from .page import PageObject
+from ..infra.logsetup import note_exception as _note_exc
 
 BITMAP_TC = 0x07
 METAFILE_TC = 0x09
@@ -67,13 +68,13 @@ def dib_section(po: PageObject) -> Optional[DibSection]:
         sec = _section_at(body, class_section_offset(po))
         if sec is not None:
             return sec
-    except Exception:  # noqa: BLE001 -- fall back to the scan
+    except Exception:  # noqa: BLE001 -- swallow-ok: fall back to the scan
         pass
     from . import geometry as G
-    from .symbols import _find_stream
+    from .symbols import find_stream
 
     gh = G.parse_geom_header(body)
-    hit = _find_stream(body, gh.end if gh else 0)
+    hit = find_stream(body, gh.end if gh else 0)
     if hit is None or hit[0] < 20:
         return None
     return _section_at(body, hit[0] - 20)
@@ -89,19 +90,19 @@ def _inflate(stream: bytes) -> Optional[bytes]:
 def read_pictures(po: PageObject):
     """``(primary, flash_or_None)`` :class:`~ctgedit.format.symbols.EmbeddedBitmap`
     of the record's own DIBs (``(None, None)`` without a DIB section)."""
-    from .symbols import _decode_dib
+    from .symbols import decode_dib
 
     sec = dib_section(po)
     if sec is None:
         return None, None
     raw = _inflate(sec.primary)
-    primary = _decode_dib(raw) if raw is not None else None
+    primary = decode_dib(raw) if raw is not None else None
     if primary is None:
         return None, None
     flash = None
     if sec.flash is not None:
         fraw = _inflate(sec.flash)
-        flash = _decode_dib(fraw) if fraw is not None else None
+        flash = decode_dib(fraw) if fraw is not None else None
         if flash is not None and (flash.width, flash.height) != (primary.width, primary.height):
             flash = None
     return primary, flash
@@ -167,15 +168,15 @@ def _write_rect(po: PageObject, rect, rect_at: int) -> None:
     else:
         r2 = tuple(new_r1[k] + old_r2[k] - old_r1[k] for k in range(4))
     if tuple(r2) != new_r1:
-        G._set_rect2(po, r2)
+        G.set_rect2(po, r2)
 
 
 def set_pictures(
     po: PageObject, rgba: bytes, width: int, height: int, flash_rgba: Optional[bytes] = None, rect=None
 ) -> bool:
     """Put new pictures into a bitmap record in place."""
-    from .ctf import _compress
-    from .symbols import _decode_dib
+    from .ctf import compress
+    from .symbols import decode_dib
 
     sec = dib_section(po)
     if sec is None or width < 1 or height < 1 or width > MAX_SIDE or height > MAX_SIDE:
@@ -188,16 +189,16 @@ def set_pictures(
     if flash_rgba is not None and _same_flash(rgba, flash_rgba, width, height):
         flash_rgba = None
     raw_old = _inflate(sec.primary)
-    old_p = _decode_dib(raw_old) if raw_old is not None else None
+    old_p = decode_dib(raw_old) if raw_old is not None else None
     old_f = None
     if sec.flash is not None:
         fraw = _inflate(sec.flash)
-        old_f = _decode_dib(fraw) if fraw is not None else None
+        old_f = decode_dib(fraw) if fraw is not None else None
     p_raw = encode_dib(rgba, width, height)
     if _same_picture(old_p, rgba, width, height) and len(raw_old) == len(p_raw):
         p_stream = sec.primary
     else:
-        p_stream = _compress(p_raw)
+        p_stream = compress(p_raw)
     f_stream = None
     if flash_rgba is not None:
         if (
@@ -207,7 +208,7 @@ def set_pictures(
         ):
             f_stream = sec.flash
         else:
-            f_stream = _compress(encode_dib(flash_rgba, width, height))
+            f_stream = compress(encode_dib(flash_rgba, width, height))
     flags = (sec.flags & ~0x100) | (0x100 if f_stream is not None else 0)
     section = struct.pack("<III", flags, len(p_raw), len(p_stream)) + p_stream
     if f_stream is not None:
@@ -422,6 +423,7 @@ def metafile_bits(po: PageObject) -> Optional[bytes]:
 
         o = class_section_offset(po) + 8
     except Exception:  # noqa: BLE001
+        _note_exc("bitmaps.metafile_bits")
         return None
     b = po.body_raw
     if o + 18 > len(b) or struct.unpack_from("<HH", b, o) not in ((1, 9), (2, 9)):

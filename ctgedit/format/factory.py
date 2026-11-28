@@ -10,7 +10,7 @@ from typing import List, Optional, Tuple
 
 from . import geometry as G
 from . import records as R
-from .page import PageObject, _parse_object
+from .page import PageObject, parse_object
 from . import writer
 from .textcodec import CODEC
 
@@ -228,7 +228,7 @@ def _instantiate(type_code: int, dwflags: int, body: bytes) -> PageObject:
         + an
         + body
     )
-    return _parse_object(0, 0, len(payload), 0, payload)
+    return parse_object(0, 0, len(payload), 0, payload)
 
 
 #: the thumb a new V3/V4 slider draws and drags: the Include library's pointer. ctgedit has
@@ -327,8 +327,8 @@ def make_bitmap_record(
 ) -> PageObject:
     """Create an embedded bitmap record from RGBA pixels."""
     from . import colourstate
-    from .ctf import _compress
-    from .page import _parse_object
+    from .ctf import compress
+    from .page import parse_object
 
     l, t, r, b = (int(v) for v in rect)
     if r <= l:
@@ -336,11 +336,11 @@ def make_bitmap_record(
     if b <= t:
         b = t + max(1, height)
     raw = _encode_dib(rgba, width, height)
-    z = _compress(raw)
+    z = compress(raw)
     section = struct.pack("<III", 0x101 if flash_rgba else 0x001, len(raw), len(z)) + z
     if flash_rgba:
         raw2 = _encode_dib(flash_rgba, width, height)
-        z2 = _compress(raw2)
+        z2 = compress(raw2)
         section += struct.pack("<I", len(z2)) + z2
     nm = name.encode(CODEC, "replace")
     body = (
@@ -364,14 +364,14 @@ def make_bitmap_record(
         + an
         + body
     )
-    po = _parse_object(0, 0, len(payload), 0, payload)
+    po = parse_object(0, 0, len(payload), 0, payload)
     colourstate.derive_dynamic_flag(po)
     return po
 
 
 def make_metafile_record(handle: int, rect, wmf: bytes) -> PageObject:
     """Create a metafile record from a Windows metafile."""
-    from .page import _parse_object
+    from .page import parse_object
 
     l, t, r, b = (int(v) for v in rect)
     if r <= l:
@@ -400,7 +400,7 @@ def make_metafile_record(handle: int, rect, wmf: bytes) -> PageObject:
         + an
         + body
     )
-    return _parse_object(0, 0, len(payload), 0, payload)
+    return parse_object(0, 0, len(payload), 0, payload)
 
 
 # GROUP record = the shape CtDraw itself writes for a FREE group (Arrange >
@@ -417,7 +417,7 @@ _GROUP_SUBTYPE_SIZE = 0x0A
 
 def make_group_record(handle: int, bbox, child_count: int, bounds=None) -> PageObject:
     """Create a group record wrapping ``child_count`` subtrees."""
-    from .page import _parse_object
+    from .page import parse_object
 
     l, t, r, b = (int(v) for v in bbox)
     # rect1 (Extent) = union of the children's rect1, rect2 (Bounds) = union of
@@ -440,7 +440,7 @@ def make_group_record(handle: int, bbox, child_count: int, bounds=None) -> PageO
         + NO_LINK.encode(CODEC)
         + body
     )
-    return _parse_object(0, 0, len(payload), 0, payload)
+    return parse_object(0, 0, len(payload), 0, payload)
 
 
 def set_symbol_reference(po: PageObject, library: str, element: str, ext: str = "ctl") -> bool:
@@ -527,24 +527,9 @@ def _create_legacy(kind: str, seed_name: str, rect, text, symbol, handle, symbol
     return po
 
 
-def create_object(
-    kind: str,
-    rect: Optional[Tuple[int, int, int, int]] = None,
-    nodes: Optional[List[Tuple[int, int]]] = None,
-    *,
-    colour: Optional[int] = None,
-    text: Optional[str] = None,
-    symbol: Optional[Tuple[str, str, str]] = None,
-    handle: int = 0,
-    link_info: Optional[dict] = None,
-) -> PageObject:
-    """Build a new PageObject of ``kind``."""
-    seed_name = TOOL_SEEDS.get(kind)
-    if seed_name is None or not _have(seed_name):
-        raise ValueError("no seed for object kind %r" % kind)
-    if kind in _LEGACY_KINDS:
-        return _create_legacy(kind, seed_name, rect, text, symbol, handle)
-    po = _new(seed_name)
+def _clean_seed(po: PageObject, kind: str) -> None:
+    """A fresh seed copy of ``kind`` without the seed's own editor references,
+    animations and property-sheet state."""
     _strip_editor_refs(po)
     # a NEW object has no ROT / MV / SZ / VISIBLE animation (the reader would treat the
     # fresh colour pair as runtime chrome)
@@ -573,7 +558,7 @@ def create_object(
         ):
             try:
                 writer.remove_object_property(po, key)
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001 -- swallow-ok: a key this seed does not hold
                 pass
     for key in _DROP_ON_CREATE.get(kind, ()):
         writer.remove_object_property(po, key)
@@ -592,30 +577,31 @@ def create_object(
         for key in keys:
             if key.startswith("!*"):
                 writer.remove_object_property(po, key)
-    if handle is not None:
-        _set_handle(po, handle)
 
-    # ---- placed library symbol: position + size live in Local ---------------
-    if kind == "symbol":
-        from . import placement
 
-        if symbol is None or link_info is None:
-            raise ValueError("The symbol's library element was not found.")
-        lib, element, ext = symbol
-        if not set_symbol_reference(po, lib, element, ext or "ctl"):
-            raise ValueError("symbol seed carries no link lpstr")
-        n = link_info["N"]
-        target = rect or (n[0], n[1], n[2], n[3])
-        placement.init_linked_symbol(po, target, link_info)
-        # the link number = the element root record's handle (what CtDraw
-        # writes for a top-level placed symbol)
-        po.an_str = str(link_info.get("root_handle", 0))
-        from .writer import refresh_object_bags
+def _place_symbol(po: PageObject, rect, symbol, link_info: Optional[dict]) -> PageObject:
+    """The new placed library symbol ``po``: its link and its Local (position and size)."""
+    from . import placement
 
-        refresh_object_bags(po)
-        return po
+    if symbol is None or link_info is None:
+        raise ValueError("The symbol's library element was not found.")
+    lib, element, ext = symbol
+    if not set_symbol_reference(po, lib, element, ext or "ctl"):
+        raise ValueError("symbol seed carries no link lpstr")
+    n = link_info["N"]
+    target = rect or (n[0], n[1], n[2], n[3])
+    placement.init_linked_symbol(po, target, link_info)
+    # the link number = the element root record's handle (what CtDraw
+    # writes for a top-level placed symbol)
+    po.an_str = str(link_info.get("root_handle", 0))
+    from .writer import refresh_object_bags
 
-    # ---- geometry ----------------------------------------------------------
+    refresh_object_bags(po)
+    return po
+
+
+def _new_geometry(po: PageObject, kind: str, rect, nodes) -> None:
+    """The new object's nodes or box, and a style's defaults."""
     if kind == "line":
         pts = nodes or [(rect[0], rect[1]), (rect[2], rect[3])] if (nodes or rect) else None
         if pts:
@@ -646,7 +632,9 @@ def create_object(
     if kind in _STYLE_DEFAULT_KINDS:
         _apply_style_defaults(po, hollow=kind.endswith("_outline"))
 
-    # ---- colour ------------------------------------------------------------
+
+def _new_colour(po: PageObject, kind: str, colour: Optional[int]) -> None:
+    """The new object's colour state and its colour."""
     from . import colourstate
 
     colourstate.rebuild(po)  # the seed's stale state-0 pair
@@ -665,7 +653,9 @@ def create_object(
     # (ROT/MVX...) must not leave it set
     colourstate.derive_dynamic_flag(po)
 
-    # ---- captions / display ------------------------------------------------
+
+def _new_texts(po: PageObject, kind: str, rect, text: Optional[str]) -> None:
+    """The new object's caption, display value and text strings."""
     if text is not None and kind != "number":
         if po.type_code == 0x05:
             # stored as typed: a plain caption, a translatable label only when
@@ -677,7 +667,7 @@ def create_object(
         # a numeric display value: TXTMODE 3 + the expression in TXT_STR
         # ('expr:format', or a bare tag = the tag's own format), as CtDraw
         # writes it (no TXT_A / FORMAT); the caption is CtDraw's '####.#' placeholder
-        writer._set_plain_caption(po, "####.#")  # plain, not @(...)
+        writer.set_plain_caption(po, "####.#")  # plain, not @(...)
         writer.ensure_object_property(po, "TXTMODE", "3")
         writer.ensure_object_property(po, "TXT_STR", text or "")
     if po.type_code == 0x05:
@@ -695,11 +685,13 @@ def create_object(
             if key in po.raw_properties():
                 writer.set_object_property(po, key, str(v))
 
-    # ---- legacy V3/V4: drop the seed's tag expressions / commands ------------
+
+def _new_extras(po: PageObject, kind: str, text: Optional[str], handle: int) -> None:
+    """The legacy kinds' cleared expressions, a string's texts, a web content's name."""
     for key in _CLEAR_ON_CREATE.get(kind, ()):
         try:
             writer.set_object_property(po, key, "")
-        except Exception:  # noqa: BLE001 -- key absent on this seed variant
+        except Exception:  # noqa: BLE001 -- swallow-ok: key absent on this seed variant
             pass
     if kind == "string" and text is not None:
         writer.ensure_object_property(po, "ON_TEXT", text)
@@ -712,6 +704,34 @@ def create_object(
 
         refresh_object_bags(po)
 
+
+def create_object(
+    kind: str,
+    rect: Optional[Tuple[int, int, int, int]] = None,
+    nodes: Optional[List[Tuple[int, int]]] = None,
+    *,
+    colour: Optional[int] = None,
+    text: Optional[str] = None,
+    symbol: Optional[Tuple[str, str, str]] = None,
+    handle: int = 0,
+    link_info: Optional[dict] = None,
+) -> PageObject:
+    """Build a new PageObject of ``kind``."""
+    seed_name = TOOL_SEEDS.get(kind)
+    if seed_name is None or not _have(seed_name):
+        raise ValueError("no seed for object kind %r" % kind)
+    if kind in _LEGACY_KINDS:
+        return _create_legacy(kind, seed_name, rect, text, symbol, handle)
+    po = _new(seed_name)
+    _clean_seed(po, kind)
+    if handle is not None:
+        _set_handle(po, handle)
+    if kind == "symbol":
+        return _place_symbol(po, rect, symbol, link_info)
+    _new_geometry(po, kind, rect, nodes)
+    _new_colour(po, kind, colour)
+    _new_texts(po, kind, rect, text)
+    _new_extras(po, kind, text, handle)
     # ---- symbol reference ----------------------------------------------------
     if symbol is not None:
         lib, element, ext = symbol
@@ -750,7 +770,6 @@ def make_input_record(
         raise ValueError("no seed for input record kind %r" % kind)
     po = _new(kind)
     po.class_flag = 0
-    _strip_editor_refs(po)
     _set_handle(po, owner_handle)
     L.place_point(po, int(anchor[0]), int(anchor[1]))
     if kind == "touch":

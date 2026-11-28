@@ -502,8 +502,8 @@ def test_eye_dropper_samples_the_rendered_page(fx_install, tmp_path):
         assert not d.active and got in ([0x2468AC], [])  # offscreen widgetAt may miss
         assert i >= 0
     finally:
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
 
 
 def test_the_same_picker_opens_from_ribbon_panel_and_sheet(fx_install, tmp_path, monkeypatch):
@@ -547,8 +547,8 @@ def test_the_same_picker_opens_from_ribbon_panel_and_sheet(fx_install, tmp_path,
         f.pick_transparent()
         assert f.pair() == (T.TRANSPARENT, T.TRANSPARENT)
     finally:
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
 
 
 # ================================================================== the dialogs
@@ -706,8 +706,8 @@ def test_swap_window_applies_to_the_selection_or_the_whole_page(fx_install, tmp_
         assert w._dialogs.get("swapcol")._frm.pair() == (0x00FF00, 0x00FF00)
         w._dialogs.get("swapcol").reject()
     finally:
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
 
 
 def test_adjust_colours_window_reads_the_selection_at_apply(fx_install, tmp_path):
@@ -735,8 +735,8 @@ def test_adjust_colours_window_reads_the_selection_at_apply(fx_install, tmp_path
         assert dlg.isVisible()
         dlg.reject()
     finally:
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
 
 
 def test_where_transparent_is_offered_follows_ctdraws_pages(fx_install, tmp_path, monkeypatch):

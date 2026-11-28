@@ -36,7 +36,7 @@ def test_merge_bag_keeps_the_copys_sheet_state_and_user_values():
         ("NEW", "y"),
     ]
     for keep in (False, True):
-        got = GP._merge_bag(stale, cur, keep_sheet=keep)
+        got = GP.merge_bag(stale, cur, keep_sheet=keep)
         assert got.pairs == want
         assert got.ov == 7
 
@@ -46,8 +46,8 @@ def test_merge_bag_keeps_a_templated_value_in_place():
     is (an inner binding level's bound value the current element leaves unbound)."""
     stale = GP.Bag([("Tag", "A_x"), ("Text 9", "t"), ("Num 9", "9")])
     cur = GP.Bag([("Tag", "_x")])
-    assert GP._merge_bag(stale, cur).pairs == [("Tag", "_x")]
-    got = GP._merge_bag(stale, cur, templated=frozenset({"tag", "text 9", "num 9"}))
+    assert GP.merge_bag(stale, cur).pairs == [("Tag", "_x")]
+    got = GP.merge_bag(stale, cur, templated=frozenset({"tag", "text 9", "num 9"}))
     assert got.pairs == [("Tag", "_x"), ("Text 9", "t"), ("Num 9", "9")]
 
 

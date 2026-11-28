@@ -1,5 +1,6 @@
 """Update Pages guards next to other writers."""
 
+from ctgedit.ui.main_window import MainWindow
 import datetime
 import os
 import shutil
@@ -468,8 +469,6 @@ def test_a_project_with_no_pages_is_drawn_disabled(app, tmp_path):
 
 
 def test_the_result_box_counts_in_words(app):
-    from ctgedit.ui.window.library import LibraryCommands
-
     rep = types.SimpleNamespace(
         pages=1,
         projects=["A"],
@@ -493,7 +492,7 @@ def test_the_result_box_counts_in_words(app):
         failed=[],
         errors=[],
     )
-    lines = LibraryCommands._update_pages_summary(rep, None, (1, 1, 1, 1))
+    lines = MainWindow._update_pages_summary(rep, None, (1, 1, 1, 1))
     text = "\n".join(lines)
     assert "(s)" not in text
     assert lines[0] == "1 page checked in 1 project, 1 out of date, 1 updated."
@@ -503,7 +502,7 @@ def test_the_result_box_counts_in_words(app):
     assert "a helper process ended: 1 page." in text
     rep.pages, rep.projects, rep.not_checked = 3, ["A", "B"], 2
     rep.unregistered = ["x", "y"]
-    lines = LibraryCommands._update_pages_summary(rep, None, (2, 0, 0, 0))
+    lines = MainWindow._update_pages_summary(rep, None, (2, 0, 0, 0))
     assert lines[0] == "3 pages checked in 2 projects, 1 out of date, 1 updated."
     assert "2 page files not registered in their project were left alone." in "\n".join(lines)
 

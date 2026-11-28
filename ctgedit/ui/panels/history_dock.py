@@ -1,6 +1,8 @@
 """The History panel: undo steps as a list."""
 
 from __future__ import annotations
+
+from ..names import plural, step_title
 from ..style.theme import sp as _sp  # (the spacing scale)
 
 import time
@@ -10,7 +12,6 @@ from typing import List, Optional
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from ..style import theme
-from ..names import step_title
 from ..style.theme import set_note_role
 
 HELP_TOPIC = "the-window#history-panel"
@@ -252,7 +253,7 @@ class HistoryDock(QtWidgets.QWidget):
         if not n and not can_redo:
             text = "No edits yet."
         else:
-            text = "%d step%s." % (n, "" if n == 1 else "s")
+            text = "%s." % (plural(n, "step"))
             if can_redo:
                 text += " %d can be redone." % can_redo
             if saved_row is None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import struct
+import threading
 from typing import Optional, Tuple
 
 from . import geometry as G
@@ -245,17 +246,56 @@ STRING_MASK = "########"
 #: the font a Number or String without one names (CtDraw's default)
 DEFAULT_FONT = "DefaultFont"
 
-#: (font dirs, their fonts.dbf stamps) -> {name (lower case): (TYPE, SIZE)}
-_FONT_TABLES: dict = {}
+#: the fonts.dbf stamps of the folders searched -> {name (lower case): its row}
+_FONT_ROWS: dict = {}
+_FONT_ROWS_LOCK = threading.Lock()
+
+
+def font_rows(dirs) -> dict:
+    """The fonts.dbf rows of the folders ``dirs``, searched in order (the first definition of
+    a name wins, as CtDraw looks them up): name (lower case) -> its row. Cached while the
+    tables are unchanged."""
+    from .fileio import file_stamp, find_ci
+    from .projects import read_dbf_rows
+
+    key = tuple(s for s in (file_stamp(find_ci(d, "fonts.dbf")) for d in dirs) if s is not None)
+    with _FONT_ROWS_LOCK:
+        got = _FONT_ROWS.get(key)
+    if got is not None:
+        return got
+    out: dict = {}
+    for f, _m, _s in key:
+        try:
+            rows = read_dbf_rows(f)
+        except Exception:  # noqa: BLE001
+            from ..infra.logsetup import note_exception
+
+            note_exception("legacy.font_rows", page=f)
+            continue
+        for row in rows:
+            name = (row.get("NAME") or "").strip().lower()
+            if name and name not in out:
+                out[name] = row
+    with _FONT_ROWS_LOCK:
+        if len(_FONT_ROWS) > 64:
+            _FONT_ROWS.clear()
+        return _FONT_ROWS.setdefault(key, out)
+
+
+def font_size(row: dict) -> int:
+    """A fonts.dbf row's SIZE: pixels when positive, points when not (0 when unreadable)."""
+    try:
+        return int(float((row.get("SIZE") or "0").strip() or "0"))
+    except ValueError:
+        return 0
 
 
 def named_fonts(path: str) -> dict:
     """The fonts.dbf fonts a page or library at ``path`` names (its project, then its
-    include chain, the implicit Include last; the first definition of a name wins, as
-    CtDraw's look it up): name (lower case) -> (TYPE, SIZE),
-    TYPE as stored ('Arial,B'), SIZE an int (pixels when positive, points when not)."""
+    include chain, the implicit Include last): name (lower case) -> (TYPE, SIZE), TYPE as
+    stored ('Arial,B'), SIZE as :func:`font_size` reads it."""
     import os
-    from .projects import include_search_dirs, read_dbf_rows
+    from .projects import include_search_dirs
 
     d = os.path.dirname(os.path.abspath(path or "page.ctg"))
     try:
@@ -265,45 +305,7 @@ def named_fonts(path: str) -> dict:
 
         note_exception("legacy.named_fonts/dirs", page=path)
         dirs = [d]
-    files = []
-    for p in dirs:
-        try:
-            names = {n.lower(): n for n in os.listdir(p)}
-        except OSError:
-            continue
-        if "fonts.dbf" in names:
-            f = os.path.join(p, names["fonts.dbf"])
-            try:
-                st = os.stat(f)
-            except OSError:
-                continue
-            files.append((f, st.st_mtime_ns, st.st_size))
-    key = tuple(files)
-    got = _FONT_TABLES.get(key)
-    if got is not None:
-        return got
-    out: dict = {}
-    for f, _m, _s in files:
-        try:
-            rows = read_dbf_rows(f)
-        except Exception:  # noqa: BLE001
-            from ..infra.logsetup import note_exception
-
-            note_exception("legacy.named_fonts/read", page=f)
-            continue
-        for row in rows:
-            name = (row.get("NAME") or "").strip().lower()
-            if not name or name in out:
-                continue
-            try:
-                size = int(float((row.get("SIZE") or "0").strip() or "0"))
-            except ValueError:
-                size = 0
-            out[name] = ((row.get("TYPE") or "").strip(), size)
-    if len(_FONT_TABLES) > 64:
-        _FONT_TABLES.clear()
-    _FONT_TABLES[key] = out
-    return out
+    return {n: ((r.get("TYPE") or "").strip(), font_size(r)) for n, r in font_rows(dirs).items()}
 
 
 def display_mask(expr: str, tag_format=None) -> str:
@@ -458,4 +460,4 @@ def save_extents(objs, fonts: Optional[dict], tag_format=_INSTALLED):
 
 from ..infra import caches as _caches  # noqa: E402
 
-_caches.register("legacy.named_fonts", _FONT_TABLES, on=("libraries", "refresh", "tests"))
+_caches.register("legacy.font_rows", _FONT_ROWS, on=("libraries", "refresh", "tests"))

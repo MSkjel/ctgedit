@@ -71,18 +71,63 @@ would, running nothing:
 - button captions wider than the button;
 - symbols or genies whose element wasn't found;
 - duplicate key sequences;
+- a Hidden when or Disable when that is a constant, such as `1` or `FALSE`;
+- a Multi-state fill colour or display value with a condition left empty before a later one,
+  or the same condition twice: some of its states can never show;
+- a Hidden when the same as its group's;
+- an object that takes clicks lying entirely under another that takes them, so that a click
+  never reaches it (see [Click map](#click-map));
+- a placed genie's input left empty where its objects' Cicode cannot work without it, such as
+  `%Equip%.Value` or `%Level% > 50`;
 - on Situational Awareness pages, the [workspace checks](situational-awareness.md#workspace-checks).
 
 Double-click a row to go to the object; **Properties…** opens where the field is set. **Check
 Again** reruns the checks. Checks never change the page.
+
+## Preview states
+
+View > Preview States ([[Ctrl+Shift+J]]) shows the page as the runtime would for values you
+choose, without running anything. The **Preview States** panel lists each condition and
+expression of the page's animated objects once, however many objects use it:
+
+- a condition (Hidden when, an On / Off or Multi-state colour, an On / Off text) is a check box:
+  ticked is TRUE;
+- an expression that moves, turns, sizes or fills an object, or picks a Threshold or Gradient
+  colour, takes a percent of its range: click the value and drag the slider, and the page
+  follows;
+- an Array colour, text or symbol takes an index; a numeric or string display takes the text it
+  shows.
+
+The page draws each object for the values set, with the runtime's rules: Hidden when hides it,
+Disable when greys it in its disabled style, the colours, texts and symbol sets show their
+state. A condition you have not set leaves its part of the object as the page stores it. Expand
+a row to see the fields it is set in; double-click one to select its object, or right-click a
+row for **Draw as Stored** and **Select Objects**. **Selected objects** lists only the conditions
+of the selection; **Reset** draws the whole page as stored again. The values are kept for each
+open page while you edit it. Closing the panel ends the preview.
+
+## Click map
+
+View > Click Map shades what takes a click on the page: a touch command, a button or a slider.
+An object that only takes keys is outlined with a dashed line. Point anywhere for where a click
+there goes, what it runs, and what lies under it.
+
+The runtime gives a click to the topmost object under the pointer that takes one; an object
+without commands lets the click through. So an object that takes clicks hides the ones under it:
+the part of an object another one covers is left clear, and one covered entirely is marked red,
+since a click never reaches it. An object over it with a Hidden when covers it only while it
+shows: then nothing is marked red, but the tip says what lies over it. With Preview States open,
+the map follows the states set: hidden objects take no clicks. The page's Cicode can hide an
+object too (`DspShow`), which the map cannot know.
 
 ## Check Project
 
 Tools > Check Project… runs Check Page on every page of a project (and, with **And the projects
 it includes**, of those too), as the pages are saved, in a separate process. It also compiles the
 Cicode of each page's properties (On page entry and the other events), the menu configuration's
-commands, the keyboard commands and the project's Cicode files. **Show** filters the list;
-double-click a row (or **Go To**) to open its page at the object.
+commands, the keyboard commands and the project's Cicode files. Click **Check** to start; **Stop**
+ends it. **Show** filters the list; double-click a row (or **Go To**) to open its page at the
+object.
 
 ## Pack the project database
 

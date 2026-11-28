@@ -21,7 +21,7 @@ from ctgedit.format.page import parse_page, decode_value
 from ctgedit.format.attributes import parse_attributes
 
 # this tool reports the body-coverage metric, so enable its (otherwise-skipped) computation
-_page._WANT_COVERAGE = True
+_page.WANT_COVERAGE = True
 
 EXAMPLE_DIR = r"C:\ProgramData\AVEVA Plant SCADA 2023 R2\User\Example"
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ...infra.logsetup import note_exception as _note_exc
+
 import contextlib
 import weakref
 from ..number_field import NumberField, ScrubLabel
@@ -238,6 +240,7 @@ class PageForm:
         try:
             avail = bool(doc.page_record_available())
         except Exception:  # noqa: BLE001
+            _note_exc("properties_page._page_record_box/available")
             avail = False
         rec = (doc.page_record() or {}) if avail else {}
         widths = doc.page_record_widths() if avail else {}
@@ -252,6 +255,7 @@ class PageForm:
         try:
             own = doc._page_record_name() if avail else ""
         except Exception:  # noqa: BLE001
+            _note_exc("properties_page._page_record_box/name")
             own = doc.page.name or ""
         widgets = []
         for col, label in PAGE_RECORD_ROWS:
@@ -346,7 +350,7 @@ class PageForm:
             return
         try:
             self._doc.set_page_background(pair[0] & 0xFFFFFF)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001  # swallow-ok: the message is shown
             self.statusMessage.emit(str(exc))
             return
         self.changed.emit()
@@ -365,7 +369,7 @@ class PageForm:
             self.statusMessage.emit(str(exc))
             QtCore.QTimer.singleShot(0, self, self.refresh)  # show the stored value again
             return
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001  # swallow-ok: the message is shown
             self.statusMessage.emit("Could not set page property %s: %s" % (column, exc))
             return
         if ok:

@@ -67,8 +67,16 @@ class AboutDialog(QtWidgets.QDialog):
         form = QtWidgets.QFormLayout()
         self._rows = about_rows()
         for label, value in self._rows:
-            v = QtWidgets.QLabel(value)
-            v.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
+            if os.sep in value:
+                # (a folder: shown as far as it fits, selectable, the whole of it in the tool tip)
+                v = QtWidgets.QLineEdit(value)
+                v.setReadOnly(True)
+                v.setFrame(False)
+                v.setCursorPosition(0)
+                v.setToolTip(value)
+            else:
+                v = QtWidgets.QLabel(value)
+                v.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
             v.setObjectName("about_" + label.lower().replace(" ", "_"))
             form.addRow(label + ":", v)
         lay.addLayout(form)
@@ -94,9 +102,9 @@ class AboutDialog(QtWidgets.QDialog):
     def open_logs(self) -> None:
         from ... import crashlog
 
-        d = crashlog.log_dir()
-        os.makedirs(d, exist_ok=True)
-        QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(d))
+        from ..messages import open_folder
+
+        open_folder(crashlog.log_dir())
 
 
 def _user_folder_line() -> str:

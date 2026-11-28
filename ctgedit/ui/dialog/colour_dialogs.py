@@ -1,6 +1,10 @@
 """The colour dialogs under Tools > Colours."""
 
 from __future__ import annotations
+
+from ..dialog_buttons import dialog_buttons
+
+from ..names import plural
 from ..style.theme import sp as _sp
 
 import math
@@ -21,6 +25,7 @@ from ..colour_picker import (
     swatch_pixmap,
 )
 from ..prefs.settings import app_settings
+from ..messages import warn
 
 Pair = Tuple[int, int]
 
@@ -230,6 +235,45 @@ class FavoriteColorsDialog(QtWidgets.QDialog):
         self._syncing = False
 
         outer = QtWidgets.QHBoxLayout()
+        left = self._build_favourites_column()
+        outer.addLayout(left)
+
+        right = QtWidgets.QVBoxLayout()
+        self._build_colour_rows(right)
+        self._build_recent_row(right)
+        self._build_state_fields(right)
+        outer.addLayout(right)
+
+        lay = QtWidgets.QVBoxLayout(self)
+        lay.addLayout(outer)
+        from ..style import theme
+
+        self.note = theme.note_label("", parent=self)
+        self.note.setWordWrap(True)
+        lay.addWidget(self.note)
+        bb = dialog_buttons(self)
+        lay.addWidget(bb)
+
+        self._connect_signals()
+
+        if palette.source != "project":
+            self.note.setText(
+                "This project has no palette file yet. Saving the favourites creates its citect.pal."
+                if palette.target_path()
+                else "This page is not in a project. The favourites are kept in the ctgedit settings."
+            )
+        else:
+            self.note.setText("Favourites are saved in %s." % palette.path)
+        i = self._pal.index_of(*self._pair) if current is not None else -1
+        self.grid.set_selected(i)
+        if i >= 0:
+            self.name.setText(self._pal[i].name)
+        self._set_pair(self._pair)
+        self._update_buttons()
+
+    def _build_favourites_column(self) -> QtWidgets.QVBoxLayout:
+        """The left column: the favourites grid, Add, Replace and Clear, and the favourite's
+        name."""
         left = QtWidgets.QVBoxLayout()
         self.grid = PaletteGrid(self._pal, self)
         self.grid.activated.connect(self._load_entry)
@@ -251,9 +295,11 @@ class FavoriteColorsDialog(QtWidgets.QDialog):
         self.name.setToolTip("The name shown in the colour picker")
         nrow.addWidget(self.name, 1)
         left.addLayout(nrow)
-        outer.addLayout(left)
+        return left
 
-        right = QtWidgets.QVBoxLayout()
+    def _build_colour_rows(self, right: QtWidgets.QVBoxLayout) -> None:
+        """The wheel and the brightness bar, the colour's sample, its hex value with Pick
+        from Page, and Transparent."""
         top = QtWidgets.QHBoxLayout()
         self.wheel = ColourWheel(self)
         self.bar = BrightnessBar(self)
@@ -293,6 +339,9 @@ class FavoriteColorsDialog(QtWidgets.QDialog):
         self.transparent.setToolTip("No colour: what is behind shows through")
         srow.addWidget(self.transparent, 1, QtCore.Qt.AlignBottom)
         right.addLayout(srow)
+
+    def _build_recent_row(self, right: QtWidgets.QVBoxLayout) -> None:
+        """The colours picked last (the colour picker's recent colours), when there are any."""
         # the colours picked last (the colour picker's recent colours)
         self.recent_buttons = []
         recents = [p for p in recent_colours() if not (T.is_clear(p[0]) and T.is_clear(p[1]))]
@@ -313,6 +362,10 @@ class FavoriteColorsDialog(QtWidgets.QDialog):
                 self.recent_buttons.append(b)
             rrow.addStretch(1)
             right.addLayout(rrow)
+
+    def _build_state_fields(self, right: QtWidgets.QVBoxLayout) -> None:
+        """Flashing with the On State and Off State, and the hue, lum, sat and red, green,
+        blue fields."""
         frow = QtWidgets.QHBoxLayout()
         self.flashing = QtWidgets.QCheckBox("&Flashing")
         self.flashing.setToolTip("Alternates between the On State and Off State colours at runtime")
@@ -339,20 +392,9 @@ class FavoriteColorsDialog(QtWidgets.QDialog):
             fields.addWidget(sp, row, 3)
             self.spins[key] = sp
         right.addLayout(fields)
-        outer.addLayout(right)
 
-        lay = QtWidgets.QVBoxLayout(self)
-        lay.addLayout(outer)
-        from ..style import theme
-
-        self.note = theme.note_label("", parent=self)
-        self.note.setWordWrap(True)
-        lay.addWidget(self.note)
-        bb = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
-        bb.accepted.connect(self.accept)
-        bb.rejected.connect(self.reject)
-        lay.addWidget(bb)
-
+    def _connect_signals(self) -> None:
+        """The buttons, the fields, the wheel, the bar and the hex field wired."""
         self.btn_add.clicked.connect(self.add)
         self.btn_replace.clicked.connect(self.replace)
         self.btn_clear.clicked.connect(self.clear)
@@ -369,21 +411,6 @@ class FavoriteColorsDialog(QtWidgets.QDialog):
         self.hex.editingFinished.connect(self._on_hex)
         self.dropper.clicked.connect(self.start_dropper)
         self._dropper = None
-
-        if palette.source != "project":
-            self.note.setText(
-                "This project has no palette file yet. Saving the favourites creates its citect.pal."
-                if palette.target_path()
-                else "This page is not in a project. The favourites are kept in the ctgedit settings."
-            )
-        else:
-            self.note.setText("Favourites are saved in %s." % palette.path)
-        i = self._pal.index_of(*self._pair) if current is not None else -1
-        self.grid.set_selected(i)
-        if i >= 0:
-            self.name.setText(self._pal[i].name)
-        self._set_pair(self._pair)
-        self._update_buttons()
 
     # -- state ------------------------------------------------------------------------
     def palette_(self) -> CP.Palette:
@@ -570,7 +597,7 @@ class FavoriteColorsDialog(QtWidgets.QDialog):
         self.btn_clear.setEnabled(favourite and self._pal[i].used)
 
     def _refused(self, exc: Exception) -> None:
-        QtWidgets.QMessageBox.warning(self, "Edit Favourite Colours", str(exc))
+        warn(self, "Edit Favourite Colours", str(exc))
 
     def add(self) -> int:
         """Add the colour shown as a new favorite (-1 when refused)."""
@@ -665,7 +692,7 @@ class _ApplyTo(QtCore.QObject):
     def _show(self) -> None:
         self._syncing = True
         try:
-            self.selection.setText("Selection (%d object%s)" % (self._n, "" if self._n == 1 else "s"))
+            self.selection.setText("Selection (%s)" % (plural(self._n, "object")))
             self.selection.setEnabled(self._n > 0)
             if self._n == 0:
                 self.page.setChecked(True)
@@ -798,14 +825,7 @@ class SwapColorsDialog(QtWidgets.QDialog):
         self.apply_to.page.toggled.connect(lambda _on: self._fill_in_use())
         lay.addWidget(self.apply_to.box)
         lay.addStretch(1)
-        buttons = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Ok
-            | QtWidgets.QDialogButtonBox.Cancel
-            | QtWidgets.QDialogButtonBox.Apply
-        )
-        buttons.accepted.connect(self._ok)
-        buttons.rejected.connect(self.reject)
-        buttons.button(QtWidgets.QDialogButtonBox.Apply).clicked.connect(self._apply)
+        buttons = dialog_buttons(self, accept=self._ok, apply=self._apply)
         lay.addWidget(buttons)
         self._frm.changed.connect(self._update)
         self._to.changed.connect(self._update)
@@ -1298,14 +1318,7 @@ class AdjustColorsDialog(QtWidgets.QDialog):
         self.apply_to.page.toggled.connect(lambda _on: self._sync_preview())
         lay.addWidget(self.apply_to.box)
         lay.addStretch(1)
-        buttons = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Ok
-            | QtWidgets.QDialogButtonBox.Cancel
-            | QtWidgets.QDialogButtonBox.Apply
-        )
-        buttons.accepted.connect(self._ok)
-        buttons.rejected.connect(self.reject)
-        buttons.button(QtWidgets.QDialogButtonBox.Apply).clicked.connect(self._apply)
+        buttons = dialog_buttons(self, accept=self._ok, apply=self._apply)
         lay.addWidget(buttons)
 
         self._sp_from.valueChanged.connect(self.set_from_start)

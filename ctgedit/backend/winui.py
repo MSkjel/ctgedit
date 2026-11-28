@@ -97,7 +97,7 @@ def text(hwnd) -> str:
         buf = ctypes.create_unicode_buffer(n + 1)
         user32.SendMessageW(hwnd, win32con.WM_GETTEXT, n + 1, buf)
         return buf.value
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- swallow-ok: a window that closed meanwhile: no text
         return ""
 
 
@@ -115,12 +115,12 @@ def windows_of(pid: int, cls: Optional[str] = DIALOG_CLASS) -> list:
             _t, p = win32process.GetWindowThreadProcessId(h)
             if p == pid:
                 hs.append(h)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 -- swallow-ok: a window that closed meanwhile
             pass
 
     try:
         win32gui.EnumWindows(cb, None)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- swallow-ok: a window that closed meanwhile
         pass
     return hs
 
@@ -141,12 +141,12 @@ def children(hwnd) -> List[dict]:
                     "id": win32gui.GetDlgCtrlID(c),
                 }
             )
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 -- swallow-ok: a window that closed meanwhile
             pass
 
     try:
         win32gui.EnumChildWindows(hwnd, cb, None)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- swallow-ok: a window that closed meanwhile
         pass
     return kids
 
@@ -176,7 +176,7 @@ def click(hwnd_button) -> None:
     win32con, win32gui, _p = _mods()
     try:
         win32gui.PostMessage(hwnd_button, win32con.BM_CLICK, 0, 0)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- swallow-ok: a window that closed meanwhile: nothing to click
         pass
 
 
@@ -192,6 +192,6 @@ def dismiss_message_box(hwnd, kids: List[dict], prefer: str = "Yes") -> str:
             return label
     try:
         win32gui.PostMessage(hwnd, win32con.WM_COMMAND, win32con.IDOK, 0)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- swallow-ok: a window that closed meanwhile: nothing to dismiss
         pass
     return "IDOK"

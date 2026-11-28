@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+from ..infra.paths import lib_path_dirs, path_key
+
+
+from .fileio import find_ci
+
 import os
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from .cnum import c_atoi, c_strtoul
+from ..infra.logsetup import note_exception as _note_exc
 
 KEYS = (
     "AI_ON",
@@ -66,7 +72,7 @@ def props_of(po) -> Dict[str, str]:
             for k, v in r.entries[0][1].pairs:
                 out.setdefault(k.upper(), v)
             return out
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- swallow-ok: a record the strict walk cannot read: the fallback below
         pass
     return {str(k).upper(): v for k, v in (po.raw_properties() or {}).items()}
 
@@ -178,51 +184,42 @@ def grown_bounds(
 _PRIORITY_CACHE: dict = {}
 
 
-def _rgb_packed(v: int) -> tuple:
+def rgb_packed(v: int) -> tuple:
     return ((v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF)
 
 
 def _bases(page_path: str) -> List[str]:
-    return [os.path.dirname(os.path.abspath(page_path))] + [
-        d for d in os.environ.get("CTG_LIB_PATH", "").split(os.pathsep) if d
-    ]
+    return [os.path.dirname(os.path.abspath(page_path))] + lib_path_dirs()
 
 
 def _cache_key(page_path: str, tables=("almprior",), own: bool = False) -> tuple:
     """The cache key of a read of ``tables`` for the page: its bases and the (path, mtime,
     size) of the table files that read opens (:func:`_table_stamps`), so a table Studio
     rewrote is read again (the fonts.dbf cache of the reader does the same)."""
-    return tuple(os.path.normcase(os.path.abspath(d)) for d in _bases(page_path)) + tuple(
+    return tuple(path_key(d) for d in _bases(page_path)) + tuple(
         _table_stamps(page_path, t, own) for t in tables
     )
 
 
 def _table_stamps(page_path: str, table: str, own: bool = False) -> tuple:
     """((path, mtime_ns, size), ...) of the files :func:`_project_rows` (``own``) or
-    :func:`_chain_rows` reads for ``table``, in that order (the same walk: the first base
+    :func:`chain_rows` reads for ``table``, in that order (the same walk: the first base
     that has the table, or is a project, for the own read; the first base whose chain has
     any for the chain read)."""
-    from .colourpalette import is_project_dir
-    from .projects import include_search_dirs
-
-    def stamp(p):
-        try:
-            st = os.stat(p)
-        except OSError:
-            return (os.path.normcase(os.path.abspath(p)), None, None)
-        return (os.path.normcase(os.path.abspath(p)), st.st_mtime_ns, st.st_size)
+    from .fileio import file_stamp as stamp
+    from .projects import include_search_dirs, is_project_dir
 
     out = []
     for base in _bases(page_path):
         if own:
-            p = _table_file(base, table)
+            p = find_ci(base, table + ".DBF")
             if p:
                 return (stamp(p),)
             if is_project_dir(base):
                 return ()
             continue
         for d in [base] + include_search_dirs(base):
-            p = _table_file(d, table)
+            p = find_ci(d, table + ".DBF")
             if p:
                 out.append(stamp(p))
         if out:
@@ -230,22 +227,14 @@ def _table_stamps(page_path: str, table: str, own: bool = False) -> tuple:
     return tuple(out)
 
 
-def _table_file(d: str, table: str) -> Optional[str]:
-    for name in (table + ".DBF", table.upper() + ".DBF", table + ".dbf"):
-        p = os.path.join(d, name)
-        if os.path.exists(p):
-            return p
-    return None
-
-
-def _chain_rows(page_path: str, table: str) -> List[dict]:
+def chain_rows(page_path: str, table: str) -> List[dict]:
     """Rows of ``table`` from the page's project and its include chain."""
     from .projects import include_search_dirs, read_dbf_rows
 
     rows: list = []
     for base in _bases(page_path):
         for d in [base] + include_search_dirs(base):
-            p = _table_file(d, table)
+            p = find_ci(d, table + ".DBF")
             if p:
                 rows += read_dbf_rows(p)
         if rows:
@@ -255,11 +244,11 @@ def _chain_rows(page_path: str, table: str) -> List[dict]:
 
 def _project_rows(page_path: str, table: str) -> List[dict]:
     """Rows of ``table`` from the page's own project only."""
-    from .colourpalette import is_project_dir
+    from .projects import is_project_dir
     from .projects import read_dbf_rows
 
     for base in _bases(page_path):
-        p = _table_file(base, table)
+        p = find_ci(base, table + ".DBF")
         if p:
             return read_dbf_rows(p)
         if is_project_dir(base):
@@ -275,15 +264,16 @@ def priorities(page_path: str, own: bool = False) -> List[tuple]:
         return hit
     out: List[tuple] = []
     try:
-        for r in (_project_rows if own else _chain_rows)(page_path, "almprior"):
+        for r in (_project_rows if own else chain_rows)(page_path, "almprior"):
             pr = c_atoi(r.get("PRIORITY"))
             if pr <= 0:
                 continue
             v = c_strtoul(r.get("UNACKONFG"), None)
             lib, el = (r.get("LIBNAME") or "").strip(), (r.get("LIBOBJNAME") or "").strip()
-            out.append((pr, _rgb_packed(v) if v is not None else None, (lib, el) if lib and el else None))
+            out.append((pr, rgb_packed(v) if v is not None else None, (lib, el) if lib and el else None))
         out.sort(key=lambda t: t[0])
     except Exception:  # noqa: BLE001 -- editor chrome only
+        _note_exc("alarmind.priorities", page=page_path)
         out = []
     # (another thread may have read them meanwhile: every caller shares the first list)
     return _PRIORITY_CACHE.setdefault(key, out)
@@ -300,7 +290,7 @@ def priority_details(page_path: str) -> Dict[int, dict]:
         return hit
     out: Dict[int, dict] = {}
     try:
-        for r in _chain_rows(page_path, "almprior"):
+        for r in chain_rows(page_path, "almprior"):
             pr = c_atoi(r.get("PRIORITY"))
             if pr <= 0 or pr in out:
                 continue
@@ -313,6 +303,7 @@ def priority_details(page_path: str) -> Dict[int, dict]:
                 "thumbnail": (lib, th) if lib and th else None,
             }
     except Exception:  # noqa: BLE001 -- simulator chrome only
+        _note_exc("alarmind.priority_details", page=page_path)
         out = {}
     return _PRIORITY_CACHE.setdefault(key, out)
 
@@ -398,7 +389,7 @@ def flag_sizes(page_path: str, resolver=None) -> List[Tuple[int, int]]:
     for lib, el in flag_refs(page_path):
         try:
             res = resolver.resolve(SymbolReference(lib, el, "ctm", "genie"), strict=True)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 -- swallow-ok: a flag element that is not there: no size
             res = None
         if res is not None and (res.width or 0) > 0 and (res.height or 0) > 0:
             out.append((int(res.width), int(res.height)))

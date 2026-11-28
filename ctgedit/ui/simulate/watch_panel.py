@@ -16,9 +16,6 @@ from ..style import theme
 from . import options
 from .sim_tools import SimTools, tools_of
 
-#: the watches update this often (ms), one call each at a time: the default of Settings >
-#: Simulate > Inspector and Watch > Watch refreshes every (options.watch_refresh_ms)
-REFRESH_MS = 1000
 #: the results the Call box keeps
 CALL_LINES = 200
 _TAG = re.compile(r"^[A-Za-z_][\w.]*(\[\d+\])?$")
@@ -169,12 +166,9 @@ class WatchPanel(QtWidgets.QWidget):
         m.exec(self.tree.viewport().mapToGlobal(pos))
 
     def _copy(self) -> None:
-        items = self.tree.selectedItems() or [
-            self.tree.topLevelItem(k) for k in range(self.tree.topLevelItemCount())
-        ]
-        QtGui.QGuiApplication.clipboard().setText(
-            "\n".join("%s\t%s" % (it.text(0), it.text(1)) for it in items)
-        )
+        from ..tables import selected_rows_text
+
+        QtGui.QGuiApplication.clipboard().setText(selected_rows_text(self.tree, all_if_none=True))
 
     def eventFilter(self, obj, ev) -> bool:  # noqa: N802
         if obj is self.tree and ev.type() == QtCore.QEvent.KeyPress:

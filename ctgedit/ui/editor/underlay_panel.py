@@ -19,8 +19,7 @@ class UnderlayDialog(QtWidgets.QDialog):
 
     def __init__(self, window):
         super().__init__(window)
-        from ..names import ElidedLabel
-        from ..style.theme import set_note_role, sp
+        from ..style.theme import sp
 
         self._win = window
         self._doc = None
@@ -30,6 +29,39 @@ class UnderlayDialog(QtWidgets.QDialog):
         lay.setSpacing(sp(2))
         form = QtWidgets.QFormLayout()
         form.setLabelAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+
+        self._build_source_rows(form, window)
+        self._build_look_rows(form)
+        self._build_place_rows(form)
+        lay.addLayout(form)
+        self._form = form
+        self._build_options(lay)
+        lay.addStretch(1)
+        bb = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Close, self)
+        bb.rejected.connect(self.reject)
+        lay.addWidget(bb)
+        self._controls = (
+            self.cb_show,
+            self.cb_above,
+            self.sl_opacity,
+            self.sp_opacity,
+            self.cb_tint,
+            self.sp_x,
+            self.sp_y,
+            self.sp_scale,
+            self.btn_fit,
+            self.btn_actual,
+            self.cb_snap,
+            self.cb_template,
+            self.cb_smooth,
+            self.btn_move,
+            self.btn_remove,
+        )
+
+    def _build_source_rows(self, form: QtWidgets.QFormLayout, window) -> None:
+        """The Source row (Change, Remove) and the note under it (Try Again)."""
+        from ..names import ElidedLabel
+        from ..style.theme import set_note_role, sp
 
         # -- the source
         row = QtWidgets.QHBoxLayout()
@@ -66,6 +98,10 @@ class UnderlayDialog(QtWidgets.QDialog):
         self.btn_retry.setVisible(False)
         note_row.addWidget(self.btn_retry, 0, QtCore.Qt.AlignTop)
         form.addRow("", note_row)
+
+    def _build_look_rows(self, form: QtWidgets.QFormLayout) -> None:
+        """How it shows: Show, Above the objects, Opacity and Tint."""
+        from ..style.theme import sp
 
         # -- how it shows
         shows = QtWidgets.QHBoxLayout()
@@ -106,6 +142,10 @@ class UnderlayDialog(QtWidgets.QDialog):
         self.cb_tint.setToolTip("Grey or Blue make it read as a reference, not as objects")
         self.cb_tint.currentIndexChanged.connect(lambda _i: self._apply(tint=self.cb_tint.currentData()))
         form.addRow("Tint:", self.cb_tint)
+
+    def _build_place_rows(self, form: QtWidgets.QFormLayout) -> None:
+        """Where it lies: X and Y, and Scale with Fit Page and Actual Size."""
+        from ..style.theme import sp
 
         # -- where it lies
         def coord(name: str, tip: str) -> QtWidgets.QDoubleSpinBox:
@@ -157,8 +197,11 @@ class UnderlayDialog(QtWidgets.QDialog):
         sc.addWidget(self.btn_actual)
         sc.addStretch(1)
         form.addRow("Scale:", sc)
-        lay.addLayout(form)
-        self._form = form
+
+    def _build_options(self, lay: QtWidgets.QVBoxLayout) -> None:
+        """The options: Snap to its objects, Draw its template, Smooth scaling, and Move
+        with the Mouse with its note."""
+        from ..style.theme import set_note_role, sp
 
         # -- the options
         self.cb_snap = QtWidgets.QCheckBox("Snap to its objects", self)
@@ -209,27 +252,6 @@ class UnderlayDialog(QtWidgets.QDialog):
         self.move_note.setWordWrap(True)
         set_note_role(self.move_note, "text_dim")
         lay.addWidget(self.move_note)
-        lay.addStretch(1)
-        bb = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Close, self)
-        bb.rejected.connect(self.reject)
-        lay.addWidget(bb)
-        self._controls = (
-            self.cb_show,
-            self.cb_above,
-            self.sl_opacity,
-            self.sp_opacity,
-            self.cb_tint,
-            self.sp_x,
-            self.sp_y,
-            self.sp_scale,
-            self.btn_fit,
-            self.btn_actual,
-            self.cb_snap,
-            self.cb_template,
-            self.cb_smooth,
-            self.btn_move,
-            self.btn_remove,
-        )
 
     # -- following the page --------------------------------------------------------------
     def set_document(self, doc) -> None:

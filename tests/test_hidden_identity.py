@@ -35,11 +35,11 @@ def win(fx_install):
     w = MainWindow()
     w.resize(1280, 800)
     yield w
-    for x in list(MainWindow._instances):
+    for x in list(MainWindow.instances):
         for e in getattr(x, "_docs", []):
             e["doc"].dirty = False
-        if x in MainWindow._instances:
-            MainWindow._instances.remove(x)
+        if x in MainWindow.instances:
+            MainWindow.instances.remove(x)
         x.hide()
 
 
@@ -135,7 +135,7 @@ def test_hidden_objects_are_remembered_by_an_and_ignored_when_gone(win, page):
     finally:
         if other.doc is not None:
             other.doc.dirty = False
-        MainWindow._instances.remove(other)
+        MainWindow.instances.remove(other)
         other.hide()
 
 

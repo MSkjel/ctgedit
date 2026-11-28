@@ -57,7 +57,7 @@ def test_array_defaults_are_the_project_palette():
             for i in range(1, L.get("arr_n", 0)):
                 if not props.get("COL_ARR_%d" % i):
                     seen += 1
-                    bad += CS._pair_at(po.body_raw, L["arr_at"] + 8 * i) != table[i]
+                    bad += CS.pair_at(po.body_raw, L["arr_at"] + 8 * i) != table[i]
 
 
 # ------------------------------------------------------------------ corpus
@@ -89,11 +89,9 @@ def test_every_corpus_colour_record_survives_an_apply():
             L = CS.layout(po)
             slot = EditableDocument.fill_static_slot(po)
             b = po.body_raw
-            static = (
-                CS.state0_source(b, L["style_at"]) if slot is not None else CS._pair_at(b, L["state0_at"])
-            )
-            arr = [CS._pair_at(b, L["arr_at"] + 8 * k) for k in range(L["arr_n"])] if "arr_at" in L else None
-            sta = [CS._pair_at(b, L["sta_at"] + 8 * k) for k in range(L["sta_n"])] if "sta_at" in L else None
+            static = CS.state0_source(b, L["style_at"]) if slot is not None else CS.pair_at(b, L["state0_at"])
+            arr = [CS.pair_at(b, L["arr_at"] + 8 * k) for k in range(L["arr_n"])] if "arr_at" in L else None
+            sta = [CS.pair_at(b, L["sta_at"] + 8 * k) for k in range(L["sta_n"])] if "sta_at" in L else None
             fc = F.read(
                 props,
                 static,
@@ -103,7 +101,7 @@ def test_every_corpus_colour_record_survives_an_apply():
                 binary_states=sta,
             )
             assert F.apply_edits(props, fc, fc.copy()) == ([], None)
-            get = F._getter(props)
+            get = F.getter(props)
             target = F.target_values(fc, get)
             if fc.mode == F.THRESHOLD:
                 for i, row in enumerate(fc.thresholds):

@@ -90,8 +90,8 @@ def win(fx_page):
     w.view.set_zoom(1.0)
     QtWidgets.QApplication.processEvents()
     yield w
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.view.finish_text_edit(False)
     w.hide()  # (close() would ask to save the edited page)
 

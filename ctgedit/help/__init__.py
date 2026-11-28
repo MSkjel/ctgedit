@@ -45,7 +45,7 @@ def is_generated(topic: str) -> bool:
 
 
 @functools.lru_cache(maxsize=1)
-def _toc_raw() -> list:
+def toc_raw() -> list:
     with open(TOC_FILE, encoding="utf-8") as fh:
         return json.load(fh)
 
@@ -56,7 +56,7 @@ def toc() -> List[TocEntry]:
             n["id"], n.get("title") or page_title(n["id"]), [build(k) for k in n.get("children", [])]
         )
 
-    return [build(n) for n in _toc_raw()]
+    return [build(n) for n in toc_raw()]
 
 
 def walk_toc(entries: Optional[List[TocEntry]] = None) -> Iterator[TocEntry]:
@@ -573,6 +573,36 @@ def snippet(text: str, words: List[str], width: int = 150, regex=None) -> str:
     return ("…" if start > 0 else "") + out + ("…" if end < len(text) else "")
 
 
+def _page_stamps() -> Tuple[Tuple[str, float], ...]:
+    """(topic, mtime) of every page on disk: one folder read (the listing carries the times
+    on Windows)."""
+    try:
+        with os.scandir(PAGES_DIR) as it:
+            return tuple(
+                sorted((e.name[:-3], e.stat().st_mtime) for e in it if e.name.endswith(".md") and e.is_file())
+            )
+    except OSError:
+        return ()
+
+
+@functools.lru_cache(maxsize=1)
+def _search_index(stamps: Tuple[Tuple[str, float], ...]) -> tuple:
+    """The pages in search order (the contents first, then the rest on disk), each as
+    (topic, its title in lower case, its sections with their heading and text in lower case),
+    for one state of the pages folder."""
+    try:
+        in_toc = [e.id for e in walk_toc()]
+    except OSError, ValueError:
+        in_toc = []
+    out = []
+    for t in dict.fromkeys(in_toc + [t for t, _m in stamps]):
+        if page_path(t) is None:
+            continue
+        rows = tuple((sec, sec.heading.lower(), sec.text.lower()) for sec in sections(t))
+        out.append((t, page_title(t).lower(), rows))
+    return tuple(out)
+
+
 def search_sections(query: str, limit: int = 40, regex: bool = False) -> List[SectionHit]:
     """The sections that hold every word of ``query`` (in their text, their heading or their
     page's title), best first: a heading that is the query, then the words in the heading,
@@ -593,18 +623,11 @@ def search_sections(query: str, limit: int = 40, regex: bool = False) -> List[Se
     phrase = " ".join(words)
     scored = []
     order = 0
-    try:
-        in_toc = [e.id for e in walk_toc()]
-    except OSError, ValueError:
-        in_toc = []
-    for t in dict.fromkeys(in_toc + topics()):
-        if t in _GENERATED or page_path(t) is None:
+    for t, title, rows in _search_index(_page_stamps()):
+        if t in _GENERATED:
             continue
-        title = page_title(t).lower()
-        for s in sections(t):
+        for s, head, text in rows:
             order += 1
-            head = s.heading.lower()
-            text = s.text.lower()
             if rx is not None:
                 in_head = rx.search(s.heading) is not None
                 hits = sum(1 for _m in rx.finditer(s.text))
@@ -642,6 +665,7 @@ def search_sections(query: str, limit: int = 40, regex: bool = False) -> List[Se
 # the process caches of this module (infra/caches.py: when each is emptied)
 from ..infra import caches as _caches  # noqa: E402
 
-_caches.register("help.toc", _toc_raw, on=())
+_caches.register("help.toc", toc_raw, on=())
 _caches.register("help.pages", _read, on=())
 _caches.register("help.sections", _sections, on=())
+_caches.register("help.search_index", _search_index, on=())

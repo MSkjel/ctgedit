@@ -914,22 +914,35 @@ def add_fit_item(menu: QtWidgets.QMenu, view) -> Optional[QtGui.QAction]:
 
 
 # -- copy ------------------------------------------------------------------------
-def selected_rows_text(view) -> str:
+def selected_rows_text(view, headers: bool = False, all_rows: bool = False, all_if_none: bool = False) -> str:
     """The selected rows (the current one when none is selected) as tab-separated
-    text, visible columns in their shown order, one line per row."""
+    text, visible columns in their shown order, one line per row. ``headers``: the column
+    names first; ``all_rows``: every row shown (a tree's expanded rows too) instead;
+    ``all_if_none``: every row shown when none is selected."""
     model = view.model()
     if model is None:
         return ""
     sel = view.selectionModel()
     rows = []
-    if sel is not None:
+    if sel is not None and not all_rows:
         seen = set()
         for idx in sel.selectedIndexes():
             key = (idx.row(), idx.parent())
             if key not in seen:
                 seen.add(key)
                 rows.append(idx.sibling(idx.row(), 0))
-    if not rows:
+    if all_rows or (all_if_none and not rows):
+        rows = []
+
+        def walk(parent):
+            for k in range(model.rowCount(parent)):
+                ix = model.index(k, 0, parent)
+                rows.append(ix)
+                if isinstance(view, QtWidgets.QTreeView) and view.isExpanded(ix):
+                    walk(ix)
+
+        walk(QtCore.QModelIndex())
+    elif not rows:
         cur = view.currentIndex()
         if cur.isValid():
             rows = [cur.sibling(cur.row(), 0)]
@@ -946,6 +959,8 @@ def selected_rows_text(view) -> str:
 
     rows.sort(key=order)
     lines = []
+    if headers:
+        lines.append("\t".join(str(model.headerData(c, QtCore.Qt.Horizontal) or "") for c in cols))
     for r in rows:
         vals = []
         for c in cols:

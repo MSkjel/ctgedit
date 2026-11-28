@@ -99,8 +99,8 @@ def window(fx_install, monkeypatch):
     finally:
         for e in list(w._docs):
             e["doc"].dirty = False
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         UpdatePagesRun.users_busy = ""
         UpdatePagesRun.users_queue.clear()
         UpdatePagesRun.chain_busy = False

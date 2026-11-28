@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import os
 from typing import Optional
+from ..infra.logsetup import note_exception as _note_exc
 
 CLSID = "{EB087A43-4189-46A9-8819-F717B9963C31}"
 
@@ -16,12 +17,12 @@ class GraphicsBuilderError(RuntimeError):
 _PARKED: list = []  # attached proxies kept alive until process exit
 
 
-def _ctdraw_pids() -> list:
+def ctdraw_pids() -> list:
     try:
         from .winui import pids_of
 
         return pids_of("CtDraw32.exe")
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- swallow-ok: no pywin32: no processes
         return []
 
 
@@ -53,7 +54,7 @@ def ask_builders_to_close() -> list:
     import win32con
     import win32gui
 
-    pids = _ctdraw_pids()
+    pids = ctdraw_pids()
     if not open_windows():
         end_builders(pids)
         return builders_running(pids)
@@ -89,7 +90,7 @@ def end_builders(pids) -> int:
 
 def builders_running(pids=None) -> list:
     """The running Graphics Builder PIDs (of ``pids`` when given)."""
-    now = _ctdraw_pids()
+    now = ctdraw_pids()
     return [p for p in now if pids is None or p in set(pids)]
 
 
@@ -98,7 +99,7 @@ def studio_running() -> bool:
         from .winui import pids_of
 
         return bool(pids_of(STUDIO_IMAGE))
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- swallow-ok: no pywin32: not running
         return False
 
 
@@ -116,7 +117,7 @@ def ensure_studio(timeout: float = 120.0) -> bool:
         from .compiler import scada_bin
 
         exe = os.path.join(scada_bin(), "CitectIDE", STUDIO_IMAGE)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- swallow-ok: no install: no Studio
         return False
     if not os.path.exists(exe):
         return False
@@ -125,7 +126,7 @@ def ensure_studio(timeout: float = 120.0) -> bool:
     while time.time() < deadline:
         time.sleep(2.0)
         # ready = Studio up AND its Graphics Builder spawned
-        if studio_running() and _ctdraw_pids():
+        if studio_running() and ctdraw_pids():
             time.sleep(5.0)  # let it finish opening the project
             return True
     return studio_running()
@@ -156,14 +157,14 @@ class GraphicsBuilder:
         pythoncom.CoInitialize()
         self._pumped = True
         ensure_studio()
-        before = set(_ctdraw_pids())
+        before = set(ctdraw_pids())
         err = None
         for attempt in range(3):
             try:
                 self._gb = win32com.client.Dispatch(CLSID)
                 err = None
                 break
-            except Exception as e:  # noqa: BLE001 -- Studio still coming up
+            except Exception as e:  # noqa: BLE001 -- swallow-ok: Studio still coming up: retried, then raised
                 err = e
                 import time
 
@@ -174,7 +175,7 @@ class GraphicsBuilder:
                 "could not start GraphicsBuilder COM server (is Plant SCADA Studio running?): %s" % err
             ) from err
         self._wait_ready()
-        self.spawned_pids = set(_ctdraw_pids()) - before
+        self.spawned_pids = set(ctdraw_pids()) - before
         self.attached = bool(before) and not self.spawned_pids
         if not self.attached:
             with contextlib.suppress(Exception):
@@ -192,7 +193,7 @@ class GraphicsBuilder:
             try:
                 _ = self._gb.Visible  # noqa: F841 -- liveness probe
                 break
-            except Exception:  # noqa: BLE001 -- still booting
+            except Exception:  # noqa: BLE001 -- swallow-ok: still booting
                 time.sleep(0.1)
         # Visible answers before the document subsystem is ready; keep pumping
         # for a settle window.
@@ -241,7 +242,7 @@ class GraphicsBuilder:
                 r = subprocess.run(cmd, capture_output=True, text=True)
                 killed += (r.stdout or "").count("SUCCESS")
         except Exception:  # noqa: BLE001
-            pass
+            _note_exc("graphics_builder.GraphicsBuilder.reap")
         return killed
 
     # -- raw access --------------------------------------------------------
@@ -331,7 +332,7 @@ def _builder_window() -> bool:
         return True
     try:
         return bool(find("ctDraw", None))
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- swallow-ok: no window search: taken as open
         return True
 
 
@@ -354,9 +355,9 @@ def open_windows() -> list:
     try:
         import win32gui
         import win32process
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- swallow-ok: no pywin32: no windows
         return out
-    pids = set(_ctdraw_pids())
+    pids = set(ctdraw_pids())
     if not pids:
         return out
 
@@ -365,7 +366,7 @@ def open_windows() -> list:
             _t, pid = win32process.GetWindowThreadProcessId(h)
             if pid in pids and win32gui.GetClassName(h) == "ctDraw":
                 win32gui.EnumChildWindows(h, child, None)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 -- swallow-ok: a window that closed meanwhile
             pass
         return True
 
@@ -373,7 +374,7 @@ def open_windows() -> list:
         try:
             if win32gui.GetClassName(h) == "ctDraw.canvas":
                 out.append(win32gui.GetWindowText(h).strip())
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 -- swallow-ok: a window that closed meanwhile
             pass
         return True
 

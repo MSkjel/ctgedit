@@ -57,7 +57,7 @@ def install(level: int = logging.INFO) -> Optional[str]:
         from ..buildinfo import version_string
 
         ident = version_string()
-    except Exception:  # noqa: BLE001 -- a log header must never fail
+    except Exception:  # noqa: BLE001 -- swallow-ok: a log header must never fail
         ident = "?"
     root.info("ctgedit %s started (pid %d, Python %s)", ident, os.getpid(), sys.version.split()[0])
 
@@ -139,7 +139,7 @@ def note_exception(where: str, exc: Optional[BaseException] = None, **ctx) -> No
             exc = sys.exc_info()[1]
         etype = type(exc).__name__ if exc is not None else "error"
         _note(where, etype, exc, None, ctx)
-    except Exception:  # noqa: BLE001 -- a diagnostic must never fail its caller
+    except Exception:  # noqa: BLE001 -- swallow-ok: a diagnostic must never fail its caller
         pass
 
 
@@ -149,7 +149,7 @@ def note_problem(where: str, message: str, **ctx) -> None:
     traceback."""
     try:
         _note(where, "problem", None, message, ctx)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- swallow-ok: a diagnostic must never fail its caller
         pass
 
 
@@ -283,7 +283,7 @@ def undo_labels(doc, last: int = 8) -> List[str]:
     """The labels of ``doc``'s last undo steps (oldest first)."""
     try:
         return [str(getattr(c, "label", "?")) for c in list(getattr(doc, "_undo", []))[-last:]]
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- swallow-ok: a diagnostic must never fail its caller
         return []
 
 
@@ -330,6 +330,7 @@ def diagnostics_text(documents: Iterable = (), lines: int = 60) -> str:
         try:
             text = fn()
         except Exception:  # noqa: BLE001 -- the rest of the report still goes
+            note_exception("logsetup.diagnostics_text")
             text = ""
         if text:
             out.append(text)

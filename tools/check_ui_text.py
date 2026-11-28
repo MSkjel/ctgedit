@@ -1,8 +1,6 @@
 """Check the UI text rules a script can check.
 
 python tools/check_ui_text.py [<file or folder> ...]
-python tools/check_ui_text.py --write-baseline     (the known offenders)
-python tools/check_ui_text.py --stale              (baseline lines fixed since)
 """
 
 from __future__ import annotations
@@ -11,7 +9,6 @@ import ast
 import os
 import re
 import sys
-from collections import Counter
 from typing import Iterable, List, Optional, Tuple
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -20,8 +17,6 @@ EXEMPT = "# text-ok"
 #: ' -- ' used as a dash (also at a line end or start inside the text; a
 #: bare '--', for example a command line argument, is not)
 DOUBLE = re.compile(r"\s--(?:\s|$)|^--\s", re.M)
-#: the message rules' accepted offenders
-BASELINE = os.path.join(ROOT, "tools", "ui_text_baseline.txt")
 
 RULE_PLURAL = "'(s)' in a message"
 RULE_STOP = "message without a final '.'"
@@ -169,26 +164,6 @@ def _message_problems(rel: str, tree: ast.AST, lines: List[str]) -> List[Tuple[i
     return out
 
 
-def _key(rel: str, rule: str, text: str) -> str:
-    """A baseline line: path | rule | the start of the text (one line, no line number: the
-    code around it moves)."""
-    short = " ".join(str(text).split())[:70]
-    return "%s | %s | %s" % (rel, rule, short)
-
-
-def load_baseline(path: str = BASELINE) -> Counter:
-    c: Counter = Counter()
-    try:
-        with open(path, encoding="utf-8") as fh:
-            for ln in fh:
-                ln = ln.rstrip("\n")
-                if ln.strip() and not ln.startswith("#"):
-                    c[ln] += 1
-    except OSError:
-        pass
-    return c
-
-
 def message_offenders(paths: Iterable[str] = ()) -> List[Tuple[str, int, str, str]]:
     """Every message that breaks the message rules: (path, line, rule, text)."""
     out = []
@@ -207,7 +182,7 @@ def message_offenders(paths: Iterable[str] = ()) -> List[Tuple[str, int, str, st
     return out
 
 
-def check_python(path: str, baseline: Optional[Counter] = None) -> List[Problem]:
+def check_python(path: str) -> List[Problem]:
     rel = _rel(path)
     with open(path, encoding="utf-8") as fh:
         src = fh.read()
@@ -230,12 +205,7 @@ def check_python(path: str, baseline: Optional[Counter] = None) -> List[Problem]
             continue
         hit = next((n for n in span if 0 < n <= len(lines) and "--" in lines[n - 1]), first)
         out.append((rel, hit, "' -- ' in a string"))
-    left = baseline if baseline is not None else load_baseline()
     for line, rule, text in _message_problems(rel, tree, lines):
-        k = _key(rel, rule, text)
-        if left.get(k, 0) > 0:
-            left[k] -= 1
-            continue
         out.append((rel, line, "%s: %r" % (rule, " ".join(text.split())[:60])))
     return out
 
@@ -282,9 +252,9 @@ def default_files() -> List[str]:
     return sorted(files)
 
 
-def check_file(path: str, baseline: Optional[Counter] = None) -> List[Problem]:
+def check_file(path: str) -> List[Problem]:
     if path.endswith(".py"):
-        return check_python(path, baseline)
+        return check_python(path)
     if path.endswith(".md"):
         return check_markdown(path)
     return check_text(path)
@@ -300,45 +270,12 @@ def check(paths: Iterable[str] = ()) -> List[Problem]:
         else:
             files.append(p)
     out: List[Problem] = []
-    baseline = load_baseline()
     for f in files or default_files():
-        out += check_file(f, baseline)
+        out += check_file(f)
     return out
 
 
-def write_baseline(path: str = BASELINE) -> int:
-    """The message rules' offenders now, as the baseline."""
-    rows = sorted(_key(rel, rule, text) for rel, _line, rule, text in message_offenders())
-    with open(path, "w", encoding="utf-8", newline="\n") as fh:
-        fh.write(
-            "# Messages that break the message rules of tools/check_ui_text.py, accepted "
-            "until their\n# package fixes them: remove a line when you fix its message "
-            "(path | rule | the text).\n"
-        )
-        for r in rows:
-            fh.write(r + "\n")
-    return len(rows)
-
-
-def stale_baseline() -> List[str]:
-    """Baseline lines no message matches any more (fixed: remove them)."""
-    left = load_baseline()
-    for rel, _line, rule, text in message_offenders():
-        k = _key(rel, rule, text)
-        if left.get(k, 0) > 0:
-            left[k] -= 1
-    return sorted(k for k, n in left.items() for _ in range(n))
-
-
 def main(argv: List[str]) -> int:
-    if "--write-baseline" in argv:
-        print("%d message(s) in the baseline" % write_baseline())  # text-ok
-        return 0
-    if "--stale" in argv:
-        rows = stale_baseline()
-        for r in rows:
-            print(r)
-        return 1 if rows else 0
     problems = check(argv)
     for rel, line, what in problems:
         print("%s:%d: %s" % (rel, line, what))

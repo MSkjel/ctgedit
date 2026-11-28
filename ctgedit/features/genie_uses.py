@@ -12,7 +12,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 from ..format.cnum import is_digits
 from .. import cicode_names as _cn
 from ..format import genie_place as GP
-from ..format.codes import TC
+from ..format.codes import INPUT_TCS, TC
 from .find_replace import FIELD_NAMES
 from .page_checks import COMMAND_KEYS, EXPRESSION_KEYS
 
@@ -28,6 +28,7 @@ ROLE_OTHER = "other"  # a privilege, an area, a colour, a mode
 _TEXT_KEY = re.compile(
     r"^(TXT_OFF|TXT_ON|TEXT|STATE_\d+|ARRAY_\d+|COMMENT|NAME|DESC|__AN_NAME__|TITLE)$", re.IGNORECASE
 )
+_METADATA = re.compile(r"^METADATA_\d+$", re.IGNORECASE)
 _NAME_CHAR = re.compile("[%s.]" % _cn.PART_CHARS)
 #: a field's object, by record type
 _OBJECT = {
@@ -265,6 +266,156 @@ def element_uses(lib_path: str, element: str, params: Sequence[str] = ()) -> "Or
             _USES.clear()
         hit = _USES[key] = param_uses(open_library(lib_path).element_objects(element), params)
     return hit
+
+
+@dataclass(frozen=True)
+class InputUse:
+    """One field of an object in a genie on a page that a parameter of the genie reaches: the
+    object (``index``; a touch or keyboard command's object for one of those), the field's
+    key and label, the value the field holds, the innermost genie the object is in (``via``:
+    the genie itself for its own members) and the field's template in the genie's own
+    parameters."""
+
+    index: int
+    key: str
+    label: str
+    value: str
+    via: int
+    template: str = ""
+
+    def names(self) -> List[str]:
+        """The parameters the template names, as written, in order (AN left out)."""
+        out: List[str] = []
+        for _s, _e, nm in _spans(self.template):
+            if nm.lower() != "an" and nm.lower() not in (n.lower() for n in out):
+                out.append(nm)
+        return out
+
+
+def member_fields(records: Sequence, page, index: int, j: int) -> List[InputUse]:
+    """The fields of record ``j`` (in placed genie ``index``) that the genie's parameters
+    reach. A member record keeps one level a genie it is in: each field's template is
+    followed up through the genies between it and ``index`` to the parameters of ``index``."""
+    objs = page.objects
+    if j >= len(records):
+        return []
+    n, via, a = 1, None, objs[j].parent
+    while a is not None and a != index:
+        r = records[a]
+        if r.class_flag and r.subtype_size & 0x200:
+            n += 1
+            via = a if via is None else via
+        a = objs[a].parent
+    if a != index:
+        return []
+    m = records[j]
+    try:
+        ents = GP.decode(m).entries
+    except Exception:  # noqa: BLE001  # swallow-ok: a record that does not decode takes no parameter
+        return []
+    if not ents or len(ents) <= n:
+        return []
+    target, tc = j, m.type_code
+    if tc in INPUT_TCS and objs[j].parent is not None and objs[j].parent != index:
+        target = objs[j].parent
+    out: List[InputUse] = []
+    for key, tmpl in ents[0][2].pairs:
+        if "%" not in tmpl or key.startswith("!") or key.endswith(".NonGenie"):
+            continue
+        t = tmpl
+        for lvl in range(1, n):
+            t = _expand(t, ents[lvl])
+        if not any(nm.lower() != "an" for _s, _e, nm in _spans(t)):
+            continue
+        v = ents[0][1].get(key)
+        if target != j:
+            what = FIELD_NAMES.get(key.upper(), key).lower()
+            kind = "touch" if tc == TC.TOUCH else "keyboard"
+            obj = _OBJECT.get(records[target].type_code, "Object")
+            label = "%s: %s %s" % (obj, kind, what)
+            seq = ents[0][1].get("KEY_SEQ") if tc == TC.KEYBOARD else None
+            if seq:
+                label += " (%s)" % seq
+        elif _METADATA.match(key):
+            # (a metadata entry holds 'name=value': the use is its value)
+            entry, _eq, v = str(v or "").partition("=")
+            t = t.partition("=")[2] if "=" in t else t
+            label = "%s: metadata %s" % (_OBJECT.get(tc, "Object"), entry or tmpl.partition("=")[0])
+        else:
+            label = _label(tc, key)
+        out.append(
+            InputUse(target, key, label, "" if v is None else str(v), index if via is None else via, t)
+        )
+    return out
+
+
+def page_uses(records: Sequence, page, index: int) -> "OrderedDict[str, Tuple[str, List[InputUse]]]":
+    """(name as first written, the fields it reaches) of each parameter of genie ``index``
+    among its members on the page (``records`` the page's records, ``page`` its model), keyed
+    by lower-case name, in page order (:func:`member_fields`). The genie's own AN is no
+    parameter."""
+    out: "OrderedDict[str, Tuple[str, List[InputUse]]]" = OrderedDict()
+    for j in page.subtree(index)[1:]:
+        for use in member_fields(records, page, index, j):
+            names = {nm.lower(): nm for _s, _e, nm in reversed(list(_spans(use.template)))}
+            names.pop("an", None)
+            for low, nm in names.items():
+                out.setdefault(low, (nm, []))[1].append(use)
+    return out
+
+
+def object_sources(records: Sequence, page, j: int) -> Tuple[Optional[int], List[InputUse]]:
+    """(the outermost placed genie object ``j`` is in, the fields of ``j`` and of its touch and
+    keyboard commands that the genie's parameters reach); (None, []) outside a placed genie."""
+    objs = page.objects
+    root, a = None, objs[j].parent
+    while a is not None:
+        r = records[a] if a < len(records) else None
+        if r is not None and r.class_flag and r.subtype_size & 0x201 == 0x201:
+            root = a
+        a = objs[a].parent
+    if root is None:
+        return None, []
+    out = member_fields(records, page, root, j)
+    for m in objs[j].members:
+        if m < len(records) and records[m].type_code in INPUT_TCS:
+            out += member_fields(records, page, root, m)
+    return root, out
+
+
+def breaks_when_empty(template: str, name: str, command: bool = False) -> bool:
+    """Whether parameter ``name`` left empty leaves Cicode in ``template`` that cannot work: a
+    name that starts or ends with a dot ('%Equip%.Value' leaves '.Value'), or an operand gone
+    beside an operator ('%Level% > 50' leaves '> 50'). Inside a string, as the whole field, as
+    a call's whole argument and as an optional part of a longer name ('%Tag%_PV'), empty is a
+    value; so it is as a statement of a ``command`` (an empty statement does nothing)."""
+    strings = _strings(template)
+    whole = template.strip()
+    for s, e, nm in _spans(template):
+        if nm.lower() != name.lower():
+            continue
+        if any(a < s and e <= b for a, b in strings):
+            continue
+        a, b = s, e
+        while a > 0 and _NAME_CHAR.match(template[a - 1]):
+            a -= 1
+        while b < len(template) and _NAME_CHAR.match(template[b]):
+            b += 1
+        if (a > 0 and template[a - 1] in "%?") or (b < len(template) and template[b] in "%?"):
+            continue  # (a name made with another parameter or an association: theirs together)
+        before, after = template[a:s], template[e:b]
+        if before or after:
+            if (not before and after.startswith(".")) or (not after and before.endswith(".")):
+                return True
+            continue
+        if whole == template[s:e] or command:
+            continue
+        before = template[:s].rstrip()[-1:]
+        after = template[e:].lstrip()[:1]
+        if before in ("", "(", ",", ";") and after in ("", ")", ",", ";"):
+            continue
+        return True
+    return False
 
 
 def substitute(template: str, values: Dict[str, str], keep_missing: bool = False) -> str:

@@ -80,7 +80,7 @@ def test_only_a_styled_owner_marks_a_member(fx_install):
     path, parsed = _parse(fx_install, "FxGenies")
     recs = parsed.page.objects
     page, der = reader.derive_page(parsed, path, records_fresh=True)
-    ctx = reader._GraftCtx(page, recs, der.resolver)
+    ctx = reader.GraftCtx(page, recs, der.resolver)
     g = _named(parsed, "FxValue")
     members = list(range(g + 1, subtree_end(recs, g)))
     frame = next(j for j in members if recs[j].type_code == 0x0F and not recs[j].subtype_size & 0x2)
@@ -89,13 +89,13 @@ def test_only_a_styled_owner_marks_a_member(fx_install):
     stripped = next(
         po for po in recs if po.type_code == 0x0F and not po.subtype_size & 0x2 and po is not recs[frame]
     )
-    o = reader._object_from(recs[frame])
+    o = reader.object_from(recs[frame])
     before = (o.style.line_colour, o.style.line_style, list(o.geometry.nodes or []))
-    reader._graft_twin_extras(o, recs[frame], stripped, ctx)
+    reader.graft_twin_extras(o, recs[frame], stripped, ctx)
     assert not o.raw.get("_twin_grafted") and not o.raw.get("_twin_style")
     assert (o.style.line_colour, o.style.line_style, list(o.geometry.nodes or [])) == before
     # ...the real (styled) owner still grafts afterwards
-    reader._graft_twin_extras(o, recs[frame], owner, ctx)
+    reader.graft_twin_extras(o, recs[frame], owner, ctx)
     assert o.raw.get("_twin_grafted") and o.raw.get("_twin_style")
 
 
@@ -131,7 +131,7 @@ def test_member_without_an_owner_keeps_the_default_pen(fx_install):
     recs[parent] = dataclasses.replace(recs[parent], class_flag=recs[parent].class_flag + 1)
     recs.insert(slot + 1, dataclasses.replace(recs[slot]))
     page1, der1 = reader.derive_page(parsed, path, records_fresh=True)
-    assert reader._GraftCtx(page1, recs, der1.resolver).twin(frame) is None
+    assert reader.GraftCtx(page1, recs, der1.resolver).twin(frame) is None
     o = page1.objects[frame]
     assert o.style.line_style != 5 and not o.raw.get("_no_outline")
 
@@ -193,8 +193,8 @@ def test_blank_caption_is_not_an_empty_caption(fx_install):
     on = tag.raw_properties()["TXT_ON"]
     assert on == "Running"
     reader.set_label_mode("literal")  # the editor's label mode
-    assert reader._editor_display(tag, "") == on
-    assert reader._editor_display(tag, " ") != on
+    assert reader.editor_display(tag, "") == on
+    assert reader.editor_display(tag, " ") != on
 
 
 def test_a_duplicated_member_keeps_the_others_owned(fx_install):
@@ -207,7 +207,7 @@ def test_a_duplicated_member_keeps_the_others_owned(fx_install):
     recs = parsed.page.objects
     g = _named(parsed, "FxValue")
     page0, der0 = reader.derive_page(parsed, path, records_fresh=True)
-    ctx0 = reader._GraftCtx(page0, recs, der0.resolver)
+    ctx0 = reader.GraftCtx(page0, recs, der0.resolver)
     kids = page0.subtree(g)[1:]
     owned = [ctx0.twin(j) is not None for j in kids]
     assert all(owned)
@@ -215,6 +215,6 @@ def test_a_duplicated_member_keeps_the_others_owned(fx_install):
     recs[g] = dataclasses.replace(recs[g], class_flag=recs[g].class_flag + 1)
     recs.insert(k + 1, dataclasses.replace(recs[k]))
     page1, der1 = reader.derive_page(parsed, path, records_fresh=True)
-    ctx1 = reader._GraftCtx(page1, recs, der1.resolver)
+    ctx1 = reader.GraftCtx(page1, recs, der1.resolver)
     moved = [j + 1 if j > k else j for j in kids]
     assert all(ctx1.twin(j) is not None for j in moved)

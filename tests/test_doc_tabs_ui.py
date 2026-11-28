@@ -39,11 +39,11 @@ def win(fx_install):
     w = MainWindow()
     w.resize(1280, 720)
     yield w
-    for x in list(MainWindow._instances):
+    for x in list(MainWindow.instances):
         for e in getattr(x, "_docs", []):
             e["doc"].dirty = False
-        if x in MainWindow._instances:
-            MainWindow._instances.remove(x)
+        if x in MainWindow.instances:
+            MainWindow.instances.remove(x)
         x.hide()
         x.deleteLater()
     _delete_now()
@@ -285,7 +285,7 @@ def test_at_most_200_views_are_kept_the_oldest_go():
         assert "view/last/c:/p/page000.ctg" not in keys
         assert "view/last/c:/p/page204.ctg" in keys
     finally:
-        MainWindow._instances.remove(w)
+        MainWindow.instances.remove(w)
         w.deleteLater()
         _delete_now()
 
@@ -388,8 +388,8 @@ def test_on_start_open_nothing_or_the_start_page(fx_install):
     finally:
         for w in made:
             w.hide()
-            if w in MainWindow._instances:
-                MainWindow._instances.remove(w)
+            if w in MainWindow.instances:
+                MainWindow.instances.remove(w)
             w.deleteLater()
         _delete_now()
 
@@ -438,7 +438,7 @@ def test_the_settings_rows():
         for want in ("Largest zoom when a page opens:", "Tab close buttons:", "On start:", "Ctrl+Tab order:"):
             assert want in labels, want
     finally:
-        MainWindow._instances.remove(w)
+        MainWindow.instances.remove(w)
         w.deleteLater()
         _delete_now()
 

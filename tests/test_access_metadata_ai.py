@@ -398,8 +398,8 @@ def test_window_member_sheet_edits_access_general(page, monkeypatch):
         assert win.act_undo.text() == "Undo Object Properties"
         dlg.reject()
     finally:
-        if win in MainWindow._instances:
-            MainWindow._instances.remove(win)
+        if win in MainWindow.instances:
+            MainWindow.instances.remove(win)
         win.close()
 
 
@@ -428,13 +428,13 @@ def test_genie_root_sheet(page):
 
 # ------------------------------------------------------------------ Access > Disable
 def test_disable_style_is_four_radios(page):
-    from ctgedit.ui.objprops.fields import _RadioChoice
+    from ctgedit.ui.objprops.fields import RadioChoice
 
     doc = _doc(page)
     r = doc.create_object("rectangle", rect=(5, 5, 50, 40), colour=0x336699)
     dlg = _sheet(doc, r)
     w = dlg._widgets["GREY_STYLE"][0][1]
-    assert isinstance(w, _RadioChoice)
+    assert isinstance(w, RadioChoice)
     assert [b.text() for b in w.buttons()] == ["Embossed", "Greyed", "Hidden", "Unchanged"]
     # an absent style shows CtDraw's default (Embossed) checked, nothing stored
     assert w.buttons()[0].isChecked() and w.currentData() is None
@@ -1170,6 +1170,6 @@ def test_animation_point_count_in_the_status_bar(fx_page, monkeypatch):
         tip = win.lbl_ans.toolTip()
         assert win.lbl_ans.text().startswith("\u26a0") and "above 100" in tip and "3000" in tip
     finally:
-        if win in MainWindow._instances:
-            MainWindow._instances.remove(win)
+        if win in MainWindow.instances:
+            MainWindow.instances.remove(win)
         win.close()

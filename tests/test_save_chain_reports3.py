@@ -1,5 +1,6 @@
 """Run holds and results after a library save."""
 
+from ctgedit.ui.main_window import MainWindow
 import json
 import os
 import subprocess
@@ -32,8 +33,8 @@ def _drop_win(w):
     for ent in list(getattr(w, "_docs", ())):
         if hasattr(ent["doc"], "dirty"):
             ent["doc"].dirty = False
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.close()
     w.deleteLater()
 
@@ -80,7 +81,7 @@ def _fake_users_run(win, monkeypatch, fx, during_tabs):
     """Update Users of fxnest.n0 in ``win`` with its plan and saves faked (a page to update,
     one library genie saved): ``during_tabs(win)`` runs in its open tabs' step."""
     from ctgedit.io import genieusage as GU
-    from ctgedit.ui.window.library import OpenTabsUpdate
+    from ctgedit.ui.window.open_tabs import OpenTabsUpdate
 
     users = [
         types.SimpleNamespace(
@@ -218,9 +219,9 @@ def test_a_run_started_while_its_question_was_open_goes_first(win, monkeypatch):
 
 def test_only_the_run_that_took_the_hold_releases_it(win):
     from ctgedit.ui.jobs.update_run import UpdatePagesRun
-    from ctgedit.ui.window.library import _TabsHold
+    from ctgedit.ui.window.open_tabs import TabsHold
 
-    mine, theirs = _TabsHold(), _TabsHold()
+    mine, theirs = TabsHold(), TabsHold()
     mine.take()
     theirs.release(win)  # (a run that never took it)
     assert UpdatePagesRun.tabs_following
@@ -235,7 +236,7 @@ def test_update_pages_without_its_chain_holds_the_others_through_its_open_tabs(t
     from ctgedit.ui.main_window import MainWindow
     from ctgedit.ui.simulate.live_reload import library_run_going
     from ctgedit.ui.jobs.update_run import UpdatePagesRun
-    from ctgedit.ui.window.library import OpenTabsUpdate
+    from ctgedit.ui.window.open_tabs import OpenTabsUpdate
     from test_update_pages_chain import _run
 
     seen = []
@@ -259,7 +260,7 @@ def test_a_second_update_pages_refused_in_the_same_window_keeps_the_runs_hold(tm
     _app()
     from ctgedit.ui.main_window import MainWindow
     from ctgedit.ui.jobs.update_run import UpdatePagesRun
-    from ctgedit.ui.window.library import OpenTabsUpdate
+    from ctgedit.ui.window.open_tabs import OpenTabsUpdate
     from test_update_pages_chain import _run
 
     seen = []
@@ -280,7 +281,7 @@ def test_the_busy_text_names_the_run_in_its_open_tabs_step(fx_install, win, tmp_
     without its chain updates no library)."""
     from ctgedit.ui.main_window import MainWindow
     from ctgedit.ui.jobs.update_run import UpdatePagesRun
-    from ctgedit.ui.window.library import OpenTabsUpdate
+    from ctgedit.ui.window.open_tabs import OpenTabsUpdate
     from test_update_pages_chain import _run
 
     seen = []
@@ -306,9 +307,9 @@ def test_following_the_saves_without_a_hold_leaves_the_runs_hold_alone(win):
     """_follow_run_saves without a hold of its own leaves the hold of the run going on: only
     the run that took it releases it."""
     from ctgedit.ui.jobs.update_run import UpdatePagesRun
-    from ctgedit.ui.window.library import _TabsHold
+    from ctgedit.ui.window.open_tabs import TabsHold
 
-    mine = _TabsHold()
+    mine = TabsHold()
     mine.take()
     win._follow_run_saves([])
     assert UpdatePagesRun.tabs_following, "a call with no hold cleared the run's hold"
@@ -516,7 +517,6 @@ def test_compose_all_names_a_copy_once_when_its_genie_waits_and_is_saved(fx_inst
     from ctgedit.editing import ElementDocument, libraries_changed
     from ctgedit.format import genie_place as GP
     from ctgedit.io import genieusage as GU
-    from ctgedit.ui.window.library import LibraryCommands
     from test_compose_all_criterion import _edit_text, _genies, _host, _nest, _save_keeping_stamps_current
 
     fx = fx_install
@@ -541,7 +541,7 @@ def test_compose_all_names_a_copy_once_when_its_genie_waits_and_is_saved(fx_inst
     assert not plan.not_composed, plan.not_composed  # (its save names it)
     rep = win._update_pages_chain([fx.project("FxLib")], None, compose_all=True)
     assert rep.not_composed == [("mylib.x", ["fxgenie.fx_value"])], rep.not_composed
-    lines = LibraryCommands._chain_summary(rep)
+    lines = MainWindow._chain_summary(rep)
     assert sum(x.count("mylib.x (its copy of fxgenie.fx_value)") for x in lines) == 1, lines
 
 
@@ -550,7 +550,6 @@ def test_the_chain_box_counts_what_it_saved_by_kind(fx_install):
     box counts them by kind, as the chain's note does."""
     from ctgedit.editing import ElementDocument, libraries_changed
     from ctgedit.io import genieusage as GU
-    from ctgedit.ui.window.library import LibraryCommands
 
     fx = fx_install
     d = ElementDocument.open_element(fx.file("FxLib", "fxsym.ctl"), "fx_on")
@@ -560,7 +559,7 @@ def test_the_chain_box_counts_what_it_saved_by_kind(fx_install):
     plan = GU.chain_plan([fx.project(p) for p in ("FxLib", "FxStyle", "FxMain")])
     rep = GU.run_update(GU.UpdatePlan(plan.elements, [], plan.skipped))
     assert rep.element_kinds["fx_alt.sets@-XGA"] == "template"
-    lines = LibraryCommands._chain_summary(rep)
+    lines = MainWindow._chain_summary(rep)
     assert lines[0] == (
         "1 super genie, 1 template and 2 library symbols saved again first: "
         "fxmore.fx_dspsym, fxsuper.!fx_detail@SUPER, fxsym.fx_set, "
@@ -570,7 +569,6 @@ def test_the_chain_box_counts_what_it_saved_by_kind(fx_install):
 
 def test_the_chain_box_counts_the_matched_and_the_supplied_ones_by_kind():
     from ctgedit.io import genieusage as GU
-    from ctgedit.ui.window.library import LibraryCommands
 
     chain = GU.UpdateUsersReport(
         elements_current=["fx_alt.sets@-XGA", "fxsym.fx_set"],
@@ -582,7 +580,7 @@ def test_the_chain_box_counts_the_matched_and_the_supplied_ones_by_kind():
             "sxw.g": "genie",
         },
     )
-    assert LibraryCommands._chain_summary(chain) == [
+    assert MainWindow._chain_summary(chain) == [
         "1 template and 1 library symbol already matched what they place: fx_alt.sets@-XGA, fxsym.fx_set.",
         "1 genie and 1 template in libraries supplied with Plant SCADA were left alone: sxw.t@-XGA, sxw.g.",
     ]
@@ -657,12 +655,12 @@ def test_the_open_tabs_step_places_them_too(fx_install):
     """A page open in a tab whose placeholders' library came back after its open: Update
     Pages' step for the open pages places them, as the helper does on a closed page."""
     from ctgedit.editing import EditableDocument
-    from ctgedit.ui.window.library import LibraryCommands, OpenTabsUpdate
+    from ctgedit.ui.window.open_tabs import OpenTabsUpdate
 
     d = EditableDocument.open(fx_install.page("FxReturned"))
     assert len(d.placeholder_genies()) == 4
     res = OpenTabsUpdate()
-    failed, _found = LibraryCommands._update_open_document(
+    failed, _found = MainWindow._update_open_document(
         d, {"genies": True, "templates": True, "symbols": True}, res
     )
     assert failed == [] and res.placeholders == 4
@@ -736,10 +734,9 @@ def test_a_pages_stamp_less_symbol_and_template_entries_are_out_of_date_in_both(
 
 
 def test_the_summary_counts_the_placeholders_placed():
-    from ctgedit.ui.window.library import LibraryCommands
     from test_update_pages_chain import _fake_report
 
     rep = _fake_report()
     rep.placeholders = 4
-    lines = LibraryCommands._update_pages_summary(rep, "BK", None)
+    lines = MainWindow._update_pages_summary(rep, "BK", None)
     assert "4 placeholder genies placed again from their library." in lines, lines

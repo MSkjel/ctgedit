@@ -428,7 +428,7 @@ def test_project_run_changes_the_open_page_in_its_tab_and_saves_the_others(fx_in
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])  # noqa: F841
     doc = EditableDocument.open(fx_install.page("FxBig", "FxMain"))
     win = _Win(doc)
-    monkeypatch.setattr(MW.MainWindow, "_instances", [win])
+    monkeypatch.setattr(MW.MainWindow, "instances", [win])
     asked = []
     run = RG.ProjectReplaceRun(
         win._qobj,
@@ -461,7 +461,7 @@ def test_project_run_cancelled_writes_nothing(fx_install, monkeypatch):
     pages = _pump_pages(fx_install)
     before = {p: open(p, "rb").read() for p in pages}
     win = _Win()
-    monkeypatch.setattr(MW.MainWindow, "_instances", [win])
+    monkeypatch.setattr(MW.MainWindow, "instances", [win])
     run = RG.ProjectReplaceRun(
         win._qobj,
         [fx_install.project("FxMain")],
@@ -644,7 +644,7 @@ def test_apply_changes_the_definition_then_brings_its_users_up_to_date(fx_instal
     # the library and the pages are in the one backup; Restore Backup puts them back
     man = backups.read_manifest(folder)
     assert man["kind"] == GW.BACKUP_KIND
-    assert any(e.get("library", "").lower().endswith("fxnest.ctm") for e in man["entries"])
+    assert any(e.get("original", "").lower().endswith("fxnest.ctm") for e in man["entries"])
     UP.restore_backup(folder)
     libraries_changed()
     n1 = ElementDocument.open_element(_nest(fx_install), "n1")
@@ -688,7 +688,7 @@ def test_project_run_changes_library_genies_and_the_tabs_follow(fx_install, monk
     before = open(lib, "rb").read()
     n1 = ElementDocument.open_element(lib, "n1")
     win = _Win(n1)
-    monkeypatch.setattr(MW.MainWindow, "_instances", [win])
+    monkeypatch.setattr(MW.MainWindow, "instances", [win])
     asked = []
     run = RG.ProjectReplaceRun(
         win._qobj,
@@ -713,7 +713,7 @@ def test_project_run_changes_library_genies_and_the_tabs_follow(fx_install, monk
     win2 = _Win()
     followed = []
     win2._follow_run_saves = lambda saved: followed.append(list(saved))
-    monkeypatch.setattr(MW.MainWindow, "_instances", [win2])
+    monkeypatch.setattr(MW.MainWindow, "instances", [win2])
     run = RG.ProjectReplaceRun(
         win2._qobj,
         _projects(fx_install),
@@ -886,7 +886,7 @@ def _tree_rows(cl):
 def test_the_checklist_lists_every_genie_the_project_can_place(fx_install):
     """Like Update Pages' tree: the genies of the page's include chain, grouped by library,
     with how many are placed here; 'Placed here only' (on when some are) and the filter
-    choose the rows shown; Select All ticks the rows shown, Clear All unticks all."""
+    choose the rows shown; Tick Shown ticks the rows shown, Untick All unticks all."""
     from PySide6 import QtWidgets
     from ctgedit.ui.dialog.replace_genie import ReplaceGenieDialog
 

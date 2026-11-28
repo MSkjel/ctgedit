@@ -1,5 +1,6 @@
 """The ctsim-page/0 export."""
 
+from ctgedit.format.fileio import find_ci
 import collections
 import json
 import os
@@ -126,7 +127,6 @@ def test_pg_rows_equal_the_project_rows():
 def _ctdraw_project(tmp_path, project, page):
     """A copy of ``project`` with the tables CtDraw's save left."""
     from ctgedit.format.dbf import Dbf
-    from ctgedit.io import pgregister as PR
 
     unit = "%s/%s" % (project, page)
     fxinstall.oracle("pages", unit, "page.ctg")  # (skips until it is captured)
@@ -147,7 +147,7 @@ def _ctdraw_project(tmp_path, project, page):
     for key, diff in diffs.items():
         if not key.lower().startswith(head) or not key.lower().endswith(".dbf"):
             continue
-        path = PR._find_file(str(dst), key[len(head) :])
+        path = find_ci(str(dst), key[len(head) :])
         assert path is not None, key
         with Dbf(path) as d:
             for c in diff.get("changed", ()):
@@ -500,7 +500,7 @@ def test_unsaved_colour_animation_shows_in_the_export(tmp_path, monkeypatch):
     # a new ON colour and condition for it
     target = len(doc.parsed.page.objects) - 1
     po = doc.parsed.page.objects[target]
-    d = {k.upper(): v for k, v in PR._value_bag(po)}
+    d = {k.upper(): v for k, v in PR.value_bag(po)}
     assert po.type_code == 0x0F and "COL_A" in d and d.get("COLMODE", "0") == "0"
     assert po.subtype_size & 0x2
     an = PM._an(doc.parsed.page.objects[target])

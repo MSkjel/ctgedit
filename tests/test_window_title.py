@@ -25,11 +25,11 @@ def win(fx_install):
         app_settings().setValue("opt/" + k, False)
     w = MainWindow()
     yield w
-    for x in list(MainWindow._instances):
+    for x in list(MainWindow.instances):
         for e in getattr(x, "_docs", []):
             e["doc"].dirty = False
-        if x in MainWindow._instances:
-            MainWindow._instances.remove(x)
+        if x in MainWindow.instances:
+            MainWindow.instances.remove(x)
 
 
 def test_no_page_is_just_the_program():
@@ -40,7 +40,7 @@ def test_no_page_is_just_the_program():
     try:
         assert w.windowTitle() == "ctgedit"
     finally:
-        MainWindow._instances.remove(w)
+        MainWindow.instances.remove(w)
 
 
 def test_a_page_of_its_project(win, fx_install):
@@ -87,4 +87,4 @@ def test_the_window_menu_lists_a_page_once(win, fx_install):
         assert any(t.startswith("&1 ") for t in texts) and any(t.startswith("&2 ") for t in texts)
     finally:
         other.hide()
-        MainWindow._instances.remove(other)
+        MainWindow.instances.remove(other)

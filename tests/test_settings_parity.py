@@ -1,5 +1,7 @@
 """Settings map to the Graphics Builder's Tools > Options."""
 
+from ctgedit.ui.prefs import settings_transfer
+from ctgedit.format.fileio import find_ci
 import os
 import shutil
 import struct
@@ -34,8 +36,8 @@ def win(fx_install):
     w.open_document(fx_install.page(MIXER))
     yield w
     _close_dialogs(w)
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.hide()
     w.deleteLater()
     QtWidgets.QApplication.processEvents()
@@ -56,16 +58,16 @@ def _mini_project(EX, dst, pages, tables=("pgdynobj", "pgtouch", "pgkey", "pgbut
 
     os.makedirs(dst, exist_ok=True)
     for f in ("pages.DBF", "changes.DBF", "PROJECT.CIT"):
-        src = PR._find_file(EX, f)
+        src = find_ci(EX, f)
         if src:
             shutil.copyfile(src, os.path.join(dst, f))
     for t in tables:
-        src = PR._find_file(EX, t + ".DBF")
+        src = find_ci(EX, t + ".DBF")
         if src is None:
             continue
         d = Dbf(src, writable=False)
-        n = PR._open_ndx(EX, t)
-        recs = [r for p in pages for _i, r in sorted(PR._page_records(d, n, "PAGE", p))]
+        n = PR.open_ndx(EX, t)
+        recs = [r for p in pages for _i, r in sorted(PR.page_records(d, n, "PAGE", p))]
         if n is not None:
             n.close()
         with open(src, "rb") as fh:
@@ -92,11 +94,11 @@ def _live_ans(project, table, page):
     from ctgedit.format.dbf import Dbf
     from ctgedit.io import pgregister as PR
 
-    path = PR._find_file(project, table + ".DBF")
+    path = find_ci(project, table + ".DBF")
     d = Dbf(path, writable=False)
-    n = PR._open_ndx(project, table)
+    n = PR.open_ndx(project, table)
     try:
-        return [d.decode(r).get("AN", "") for _i, r in PR._page_records(d, n, "PAGE", page) if r[:1] != b"*"]
+        return [d.decode(r).get("AN", "") for _i, r in PR.page_records(d, n, "PAGE", page) if r[:1] != b"*"]
     finally:
         if n is not None:
             n.close()
@@ -223,7 +225,7 @@ def test_restore_defaults_and_export_import(win, tmp_path, monkeypatch):
     bad = tmp_path / "other.ini"
     bad.write_text("[General]\nx=1\n")
     with pytest.raises(S.SettingsFileError, match="not a settings file"):
-        S.import_settings(str(bad))
+        settings_transfer.import_groups(str(bad))
     assert not dlg.import_from(str(bad))
     assert S.option("props_on_copy")
 
@@ -657,7 +659,7 @@ def test_import_keeps_this_computers_session_and_applies_the_layout(win, tmp_pat
     st.setValue("session/open_files", [r"C:\here\mine.ctg"])
     st.setValue("view/crosshair", True)
     path = str(tmp_path / "other.ini")
-    S.export_settings(path)
+    settings_transfer.export_groups(path)
     out = QtCore.QSettings(path, QtCore.QSettings.Format.IniFormat)
     assert not any(k.startswith("session/") for k in out.allKeys())
     out.setValue("session/open_files", [r"C:\elsewhere\theirs.ctg"])  # a foreign one

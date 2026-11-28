@@ -1,15 +1,15 @@
 """Show windows the page's Cicode opens, the way the runtime does."""
 
 from __future__ import annotations
-from ..style.theme import sp as _sp
 
 from typing import Optional, Tuple
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
+from ..style.theme import sp as _sp
+
 MODE_PAGE_CHILD = 0x1
 MODE_WINDOW_CHILD = 0x2
-MODE_NO_CAPTION = 0x10
 MODE_KEEP_SIZE = 0x400
 MODE_FREE_ASPECT = 0x1000
 MODE_PINNED = 0x80000
@@ -17,7 +17,7 @@ MODE_PINNED = 0x80000
 TAB, EMBEDDED, POPUP = "tab", "embedded", "popup"
 
 
-def _int(v, default: int = 0) -> int:
+def as_int(v, default: int = 0) -> int:
     try:
         return int(v)
     except TypeError, ValueError:
@@ -29,8 +29,8 @@ def placement(w: dict, tab_per_window: bool = False) -> str:
     its own), EMBEDDED (a pinned child: inside its parent) or POPUP."""
     if tab_per_window:
         return TAB
-    mode = _int(w.get("mode"))
-    if mode & MODE_PINNED and _int(w.get("parent"), -1) >= 0:
+    mode = as_int(w.get("mode"))
+    if mode & MODE_PINNED and as_int(w.get("parent"), -1) >= 0:
         return EMBEDDED
     return POPUP
 
@@ -39,22 +39,23 @@ def is_child(w: dict) -> bool:
     """A page child or window child (WinNewAt mode 1 / 2): its (x, y) is in its parent
     window's page."""
     return (
-        bool(_int(w.get("mode")) & (MODE_PAGE_CHILD | MODE_WINDOW_CHILD)) and _int(w.get("parent"), -1) >= 0
+        bool(as_int(w.get("mode")) & (MODE_PAGE_CHILD | MODE_WINDOW_CHILD))
+        and as_int(w.get("parent"), -1) >= 0
     )
 
 
 def window_rect(w: dict) -> QtCore.QRectF:
     """(x, y, w, h) of window ``w``; a zero size stays zero (the page's size then counts)."""
     return QtCore.QRectF(
-        _int(w.get("x")), _int(w.get("y")), max(0, _int(w.get("w"))), max(0, _int(w.get("h")))
+        as_int(w.get("x")), as_int(w.get("y")), max(0, as_int(w.get("w"))), max(0, as_int(w.get("h")))
     )
 
 
 def content_scale(w: dict, page_w: float, page_h: float) -> Tuple[float, float]:
     """The scale of a window's page in its window (the runtime fits the page to the window
     unless mode 1024 keeps its size; mode 4096 lets the two axes differ)."""
-    mode = _int(w.get("mode"))
-    ww, wh = _int(w.get("w")), _int(w.get("h"))
+    mode = as_int(w.get("mode"))
+    ww, wh = as_int(w.get("w")), as_int(w.get("h"))
     if mode & MODE_KEEP_SIZE or ww <= 0 or wh <= 0 or page_w <= 0 or page_h <= 0:
         return 1.0, 1.0
     sx, sy = ww / float(page_w), wh / float(page_h)
@@ -65,7 +66,7 @@ def content_scale(w: dict, page_w: float, page_h: float) -> Tuple[float, float]:
 
 def view_size(w: dict, page_w: float, page_h: float) -> Tuple[float, float]:
     """The window's size in page pixels: its own (w, h), else its page's."""
-    ww, wh = _int(w.get("w")), _int(w.get("h"))
+    ww, wh = as_int(w.get("w")), as_int(w.get("h"))
     return (float(ww) if ww > 0 else float(page_w), float(wh) if wh > 0 else float(page_h))
 
 

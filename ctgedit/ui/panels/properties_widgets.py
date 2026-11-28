@@ -3,13 +3,12 @@ Add animation combo, the area field."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 
 from ..style.theme import sp as _sp
 import contextlib
 import functools
 import weakref
-from typing import Optional
 from PySide6 import QtCore, QtWidgets
 from ..number_field import NumberField, evaluate, is_relative, round_half_away
 from ...infra import caches as _caches
@@ -59,7 +58,7 @@ def sheet_labels() -> dict:
 
 try:
     from ..colour_picker import ColourButton as panel_ColourButton
-except Exception:  # noqa: BLE001 -- the panel still builds without swatches
+except Exception:  # noqa: BLE001  # swallow-ok: the panel still builds without swatches
     panel_ColourButton = QtWidgets.QToolButton
 
 

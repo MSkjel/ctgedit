@@ -28,7 +28,7 @@ def _fx(fx_install):
 
 # --------------------------------------------------------------------------- pagesummary
 def _full_parse_facts(path):
-    from ctgedit.format.page import _extract_bmp, parse_ctg
+    from ctgedit.format.page import extract_bmp, parse_ctg
     from ctgedit.format.symbols import reference_from_object
 
     pb = parse_ctg(path).page
@@ -40,7 +40,7 @@ def _full_parse_facts(path):
         if r is not None and r.ext == "ctt":
             ref = "%s.%s" % (r.library, r.element)
             break
-    return (pb.page_width, pb.page_height, len(pb.objects), _extract_bmp(pb.thumbnail) or b"", ref)
+    return (pb.page_width, pb.page_height, len(pb.objects), extract_bmp(pb.thumbnail) or b"", ref)
 
 
 def test_page_summary_matches_the_full_parser():
@@ -951,7 +951,7 @@ def test_typing_in_the_grid_appends_to_the_search(catalog):
 
 
 def test_with_included_projects_and_saved_chain_scope(catalog):
-    """'With included projects' shows the project and its include chain;
+    """'And the projects it includes' shows the project and its include chain;
     a saved 'c:' scope id comes back as that (the check box ticked)."""
     from ctgedit.ui.browser import PageBrowserDialog
     from ctgedit.ui.prefs.settings import app_settings
@@ -1154,7 +1154,7 @@ def test_other_install_copy_points_at_the_live_one(fx_install):
 
 
 def test_a_start_scope_without_the_kind_shows_its_includes(catalog):
-    """A remembered 'With included projects' off never opens on an empty
+    """A remembered 'And the projects it includes' off never opens on an empty
     list: a picker, and Open on its last scope, show the include chain when
     the project itself has none of the kind (the setting stays as it was)."""
     from ctgedit.ui.browser import PageBrowserDialog
@@ -1182,7 +1182,7 @@ def test_a_start_scope_without_the_kind_shows_its_includes(catalog):
         assert dlg.current_scope().kind == "chain" and dlg.model.total
         # unticked by hand: the project alone, and the status says why it is empty
         dlg.set_with_includes(False)
-        assert dlg.model.total == 0 and "With included projects" in dlg.status.text()
+        assert dlg.model.total == 0 and "And the projects it includes" in dlg.status.text()
     finally:
         dlg.deleteLater()
     st.setValue("pagebrowser/pick/with_includes", True)
@@ -1191,7 +1191,7 @@ def test_a_start_scope_without_the_kind_shows_its_includes(catalog):
         dlg.set_with_includes(False)
         assert dlg.model.total == 0
         # a picker on one project: not 'nothing on the include path'
-        assert "With included projects" in dlg.status.text()
+        assert "And the projects it includes" in dlg.status.text()
     finally:
         dlg.deleteLater()
 

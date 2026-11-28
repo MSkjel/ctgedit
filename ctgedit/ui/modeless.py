@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from ..infra.logsetup import note_exception as _note_exc
+
+from ..infra.paths import path_key
+
 import contextlib
 from typing import Callable, List, Optional
 
@@ -34,12 +38,15 @@ def _records(doc) -> list:
         return []
 
 
-def _alive(obj) -> bool:
+def alive(obj) -> bool:
+    """``obj`` is a Qt object whose C++ side still exists (False for None)."""
+    if obj is None:
+        return False
     try:
         import shiboken6
 
         return shiboken6.isValid(obj)
-    except Exception:  # noqa: BLE001 -- no shiboken: assume it is
+    except ImportError:  # swallow-ok: no shiboken (a stand-in object in a test)
         return True
 
 
@@ -159,7 +166,7 @@ class ModelessMixin:
                 kind = key[0] if isinstance(key, tuple) else str(key)
                 key = (kind, doc_key(doc), id(target))
         existing = self._dialogs.get(key)
-        if existing is not None and _alive(existing):
+        if existing is not None and alive(existing):
             if existing.isHidden():
                 existing._ctg_tab_hidden = False
                 existing.show()
@@ -252,7 +259,7 @@ class ModelessMixin:
         n = sum(
             1
             for d in self._dialogs.values()
-            if d is not dlg and type(d) is type(dlg) and _alive(d) and d.isVisible()
+            if d is not dlg and type(d) is type(dlg) and alive(d) and d.isVisible()
         )
         x = top_right.x() - size.width() - 16
         y = top_right.y() + 16 + STEP * n
@@ -279,7 +286,7 @@ class ModelessMixin:
         """What an object window shows: the payloads of its record and the
         record's subtree (a genie's members, an object's touch / keyboard
         records)."""
-        from ..io.reader import _record_sig
+        from ..io.reader import record_sig
 
         objs = _records(doc)
         if index is None or not 0 <= index < len(objs):
@@ -287,8 +294,9 @@ class ModelessMixin:
         try:
             span = doc._subtree_span(index)
         except Exception:  # noqa: BLE001
+            _note_exc("modeless._modeless_sig")
             span = [index]
-        return tuple(_record_sig(objs[j]) for j in span if j < len(objs))
+        return tuple(record_sig(objs[j]) for j in span if j < len(objs))
 
     def _modeless_applied(self, dlg, extra: Optional[Callable] = None) -> None:
         """The window's own Apply changed the page: redraw it without
@@ -328,7 +336,7 @@ class ModelessMixin:
             return
         new = (key[0], key[1], id(target))
         other = dict.get(self._dialogs, new)
-        if other is not None and other is not dlg and _alive(other):
+        if other is not None and other is not dlg and alive(other):
             return  # (another window already has that record)
         if dict.get(self._dialogs, key) is dlg:
             dict.pop(self._dialogs, key, None)
@@ -369,7 +377,7 @@ class ModelessMixin:
         for key, dlg in list(self._dialogs.items()):
             if getattr(dlg, "_ctg_doc_key", None) != dk or getattr(dlg, "_ctg_dropped", False):
                 continue
-            if not _alive(dlg):
+            if not alive(dlg):
                 dict.pop(self._dialogs, key, None)
                 continue
             scope = getattr(dlg, "_ctg_scope", "")
@@ -412,6 +420,7 @@ class ModelessMixin:
                     try:
                         changes = doc.model_changes_since(dlg._ctg_serial)
                     except Exception:  # noqa: BLE001
+                        _note_exc("modeless._sync_modeless")
                         changes = None
                     if changes is not None and doc.root_of(i) not in changes:
                         dlg._ctg_serial = serial  # nothing it shows changed
@@ -505,7 +514,7 @@ class ModelessMixin:
         t.start()
 
     def _run_page_reload(self, dlg) -> None:
-        if not getattr(dlg, "_ctg_reload_pending", False) or not _alive(dlg):
+        if not getattr(dlg, "_ctg_reload_pending", False) or not alive(dlg):
             return
         if dict.get(self._dialogs, getattr(dlg, "_ctg_wkey", None)) is not dlg or not dlg.isVisible():
             return
@@ -536,7 +545,7 @@ class ModelessMixin:
         """The object and page windows of ``doc``."""
         dk = doc_key(doc)
         return [
-            d for d in list(self._dialogs.values()) if getattr(d, "_ctg_doc_key", None) == dk and _alive(d)
+            d for d in list(self._dialogs.values()) if getattr(d, "_ctg_doc_key", None) == dk and alive(d)
         ]
 
     def _hide_page_windows(self, doc) -> None:
@@ -577,14 +586,10 @@ class ModelessMixin:
             self._drop_modeless(dlg)
         self.__dict__.setdefault("_modeless_reasons", {}).pop(doc_key(doc), None)
         u = getattr(self, "_unresolved_dlg", None)
-        if u is not None and _alive(u):
-            import os
-
+        if u is not None and alive(u):
             rep = getattr(u, "report", None)
             path = getattr(rep, "path", None)
-            if path and os.path.normcase(os.path.abspath(path)) == os.path.normcase(
-                os.path.abspath(getattr(doc, "path", "") or "")
-            ):
+            if path and path_key(path) == path_key(getattr(doc, "path", "") or ""):
                 with contextlib.suppress(RuntimeError):
                     u.close()
                 self._unresolved_dlg = None
@@ -655,6 +660,7 @@ class ModelessMixin:
                 try:
                     dlg.accept()
                 except Exception:  # noqa: BLE001 -- the save question explains
+                    _note_exc("modeless._apply_pending_windows/accept")
                     return False
                 if dlg.isVisible() or dlg.result() != QtWidgets.QDialog.Accepted:
                     return False  # its checks kept it open
@@ -663,6 +669,7 @@ class ModelessMixin:
                 if fn() is False:
                     return False
             except Exception:  # noqa: BLE001 -- the save question explains
+                _note_exc("modeless._apply_pending_windows")
                 return False
         return True
 
@@ -690,7 +697,7 @@ class ModelessMixin:
         doc = getattr(self, "doc", None)
         sel = list(getattr(self, "_sel", []) or [])
         for dlg in list(self._dialogs.values()):
-            if getattr(dlg, "_ctg_scope", "") != "selection" or not _alive(dlg):
+            if getattr(dlg, "_ctg_scope", "") != "selection" or not alive(dlg):
                 continue
             fn = getattr(dlg, "set_selection", None)
             if fn is not None:
@@ -712,7 +719,7 @@ class ModelessMixin:
     def _run_window_sync(self) -> None:
         doc = getattr(self, "doc", None)
         for dlg in list(self._dialogs.values()):
-            if not getattr(dlg, "_ctg_reads_page", False) or not _alive(dlg):
+            if not getattr(dlg, "_ctg_reads_page", False) or not alive(dlg):
                 continue
             if doc is None:
                 self._drop_modeless(dlg)

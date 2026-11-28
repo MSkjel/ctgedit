@@ -1,6 +1,9 @@
 """Tools > Settings."""
 
 from __future__ import annotations
+
+from ...format.projects import is_project_dir
+from ...infra import logsetup
 from ..style.theme import sp as _sp
 
 import os
@@ -20,10 +23,7 @@ from .settings import (
     app_settings,
     surround_mode,
 )
-
-#: the live-apply pause after the last change (ms): the default of Advanced > The settings
-#: window > Apply after a pause of (ui/settings_live_delay_ms)
-LIVE_DELAY_MS = 150
+from ..messages import warn
 
 
 def live_delay_ms() -> int:
@@ -1766,7 +1766,7 @@ class SettingsDialog(QtWidgets.QDialog):
             ),
         ),
         # how long an automatic update waits for
-        # the steps to redo it would clear (ui/window/files.redo_wait_s, read at each look)
+        # the steps to redo it would clear (ui/window/open_genie_updates.redo_wait_s, read at each look)
         SettingRow(
             "Pages and libraries",
             "When a page opens",
@@ -2420,7 +2420,7 @@ class SettingsDialog(QtWidgets.QDialog):
             self._btn_undo_last.setToolTip("Put back the setting changed last, as it was before")
             self._btn_undo_last.setEnabled(False)
             self._btn_undo_last.clicked.connect(self.undo_last_change)
-            self._btn_undo = bb.addButton("Revert to Opening Values", B.RejectRole)
+            self._btn_undo = bb.addButton("Revert to Opening Values", B.ResetRole)
             self._btn_undo.setToolTip("Put back the settings this window opened with")
             self._btn_undo.setEnabled(False)
             self._btn_undo.clicked.connect(self.undo_changes)
@@ -2461,48 +2461,61 @@ class SettingsDialog(QtWidgets.QDialog):
     # -- the pages ----------------------------------------------------------------------
     def _lay_out_pages(self) -> None:
         """The controls on their pages, in headed sections."""
-        t = self._tabs
+        self._lay_out_editing()
+        self._lay_out_canvas()
+        self._lay_out_drawing()
+        self._lay_out_appearance()
+        self._lay_out_keyboard()
+        self._lay_out_ribbon()
+        self._lay_out_libraries()
+        self._lay_out_simulate()
+        self._lay_out_advanced()
+
+    def _gb_name(self, key: str) -> str:
+        """The Graphics Builder's name of option ``key`` for the search (a search for it
+        finds the option), or ''."""
+        name = self.GB_NAMES.get(key)
+        return "Graphics Builder: %s" % name if name else ""
+
+    def _flag_row(self, s, key: str, extra: str = "", sub: bool = False):
+        """Option ``key``'s check box on section ``s`` (``sub``: indented under the one
+        above it)."""
+        return (s.sub if sub else s.check)(self._flags[key], extra, key="opt/" + key)
+
+    def _lay_out_editing(self) -> None:
+        """The Editing page."""
         f = self._flags
-
-        def gb(key: str) -> str:
-            # (a search for the Graphics Builder's name of the option finds it)
-            name = self.GB_NAMES.get(key)
-            return "Graphics Builder: %s" % name if name else ""
-
-        def flag(s, key, extra="", sub=False):
-            return (s.sub if sub else s.check)(f[key], extra, key="opt/" + key)
-
-        p = t.add_page("Editing")
+        p = self._tabs.add_page("Editing")
         s = p.section("Tools")
-        flag(s, "show_legacy_tools", gb("show_legacy_tools"))
+        self._flag_row(s, "show_legacy_tools", self._gb_name("show_legacy_tools"))
         self._add_rows(p, "Editing", "Tools", section=s)
         s.note("The keys of the tools and of every command are on the Keyboard page.")
         s = p.section("Text")
-        flag(s, "dblclick_edits_text")
-        flag(s, "stretch_texts")
+        self._flag_row(s, "dblclick_edits_text")
+        self._flag_row(s, "stretch_texts")
         self._add_rows(p, "Editing", "Text", section=s)
         s = p.section("Expressions")
-        flag(s, "colour_cicode")
-        flag(s, "function_hints")
+        self._flag_row(s, "colour_cicode")
+        self._flag_row(s, "function_hints")
         self._add_rows(p, "Editing", "Expressions", section=s)
         s = p.section("New objects")
         s.row("Colours of new objects:", self._new_colours, key="draw/colour_mode")
         self._add_rows(p, "Editing", "New objects", section=s)
-        flag(s, "props_on_new", gb("props_on_new"))
-        flag(s, "xp_buttons", gb("xp_buttons"))
+        self._flag_row(s, "props_on_new", self._gb_name("props_on_new"))
+        self._flag_row(s, "xp_buttons", self._gb_name("xp_buttons"))
         self._add_rows(p, "Editing", "Styles", section=s)
         s = p.section("Objects")
-        flag(s, "modify_an", gb("modify_an"))
+        self._flag_row(s, "modify_an", self._gb_name("modify_an"))
         self._add_rows(p, "Editing", "Objects", section=s)
         s = p.section("Genie forms")
-        flag(s, "disable_genie_forms", gb("disable_genie_forms"))
-        flag(s, "genie_group_button", gb("genie_group_button"))
+        self._flag_row(s, "disable_genie_forms", self._gb_name("disable_genie_forms"))
+        self._flag_row(s, "genie_group_button", self._gb_name("genie_group_button"))
         s = p.section("Arrange")
-        flag(s, "turn_gradients")
-        flag(s, "reversible_turns")
+        self._flag_row(s, "turn_gradients")
+        self._flag_row(s, "reversible_turns")
         self._add_rows(p, "Editing", "Arrange", section=s)
         s = p.section("Safety")
-        flag(s, "confirm_delete")
+        self._flag_row(s, "confirm_delete")
         s.row("Autosave recovery copies every:", self._autosave, key="opt/autosave_minutes")
         # (the pause in editing that also writes a copy)
         self._add_rows(p, "Editing", "Safety", section=s, keys=("opt/autosave_idle_s",))
@@ -2519,11 +2532,11 @@ class SettingsDialog(QtWidgets.QDialog):
         s.row("Earlier versions now use:", self._history_use_row())
         self._add_rows(p, "Editing", "Safety", section=s)
         s = p.section("Properties panel")
-        flag(s, "props_arrow_live")
+        self._flag_row(s, "props_arrow_live")
         # (the pause under the switch it needs)
         self._add_rows(p, "Editing", "Properties panel", section=s, keys=("opt/props_step_pause_ms",))
         self._enable_with("opt/props_step_pause_ms", f["props_arrow_live"])
-        flag(s, "props_scrub")
+        self._flag_row(s, "props_scrub")
         # (the drag speed under the switch it needs)
         self._add_rows(p, "Editing", "Properties panel", section=s, keys=("opt/scrub_speed",))
         speed = self._row_widgets.get("opt/scrub_speed")
@@ -2540,7 +2553,9 @@ class SettingsDialog(QtWidgets.QDialog):
         s.row("Smart-guide snap radius:", self._tol, key="view/smart_guide_tol")
         self._add_rows(p, "Editing", "Moving and resizing", section=s)
 
-        p = t.add_page("Canvas")
+    def _lay_out_canvas(self) -> None:
+        """The Canvas page."""
+        p = self._tabs.add_page("Canvas")
         s = p.section("Mouse")
         s.row("Mouse wheel:", self._wheel, key="opt/wheel_scrolls")
         self._nav.lay_out_mouse(s)  # (the touchpad, right under the wheel)
@@ -2560,7 +2575,7 @@ class SettingsDialog(QtWidgets.QDialog):
         s.row("Paste and duplicate offset:", self._paste_offset, key="opt/paste_offset")
         # where to paste; how many property windows a paste opens
         self._add_rows(p, "Canvas", "Copy and paste", section=s, keys=("canvas/paste_at",))
-        flag(s, "props_on_copy", gb("props_on_copy"))
+        self._flag_row(s, "props_on_copy", self._gb_name("props_on_copy"))
         self._add_rows(p, "Canvas", "Copy and paste", section=s)
         s = p.section("Pictures")
         s.row("Picture options open:", self._picture_options, key="opt/picture_options")
@@ -2568,7 +2583,7 @@ class SettingsDialog(QtWidgets.QDialog):
         s.row("Flag pictures larger than:", self._large_picture, key="opt/large_picture_kb")
         from ..dialog.bitmap_import import SETTING as TRANSPARENT
 
-        s.check(self._build_transparent(), gb("transparent_paste"), key=TRANSPARENT)
+        s.check(self._build_transparent(), self._gb_name("transparent_paste"), key=TRANSPARENT)
         s = p.section("Opening a page")
         s.row("Open a page at:", self._open_zoom, key="opt/open_zoom")
         # (the pages Where I left it remembers)
@@ -2594,7 +2609,9 @@ class SettingsDialog(QtWidgets.QDialog):
         self._enable_with("opt/underlays_kept", self._row_widgets.get("opt/underlay_remember"))
         self._add_rows(p, "Canvas", "Underlay")
 
-        p = t.add_page("Drawing")
+    def _lay_out_drawing(self) -> None:
+        """The Drawing page."""
+        p = self._tabs.add_page("Drawing")
         p.note(
             "Where ctgedit and the Graphics Builder draw differently, choose which you "
             "want. Open pages are redrawn."
@@ -2606,7 +2623,9 @@ class SettingsDialog(QtWidgets.QDialog):
         s.row("Draw a composite genie from:", self._composite, key="opt/composite_genies")
         self._add_rows(p, "Drawing", "Embedded controls")
 
-        p = t.add_page("Appearance")
+    def _lay_out_appearance(self) -> None:
+        """The Appearance page, its preview on top."""
+        p = self._tabs.add_page("Appearance")
         self._preview = AppearancePreview(self)
         holder = QtWidgets.QWidget()
         hl = QtWidgets.QHBoxLayout(holder)
@@ -2664,7 +2683,9 @@ class SettingsDialog(QtWidgets.QDialog):
             )
         )
 
-        p = t.add_page("Keyboard")
+    def _lay_out_keyboard(self) -> None:
+        """The Keyboard page."""
+        p = self._tabs.add_page("Keyboard")
         s = p.section("")
         s.check(
             self._keys,
@@ -2674,7 +2695,9 @@ class SettingsDialog(QtWidgets.QDialog):
         )
         self._add_rows(p, "Keyboard", "Other windows")
 
-        p = t.add_page("Ribbon", help_topic="settings#ribbon")
+    def _lay_out_ribbon(self) -> None:
+        """The Ribbon page."""
+        p = self._tabs.add_page("Ribbon", help_topic="settings#ribbon")
         s = p.section("Groups shown")
         for key, cb in self._ribbon_boxes.items():
             s.check(cb, key="ui/ribbon_hidden_groups")
@@ -2687,7 +2710,10 @@ class SettingsDialog(QtWidgets.QDialog):
         for sec in ("Quick Access", "Right-click menu", "Selection toolbar", "Contextual tabs", "Search"):
             self._add_rows(p, "Ribbon", sec)
 
-        p = t.add_page("Pages and libraries")
+    def _lay_out_libraries(self) -> None:
+        """The Pages and libraries page."""
+        f = self._flags
+        p = self._tabs.add_page("Pages and libraries")
         s = p.section("When a page opens")
         for k in (
             "auto_update_template",
@@ -2697,16 +2723,16 @@ class SettingsDialog(QtWidgets.QDialog):
             "auto_placeholder_missing",
             "show_auto_changes",
         ):
-            flag(s, k)
+            self._flag_row(s, k)
         self._add_rows(p, "Pages and libraries", "When a page opens", section=s)
         s = p.section("After saving")
-        s.check(self._build_fast_display(), gb("citect.ini [Animator] FastDisplay"))
-        flag(s, "ctf_rebuild_stale", sub=True)
+        s.check(self._build_fast_display(), self._gb_name("citect.ini [Animator] FastDisplay"))
+        self._flag_row(s, "ctf_rebuild_stale", sub=True)
         f["ctf_rebuild_stale"].setEnabled(self._fast_display.isChecked())
         self._fast_display.toggled.connect(f["ctf_rebuild_stale"].setEnabled)
-        flag(s, "save_template_warning", gb("save_template_warning"))
-        flag(s, "save_supergenie_warning")
-        flag(s, "auto_close_builder")
+        self._flag_row(s, "save_template_warning", self._gb_name("save_template_warning"))
+        self._flag_row(s, "save_supergenie_warning")
+        self._flag_row(s, "auto_close_builder")
         s.row(
             "Genies and closed pages that use a saved genie:", self._genie_pages, key="opt/genie_save_pages"
         )
@@ -2720,23 +2746,23 @@ class SettingsDialog(QtWidgets.QDialog):
             self._template_pages,
             key="opt/template_save_pages",
         )
-        flag(s, "warn_shipped_template")
+        self._flag_row(s, "warn_shipped_template")
         s = p.section("Pages")
         self._add_rows(p, "Pages and libraries", "New pages", section=s)
-        flag(s, "unlock_template")
-        flag(s, "list_system_pages", gb("list_system_pages"))
+        self._flag_row(s, "unlock_template")
+        self._flag_row(s, "list_system_pages", self._gb_name("list_system_pages"))
         self._add_rows(p, "Pages and libraries", "Printing", section=s)
         s = p.section("Run")
-        flag(s, "compile_enquiry", gb("compile_enquiry"))
+        self._flag_row(s, "compile_enquiry", self._gb_name("compile_enquiry"))
         self._add_rows(p, "Pages and libraries", "Run", section=s)
         s = p.section("Files and folders")
         s.row("When another program changes an open page:", self._disk_reload, key="opt/disk_reload")
         self._add_rows(p, "Pages and libraries", "Files and folders", section=s)
         s.row("Extra library folders:", self._lib_row, key="opt/library_folders")
         s.row("Shared styles file:", self._shared_styles, key="styles/shared_file")
-        flag(s, "library_siblings")
+        self._flag_row(s, "library_siblings")
         s.row("Text code page (restart needed):", self._codepage, key="opt/codepage")
-        flag(s, "text_question_marks")
+        self._flag_row(s, "text_question_marks")
         s = p.section("Find in closed pages")
         s.row("Helper processes:", self._find_procs, key="opt/find_processes")
         self._add_rows(p, "Pages and libraries", "Find in closed pages", section=s)
@@ -2755,16 +2781,20 @@ class SettingsDialog(QtWidgets.QDialog):
         # the recent pages, the window's rows and File > Print, into the section above
         self._add_rows(p, "Pages and libraries", "Starting and switching pages", section=s)
 
-        p = t.add_page("Simulate", help_topic="simulate#simulate-settings")
+    def _lay_out_simulate(self) -> None:
+        """The Simulate page."""
+        p = self._tabs.add_page("Simulate", help_topic="simulate#simulate-settings")
         self._sim.lay_out(p)
         # (in the one long scroll the widest row sets every page's width)
         self._sim.engine.setMinimumWidth(140)
 
-        p = t.add_page("Advanced")
+    def _lay_out_advanced(self) -> None:
+        """The Advanced page."""
+        p = self._tabs.add_page("Advanced")
         s = p.section("Diagnostics")
-        flag(s, "developer_tools")
-        flag(s, "dyn_badges", sub=True)
-        flag(s, "display_check")
+        self._flag_row(s, "developer_tools")
+        self._flag_row(s, "dyn_badges", sub=True)
+        self._flag_row(s, "display_check")
         self._add_rows(p, "Advanced", "Updates")
         self._add_rows(p, "Advanced", "The settings window")
 
@@ -3065,92 +3095,18 @@ class SettingsDialog(QtWidgets.QDialog):
         self._rich_tips = QtWidgets.QCheckBox("Show the key and a description in tool tips")
         self._rich_tips.setToolTip("Off: tool tips show the name and the key only")
         self._rich_tips.setChecked(st.value(_RICH_TIPS, _KEYS[_RICH_TIPS], type=bool))
-        w = QtWidgets.QWidget()
-        lay = QtWidgets.QHBoxLayout(w)
-        lay.setContentsMargins(0, 0, 0, 0)
-        self._ribbon_list = QtWidgets.QListWidget()
-        self._ribbon_list.setToolTip("The commands of your own ribbon group, in order")
-        self._ribbon_list.setMinimumHeight(120)
-        self._fill_ribbon_list(st.value("ui/ribbon_custom", [], type=list) or [])
-        lay.addWidget(self._ribbon_list, 1)
-        col = QtWidgets.QVBoxLayout()
-        self._ribbon_add = QtWidgets.QPushButton("Add…")
-        self._ribbon_add.setAutoDefault(False)
-        self._ribbon_add.setToolTip("Add a menu command to the group")
-        self._ribbon_add.clicked.connect(self._ribbon_add_command)
-        self._ribbon_remove = QtWidgets.QPushButton("Remove")
-        self._ribbon_remove.setAutoDefault(False)
-        self._ribbon_remove.clicked.connect(self._ribbon_remove_command)
-        self._ribbon_up = QtWidgets.QPushButton("Move Up")
-        self._ribbon_up.setAutoDefault(False)
-        self._ribbon_up.clicked.connect(lambda: self._ribbon_move(-1))
-        self._ribbon_down = QtWidgets.QPushButton("Move Down")
-        self._ribbon_down.setAutoDefault(False)
-        self._ribbon_down.clicked.connect(lambda: self._ribbon_move(1))
-        for b in (self._ribbon_add, self._ribbon_remove, self._ribbon_up, self._ribbon_down):
-            col.addWidget(b)
-        col.addStretch(1)
-        lay.addLayout(col)
-        self._ribbon_custom_widget = w
+        from .command_list import CommandListField
 
-    def _fill_ribbon_list(self, refs) -> None:
-        """The user's group: each command by its name, its id kept with it (ui/prefs/keymap)."""
-        from . import keymap
-
-        self._ribbon_list.clear()
-        for ref in refs:
-            ref = str(ref)
-            a = keymap.find_action(self._w, ref)
-            cid = keymap.command_id(a) if a is not None else ref
-            if cid.startswith("menu:"):
-                cid = ref
-            it = QtWidgets.QListWidgetItem(keymap.label_of(a) if a is not None else ref)
-            it.setData(QtCore.Qt.UserRole, cid)
-            self._ribbon_list.addItem(it)
-
-    def _ribbon_add_command(self) -> None:
-        from . import keymap
-
-        cmds = [c for c in keymap.commands(self._w) if c.label]
-        have = {self._ribbon_list.item(k).data(QtCore.Qt.UserRole) for k in range(self._ribbon_list.count())}
-        seen, labels, ids = set(), [], {}
-        for c in sorted(cmds, key=lambda c: c.label.lower()):
-            if c.id in have or c.label in seen:
-                continue
-            seen.add(c.label)
-            labels.append(c.label)
-            ids[c.label] = c.id
-        if not labels:
-            return
-        label, ok = QtWidgets.QInputDialog.getItem(self, "Add a Command", "Command:", labels, 0, False)
-        if ok and label:
-            it = QtWidgets.QListWidgetItem(label)
-            it.setData(QtCore.Qt.UserRole, ids.get(label, label))
-            self._ribbon_list.addItem(it)
-            self._ribbon_list.setCurrentRow(self._ribbon_list.count() - 1)
-
-    def _ribbon_remove_command(self) -> None:
-        row = self._ribbon_list.currentRow()
-        if row >= 0:
-            self._ribbon_list.takeItem(row)
-
-    def _ribbon_move(self, step: int) -> None:
-        row = self._ribbon_list.currentRow()
-        new = row + step
-        if row < 0 or not 0 <= new < self._ribbon_list.count():
-            return
-        item = self._ribbon_list.takeItem(row)
-        self._ribbon_list.insertItem(new, item)
-        self._ribbon_list.setCurrentRow(new)
+        # (the list settings' own field: Add, Remove, Move Up and Move Down)
+        self._ribbon_field = CommandListField(self._w, tip="The commands of your own ribbon group, in order")
+        self._ribbon_field.set_value(st.value("ui/ribbon_custom", [], type=list) or [])
+        self._ribbon_list = self._ribbon_field.list
+        self._ribbon_custom_widget = self._ribbon_field
 
     def ribbon_choices(self) -> dict:
         """The Ribbon page's settings (My Commands by command id)."""
         hidden = [key for key, cb in self._ribbon_boxes.items() if not cb.isChecked()]
-        custom = [
-            self._ribbon_list.item(k).data(QtCore.Qt.UserRole) or self._ribbon_list.item(k).text()
-            for k in range(self._ribbon_list.count())
-        ]
-        return {"ui/ribbon_hidden_groups": hidden, "ui/ribbon_custom": custom}
+        return {"ui/ribbon_hidden_groups": hidden, "ui/ribbon_custom": self._ribbon_field.value()}
 
     def _build_transparent(self) -> QtWidgets.QHBoxLayout:
         from ..dialog.bitmap_import import transparent_colour
@@ -3182,6 +3138,7 @@ class SettingsDialog(QtWidgets.QDialog):
         try:
             on = citect_config.fast_display_enabled()
         except Exception:  # noqa: BLE001 -- an unreadable ini reads as the default
+            logsetup.note_exception("settings_dialog.fast_display")
             on = True
         self._fast_initial = on
         self._fast_display.setChecked(on)
@@ -3238,7 +3195,7 @@ class SettingsDialog(QtWidgets.QDialog):
                 for lang in db.languages() if db else []:
                     self._labels.addItem(lang, lang)
         except Exception:  # noqa: BLE001
-            pass
+            logsetup.note_exception("settings_dialog.languages")
         self._labels.setCurrentIndex(max(0, self._labels.findData(getattr(window, "_label_mode", "literal"))))
         # View > Outside the Page: what the canvas shows around the page
         self._surround = QtWidgets.QComboBox()
@@ -3589,35 +3546,10 @@ class SettingsDialog(QtWidgets.QDialog):
             max(0, self._codepage.findData(choice("opt/codepage", CODEPAGES, "auto")))
         )
         self._codepage.setToolTip("Change it only for projects made on Windows set to another language")
-        from .settings import FIND_PROCESSES_RANGE
+        from .job_options import processes_box
 
-        self._find_procs = QtWidgets.QSpinBox()
-        self._find_procs.setRange(*FIND_PROCESSES_RANGE)
-        self._find_procs.setSpecialValueText("Automatic")
-        try:
-            self._find_procs.setValue(int(str(app_settings().value("opt/find_processes", 0)).strip()))
-        except TypeError, ValueError:  # swallow-ok: a garbled setting shows Automatic
-            self._find_procs.setValue(0)
-        from .settings import HELPER_MB, UPDATE_PROCESSES_RANGE
-
-        self._find_procs.setToolTip(
-            "More search a big project sooner. Each one takes about "
-            "%d MB while it runs. Automatic: half the processors, "
-            "at most 4" % HELPER_MB
-        )
-        # Tools > Update Pages: its helper processes (settings.update_parts)
-        self._update_procs = QtWidgets.QSpinBox()
-        self._update_procs.setRange(*UPDATE_PROCESSES_RANGE)
-        self._update_procs.setSpecialValueText("Automatic")
-        try:
-            self._update_procs.setValue(int(str(app_settings().value("opt/update_processes", 0)).strip()))
-        except TypeError, ValueError:  # swallow-ok: a garbled setting shows Automatic
-            self._update_procs.setValue(0)
-        self._update_procs.setToolTip(
-            "Each helper process takes about %d MB of memory "
-            "while it runs. The Update Pages window has the same "
-            "box" % HELPER_MB
-        )
+        self._find_procs = processes_box("opt/find_processes")
+        self._update_procs = processes_box("opt/update_processes")
 
     def _show_appearance(self, a: dict) -> None:
         self._theme.setCurrentIndex(max(0, self._theme.findData(a["ui/style/theme"])))
@@ -3941,15 +3873,15 @@ class SettingsDialog(QtWidgets.QDialog):
 
     # -- Reset All Settings / Export / Import ------------------------------------------
     def _ask_reset_all(self) -> None:
-        ans = QtWidgets.QMessageBox.question(
+        from ..messages import confirm
+
+        if confirm(
             self,
             "Reset All Settings",
             "Put every setting on every page back to its default, also the pages and rows "
             "the search hides? Undo Reset puts them back.",
-            QtWidgets.QMessageBox.Ok | QtWidgets.QMessageBox.Cancel,
-            QtWidgets.QMessageBox.Cancel,
-        )
-        if ans == QtWidgets.QMessageBox.Ok:
+            "Reset All",
+        ):
             self.reset_all()
 
     def reset_all(self) -> None:
@@ -3987,7 +3919,7 @@ class SettingsDialog(QtWidgets.QDialog):
             cb.setChecked(bool(OPTION_DEFAULTS.get(key, False)))
         for cb in self._ribbon_boxes.values():
             cb.setChecked(True)
-        self._ribbon_list.clear()
+        self._ribbon_field.set_value([])
         self._rich_tips.setChecked(True)
         self._tol.setValue(int(getattr(type(self._w.view), "SMART_GUIDE_TOL", 12)))
         self._sg_outline.setChecked(True)
@@ -4112,7 +4044,7 @@ class SettingsDialog(QtWidgets.QDialog):
         hidden = {str(x) for x in (st.value("ui/ribbon_hidden_groups", [], type=list) or [])}
         for key, cb in self._ribbon_boxes.items():
             cb.setChecked(key not in hidden)
-        self._fill_ribbon_list(st.value("ui/ribbon_custom", [], type=list) or [])
+        self._ribbon_field.set_value(st.value("ui/ribbon_custom", [], type=list) or [])
         self._rows_load()
         from . import keymap
 
@@ -4124,9 +4056,15 @@ class SettingsDialog(QtWidgets.QDialog):
         dlg = SettingsTransferDialog(self, "export")
         if dlg.exec() != QtWidgets.QDialog.Accepted:
             return
-        start = os.path.join(os.path.expanduser("~"), "ctgedit-settings.ini")
-        path, _f = QtWidgets.QFileDialog.getSaveFileName(
-            self, "Export Settings", start, "Settings files (*.ini);;All files (*.*)"
+        from ..remember import file_path
+
+        path = file_path(
+            self,
+            "Export Settings",
+            "settings",
+            "Settings files (*.ini);;All files (*.*)",
+            save=True,
+            file_name="ctgedit-settings.ini",
         )
         if not path:
             return
@@ -4152,7 +4090,7 @@ class SettingsDialog(QtWidgets.QDialog):
         try:
             n, gs = export_groups(path, groups, overrides=self._overrides())
         except (SettingsFileError, OSError) as e:
-            QtWidgets.QMessageBox.warning(self, "Export Settings", str(e))
+            warn(self, "Export Settings", str(e))
             return False
         self._message = "%s To %s." % (summary(n, gs, "Exported"), path)
         self._status(self._message)
@@ -4161,15 +4099,17 @@ class SettingsDialog(QtWidgets.QDialog):
     def _import(self) -> None:
         from .settings_transfer import SettingsTransferDialog, file_groups
 
-        path, _f = QtWidgets.QFileDialog.getOpenFileName(
-            self, "Import Settings", os.path.expanduser("~"), "Settings files (*.ini);;All files (*.*)"
+        from ..remember import file_path
+
+        path = file_path(
+            self, "Import Settings", "settings", "Settings files (*.ini);;All files (*.*)", save=False
         )
         if not path:
             return
         try:
             available = file_groups(path)
         except (SettingsFileError, OSError) as e:
-            QtWidgets.QMessageBox.warning(self, "Import Settings", str(e))
+            warn(self, "Import Settings", str(e))
             return
         dlg = SettingsTransferDialog(self, "import", available=available)
         if dlg.exec() != QtWidgets.QDialog.Accepted:
@@ -4192,7 +4132,7 @@ class SettingsDialog(QtWidgets.QDialog):
         try:
             n, gs = import_groups(path, groups, mode)
         except (SettingsFileError, OSError) as e:
-            QtWidgets.QMessageBox.warning(self, "Import Settings", str(e))
+            warn(self, "Import Settings", str(e))
             return False
         self._building = True
         try:
@@ -4216,7 +4156,7 @@ class SettingsDialog(QtWidgets.QDialog):
             try:
                 restore(reopen=False)
             except Exception:  # noqa: BLE001 -- the settings are stored either way
-                pass
+                logsetup.note_exception("settings_dialog.import_from/restore")
         self._rows_load()
         self._update_marks()
         self._message = "%s From %s." % (summary(n, gs), os.path.basename(path))
@@ -4226,7 +4166,7 @@ class SettingsDialog(QtWidgets.QDialog):
     def _status(self, text: str) -> None:
         try:
             self._w.statusBar().showMessage(text, 8000)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001  # swallow-ok: the window may be gone
             pass
 
     # -- apply ----------------------------------------------------------------------
@@ -4327,16 +4267,14 @@ class SettingsDialog(QtWidgets.QDialog):
                             logsetup.files_written(
                                 "removed out-of-date fast-display files", ["removed " + p for p in removed]
                             )
-                        except Exception:  # noqa: BLE001
+                        except Exception:  # noqa: BLE001  # swallow-ok: the log line is a record only
                             pass
         from ...io import citect_config
 
         try:
             citect_config.set_fast_display(on)
         except OSError as e:
-            QtWidgets.QMessageBox.warning(
-                self, "Fast Display Files", "The fast display setting was not changed: %s" % e
-            )
+            warn(self, "Fast Display Files", "The fast display setting was not changed: %s" % e)
             return True
         self._fast_initial = on
         msg = "Fast display files turned %s." % ("on" if on else "off")
@@ -4384,13 +4322,14 @@ class SettingsDialog(QtWidgets.QDialog):
         if not path or not path.lower().endswith(".ctg"):
             return []
         pdir = os.path.dirname(os.path.abspath(path))
-        if not any(os.path.exists(os.path.join(pdir, n)) for n in ("pages.DBF", "pages.dbf")):
+        if not is_project_dir(pdir):
             return []
         try:
             from ...format.ctf import stale_ctf_files
 
             return stale_ctf_files(pdir)
         except Exception:  # noqa: BLE001 -- the offer is an aid only
+            logsetup.note_exception("settings_dialog.stale_ctf_files")
             return []
 
     def _apply_simulate(self) -> None:

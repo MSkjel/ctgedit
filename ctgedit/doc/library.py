@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+from ..infra.paths import lib_path_dirs, path_key
+
+
 from typing import TYPE_CHECKING
+from ..infra.logsetup import note_exception as _note_exc
 
 if TYPE_CHECKING:
     from collections import OrderedDict
@@ -36,24 +40,24 @@ from ..editing_base import (  # noqa: F401
     writer,
 )
 from ..editing_base import (  # noqa: F401
-    _Command,
-    _codes,
-    _ini_back_color,
-    _parse_object,
+    Command,
+    codes,
+    ini_back_color,
+    parse_object,
 )
 
 #: one read of each library per composition: a copy and its stamp from the same bytes
 from ..format.symbols import current_hold, one_read
 
 
-#: the errors genie_place._refresh_nested notes where a nested copy then stays as stored (not
-#: the ones with a fallback that composes it all the same: 'composed load', 'copy form',
-#: 'root level', 'root binding'): an instance with one is not brought up to date
+#: the errors genie_place._refresh_nested and its helpers note where a nested copy then stays
+#: as stored (not the ones with a fallback that composes it all the same: _composed_if_grown,
+#: _copy_form, _merge_copy_root): an instance with one is not brought up to date
 _KEPT_STORED = frozenset(
     {
         "genie_place._refresh_nested",
-        "genie_place._refresh_nested/nested load",
-        "genie_place._refresh_nested/recompose",
+        "genie_place._load_nested_copy",
+        "genie_place._recompose_unaligned",
     }
 )
 
@@ -109,6 +113,178 @@ def _keep_root_name(out: list, name: str) -> list:
     return [GP.to_po(GP.encode(rn))] + list(out[1:])
 
 
+def _fold_bag(L, B, bo, bn, tn=None):
+    """A bag of a stored record folded with its composed twin (level ``L``, bag ``B``)."""
+    from ..format import genie_place as GP
+
+    # as CtDraw's load of stale genies does: a linked record keeps its stored key
+    # order with the current values in place and new keys appended; a binding
+    # level keeps its stored keys in place, the element's or not, and the levels are then
+    # derived again top down, which updates a templated value in place and
+    # removes an empty one (a nested instrument's itemName under '%itemName%');
+    # a declaration bag is the element's own (its order too)
+    if L >= 1 and B == 0:
+        return bn
+    if L >= 1:
+        return GP.merge_bag(bo, bn, templated=GP.bag_keys(bo))
+    if B == 2 and tn is not None:
+        # a stored template whose key the element still gives as a value stays
+        return GP.merge_bag(bo, bn, templated=GP.bag_keys(tn) & GP.bag_keys(bo))
+    return GP.merge_bag(bo, bn)
+
+
+def _fold_level(L, eo, en):
+    """Level ``L`` of a stored record (``eo``) folded with its composed twin (``en``)."""
+    return [
+        _fold_bag(L, B, bo, bn, en[2] if B == 1 else (en[1] if B == 2 else None))
+        for B, (bo, bn) in enumerate(zip(eo, en))
+    ]
+
+
+def _merge_whole(n, shells: bool):
+    """The composed record ``n`` taken as it is (a fresh object for ``shells``)."""
+    from ..format import genie_place as GP
+
+    return GP.to_po(writer.object_payload(n)) if shells else n
+
+
+def _merge_new_object(n, shells: bool):
+    """The composed record ``n`` that links to no stored one, as CtDraw makes it."""
+    from ..format import genie_place as GP
+
+    # CtDraw's new object (an element record that links to no stored one): the
+    # polygon vertex offsets it generates come after its values (VERTEX_VERT*
+    # last in e0.b1, the template bag in the element's order)
+    try:
+        r = GP.decode(n)
+    except Exception:  # noqa: BLE001  # swallow-ok: taken as composed
+        return _merge_whole(n, shells)
+    if not r.entries:
+        return _merge_whole(n, shells)
+    bag = r.entries[0][1]
+    vert = [p for p in bag.pairs if p[0].upper().startswith("VERTEX_VERT")]
+    if not vert:
+        return _merge_whole(n, shells)
+    pairs = [p for p in bag.pairs if not p[0].upper().startswith("VERTEX_VERT")] + vert
+    if pairs == bag.pairs:
+        return _merge_whole(n, shells)
+    r.entries[0][1] = GP.Bag(pairs, bag.ov)
+    return GP.to_po(GP.encode(r))
+
+
+def _merge_twins(old, new, element_records) -> tuple:
+    """(the Element, its records, the stored twin of each composed record: an index into
+    ``old`` or None). The records are None when they do not pair with ``new``."""
+    from ..format import genie_place as GP
+
+    # the re-composition kept the handle of every record it linked with a stored one
+    # (genie_place.link_instance), so the stored twin of a record is the stored record
+    # with its handle and class; a record without one is taken as composed
+    element = None
+    if isinstance(element_records, GP.Element):
+        element, element_records = element_records, element_records.records
+    if element_records is not None and len(element_records) == len(new):
+        twin = GP.link_instance(old, element_records) if old and new else [None] * len(new)
+    else:
+        element_records = None
+        by = {}
+        for i in range(1, len(old)):
+            by.setdefault((geom.get_handle(old[i]), old[i].type_code), []).append(i)
+        twin = [0 if old and new else None]
+        for n in new[1:]:
+            q = by.get((geom.get_handle(n), n.type_code))
+            twin.append(q.pop(0) if q else None)
+    return element, element_records, twin
+
+
+def _fold_with_memory(ro, rn, mem, n, element_form: bool, specials: dict) -> None:
+    """``rn``'s levels folded with the stored ``ro``'s and the element's memory values
+    ``mem`` (e0's values derived again from the folded templates)."""
+    from ..format import genie_place as GP
+
+    composed = rn.entries[0][1]
+    vals = GP.merge_bag(ro.entries[0][1], mem)
+    templ = GP.bag_keys(rn.entries[0][2])
+    have = GP.bag_keys(composed)
+    rest = [_fold_level(L, eo, en) for L, (eo, en) in enumerate(zip(ro.entries, rn.entries))]
+    # the derived values are set in the FOLDED template order (the stored
+    # order with the element's new keys after it), then the composed values
+    # without a template: a key the merge dropped comes back in that order
+    cd = {kk.lower(): v for kk, v in composed.pairs}
+    names = [kk for kk, _v in rest[0][2].pairs if kk.lower() in cd]
+    seen = {kk.lower() for kk in names}
+    names += [kk for kk, _v in composed.pairs if kk.lower() not in seen]
+    for kk in names:
+        v = cd[kk.lower()]
+        # the composed value as it is (an empty one too: a left-trimmed
+        # blank COMMENT stays as '', genie_place)
+        at = next((i for i, (k2, _v2) in enumerate(vals.pairs) if k2.lower() == kk.lower()), None)
+        if at is None:
+            vals.pairs.append((next(k2 for k2, _ in composed.pairs if k2.lower() == kk.lower()), v))
+        else:
+            vals.pairs[at] = (vals.pairs[at][0], v)
+    vals = GP.Bag(
+        [(kk, v) for kk, v in vals.pairs if kk.lower() in have or kk.lower() not in templ],
+        vals.ov,
+    )
+    if len(rest) >= 3:
+        # the binding levels are derived again from the folded ones, top down,
+        # as CtDraw derives after its merge; in the
+        # element form a member's levels under the placed one (the level
+        # under the element's own) from the placed level's templates as
+        # typed, as genie_place._build_recs' member rule does (a nested
+        # genie's root from the values: its own level is level 1)
+        eff = None
+        member_rule = element_form and not (n.class_flag and n.subtype_size & 0x200)
+        for lvl in range(len(rest) - 2, 0, -1):
+            GP.subst_level(rest[lvl], rest[lvl + 1], specials, outer_vals=eff)
+            if eff is not None:
+                eff = rest[lvl][1]
+            elif member_rule:
+                eff = GP.top_level_templates(rest[lvl])
+    if len(rest) >= 2:
+        # a value whose template names a binding the fold kept (a stored one
+        # the element no longer gives) is derived again from it, as CtDraw
+        # derives after its merge
+        was = {kk.lower(): v for kk, v in rn.entries[1][1].pairs}
+        now = {kk.lower(): v for kk, v in rest[1][1].pairs}
+        moved = {kk for kk in set(was) | set(now) if was.get(kk) != now.get(kk)}
+        for key, tmpl in rn.entries[0][2].pairs if moved else ():
+            refs = {t.lower() for t in GP.template_refs(GP.Bag([(key, tmpl)]))}
+            if not refs & moved:
+                continue
+            v = GP.substitute(tmpl, rest[1][1], rest[1][0], key, specials)
+            vals.set(key, v)
+    rest[0][1] = vals
+    rn.entries = rest
+
+
+def _fold_extra_levels(ro, rn, n) -> None:
+    """``rn``'s levels folded with the stored ``ro``'s, which has more levels."""
+    from ..format import genie_place as GP
+
+    # the stored record has a binding level the element no longer gives it (a
+    # nested genie replaced by a plain group of the same handle and class):
+    # e0 and the outer levels pair from both ends, and the extra stored level
+    # stays without declarations, as CtDraw's load keeps it
+    # (a record that is no longer a nested member keeps its stored levels and
+    # their declarations; a GROUP's declarations are its members', none at
+    # that level any more; a state set keeps its own, and an element that lost
+    # its only parameter leaves the instance's levels as stored)
+    extra = len(ro.entries) - len(rn.entries)
+    box = bool(n.class_flag) and n.type_code == 0x08
+    ents = [_fold_level(0, ro.entries[0], rn.entries[0])]
+    for L in range(1, 1 + extra):
+        eo = ro.entries[L]
+        ents.append([GP.Bag([], 0) if box else eo[0].copy(), eo[1].copy(), eo[2].copy()])
+    for L in range(1, len(rn.entries)):
+        lvl = _fold_level(L, ro.entries[L + extra], rn.entries[L])
+        if not box:
+            lvl[0] = ro.entries[L + extra][0].copy()
+        ents.append(lvl)
+    rn.entries = ents
+
+
 class LibraryEdits:
     """EditableDocument's genie forms, library links, placement, symbols that follow their library,
     composite genies, super genies."""
@@ -122,6 +298,7 @@ class LibraryEdits:
         try:
             ref = reference_from_object(self.parsed.page.objects[index])
         except Exception:  # noqa: BLE001
+            _note_exc("library.LibraryEdits.genie_link", index=index)
             ref = None
         if ref is None or not ref.library or not ref.element:
             return None
@@ -136,11 +313,11 @@ class LibraryEdits:
 
         # the page's project, then (a page copied outside its project) the
         # extra library folders the resolver searches too (CTG_LIB_PATH)
-        dirs = [self._project_dir()] + [p for p in os.environ.get("CTG_LIB_PATH", "").split(os.pathsep) if p]
+        dirs = [self._project_dir()] + lib_path_dirs()
         for d in dirs:
             try:
                 form = GF.find_form(d, library, element)
-            except Exception:  # noqa: BLE001 -- a broken .frm must never block the dialog
+            except Exception:  # noqa: BLE001 -- swallow-ok: a broken .frm must never block the dialog
                 form = None
             if form is not None:
                 return form
@@ -159,15 +336,13 @@ class LibraryEdits:
         from ..format import genieform as GF
 
         out: List[Tuple[str, str]] = []
-        for d in [self._project_dir()] + [
-            p for p in os.environ.get("CTG_LIB_PATH", "").split(os.pathsep) if p
-        ]:
+        for d in [self._project_dir()] + lib_path_dirs():
             try:
                 for hit in GF.form_problems(d, library, element):
                     if hit not in out:
                         out.append(hit)
             except Exception:  # noqa: BLE001
-                pass
+                _note_exc("library.LibraryEdits.genie_form_problems", library=library, element=element)
         return out
 
     def genie_an(self, index: int) -> int:
@@ -192,6 +367,7 @@ class LibraryEdits:
         try:
             return PR.list_values(self._project_dir(), fld.list_form, fld.list_field, fld.list_filter)
         except Exception:  # noqa: BLE001
+            _note_exc("library.LibraryEdits.form_list_values")
             return None
 
     def _recompose_genie(
@@ -219,6 +395,7 @@ class LibraryEdits:
         try:
             ref = reference_from_object(po)
         except Exception:  # noqa: BLE001
+            _note_exc("library.LibraryEdits._recompose_genie")
             ref = None
         res = self._resolver()
         if ref is None or ref.ext != "ctm" or res is None:
@@ -270,6 +447,7 @@ class LibraryEdits:
                 opts=GP.Options(into_genie_element=in_element, dialog_an=dialog_an),
             )
         except Exception:  # noqa: BLE001
+            _note_exc("library.LibraryEdits._recompose_genie")
             new = None
         if not new:
             return None
@@ -334,6 +512,7 @@ class LibraryEdits:
 
                 ref = reference_from_object(self.parsed.page.objects[k])
             except Exception:  # noqa: BLE001
+                _note_exc("library.LibraryEdits.is_composite_genie", index=k)
                 ref = None
             if ref is not None and "_compositioncaches" in (ref.library or "").lower():
                 return True
@@ -401,7 +580,7 @@ class LibraryEdits:
                     # inside a library genie: the authored values too (what the dialog
                     # shows, and what placing the outer genie substitutes from)
                     return writer.set_authored_genie_binding(p, key, value) or done
-                if p.type_code in (_codes.TC.TOUCH, _codes.TC.KEYBOARD):
+                if p.type_code in (codes.TC.TOUCH, codes.TC.KEYBOARD):
                     # input records keep their CMD/KEY bindings keyed too
                     if key in writer.genie_bindings(p):
                         writer.set_genie_binding(p, key, value)
@@ -485,7 +664,7 @@ class LibraryEdits:
                 self._rerender_page()
 
         # mutate() already applied the change; register without re-applying
-        self._push_step(_Command(label, lambda: _apply(True), lambda: _apply(False)))
+        self._push_step(Command(label, lambda: _apply(True), lambda: _apply(False)))
         self._note_edit()
         if rerender:
             self._rerender_page()
@@ -506,6 +685,7 @@ class LibraryEdits:
         try:
             ref = reference_from_object(po)
         except Exception:  # noqa: BLE001
+            _note_exc("library.LibraryEdits.symbol_link")
             ref = None
         if ref is None:
             return None
@@ -650,7 +830,7 @@ class LibraryEdits:
         moved_inputs = []
         for k in inputs_:
             for j in self.subtree(k):
-                cp = _parse_object(0, 0, 0, 0, writer.object_payload(objs[j]))
+                cp = parse_object(0, 0, 0, 0, writer.object_payload(objs[j]))
                 if [s[:2] for s in placement.read_slots(cp.body_raw)[0]] != [(0, placement.IDENT)] * 3:
                     placement.write_slots(cp, [(0, placement.IDENT)] * 3)
                     writer.refresh_object_bags(cp)
@@ -810,7 +990,7 @@ class LibraryEdits:
         bag), '!' editor keys left out."""
         try:
             pairs = writer.value_bag(self.parsed.page.objects[index])
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 -- swallow-ok: a record the strict walk cannot read: no value bag
             pairs = None
         if pairs is None:
             pairs = list(self.object_properties(index).items())
@@ -941,6 +1121,7 @@ class LibraryEdits:
             r0 = GP.load_element(path, element).records[0]
             grouped = r0.type_code == 0x08 and bool(r0.class_flag)
         except Exception:  # noqa: BLE001
+            _note_exc("library.LibraryEdits.relink_symbol", lib=path, element=element)
             grouped = info.get("root_tc") == 0x08
         if grouped != (po.type_code != 0x07):
             # a symbol-set state takes any symbol: the set rebuilds the state in the new
@@ -963,7 +1144,7 @@ class LibraryEdits:
             )
         ref = "%s.%s.<%s" % (library, element, ext)
         if po.type_code == 0x07:
-            new = [_parse_object(0, 0, 0, 0, writer.object_payload(po))]
+            new = [parse_object(0, 0, 0, 0, writer.object_payload(po))]
             if not writer.set_body_reference(new[0], ref):
                 raise ValueError("The symbol's link could not be rewritten.")
             chain = self._ancestor_chain(index)
@@ -974,7 +1155,7 @@ class LibraryEdits:
             span = (index, index + 1)  # its input children stay after it
         else:
             span = (index, index + len(self.subtree(index)))
-            inst = [_parse_object(0, 0, 0, 0, writer.object_payload(o)) for o in objs[span[0] : span[1]]]
+            inst = [parse_object(0, 0, 0, 0, writer.object_payload(o)) for o in objs[span[0] : span[1]]]
             if not writer.set_body_reference(inst[0], ref):
                 raise ValueError("The symbol's link could not be rewritten.")
             used = set(self._used_handles())
@@ -1013,7 +1194,7 @@ class LibraryEdits:
             el = GP.load_element(path, element)
             el.library, el.element = library, element
             GP.add_link_entries(probe, [GP.link_table_entry(el)])
-        except Exception:  # noqa: BLE001 -- the table is a cache; the link is what counts
+        except Exception:  # noqa: BLE001 -- swallow-ok: the table is a cache; the link is what counts
             pass
         new_state = (order, probe.link_table_raw, probe.link_count)
         old_state = (list(objs), pb.link_table_raw, pb.link_count)
@@ -1032,10 +1213,10 @@ class LibraryEdits:
         """(root index, link) of every template and genie whose library doesn't open."""
         from ..format import template_place as TP
         from ..format import genie_place as GP
-        from ..format.colourpalette import is_project_dir
+        from ..format.projects import is_project_dir
 
         dirs = [os.path.dirname(os.path.abspath(self.path))] if self.path else []
-        dirs += [p for p in os.environ.get("CTG_LIB_PATH", "").split(os.pathsep) if p]
+        dirs += lib_path_dirs()
         if not any(is_project_dir(d) for d in dirs):
             return []
         res = self._resolver()
@@ -1312,6 +1493,7 @@ class LibraryEdits:
         try:
             anc = list(self.page.ancestors(index))
         except Exception:  # noqa: BLE001
+            _note_exc("library.LibraryEdits.colour_owned", index=index)
             return False
         return any(a < len(objs) and objs[a].subtype_size & 0x201 for a in anc)
 
@@ -1424,7 +1606,7 @@ class LibraryEdits:
         copies: List[PageObject] = []
         for i in idx:
             blob = writer.object_payload(self.parsed.page.objects[i])
-            copies.append(_parse_object(0, 0, len(blob), 0, blob))
+            copies.append(parse_object(0, 0, len(blob), 0, blob))
         ext = os.path.splitext(lib_path)[1].lower().lstrip(".")
         box = self.selection_extent(idx) or (0, 0, 0, 0)
         page_size = None
@@ -1718,6 +1900,7 @@ class LibraryEdits:
             try:
                 ref = reference_from_object(po)
             except Exception:  # noqa: BLE001
+                _note_exc("library.LibraryEdits.genie_instances")
                 ref = None
             if ref is None or ref.ext != "ctm":
                 continue
@@ -1766,68 +1949,7 @@ class LibraryEdits:
         """Merge a recomposed instance onto the stored one the way CtDraw's load keeps it."""
         from ..format import genie_place as GP
 
-        def _fold_bag(L, B, bo, bn, tn=None):
-            # as CtDraw's load of stale genies does: a linked record keeps its stored key
-            # order with the current values in place and new keys appended; a binding
-            # level keeps its stored keys in place, the element's or not, and the levels are then
-            # derived again top down, which updates a templated value in place and
-            # removes an empty one (a nested instrument's itemName under '%itemName%');
-            # a declaration bag is the element's own (its order too)
-            if L >= 1 and B == 0:
-                return bn
-            if L >= 1:
-                return GP._merge_bag(bo, bn, templated=GP.bag_keys(bo))
-            if B == 2 and tn is not None:
-                # a stored template whose key the element still gives as a value stays
-                return GP._merge_bag(bo, bn, templated=GP.bag_keys(tn) & GP.bag_keys(bo))
-            return GP._merge_bag(bo, bn)
-
-        def _fold_level(L, eo, en):
-            return [
-                _fold_bag(L, B, bo, bn, en[2] if B == 1 else (en[1] if B == 2 else None))
-                for B, (bo, bn) in enumerate(zip(eo, en))
-            ]
-
-        def whole(n):
-            return GP.to_po(writer.object_payload(n)) if shells else n
-
-        def _new_object(n):
-            # CtDraw's new object (an element record that links to no stored one): the
-            # polygon vertex offsets it generates come after its values (VERTEX_VERT*
-            # last in e0.b1, the template bag in the element's order)
-            try:
-                r = GP.decode(n)
-            except Exception:  # noqa: BLE001  # swallow-ok: taken as composed
-                return whole(n)
-            if not r.entries:
-                return whole(n)
-            bag = r.entries[0][1]
-            vert = [p for p in bag.pairs if p[0].upper().startswith("VERTEX_VERT")]
-            if not vert:
-                return whole(n)
-            pairs = [p for p in bag.pairs if not p[0].upper().startswith("VERTEX_VERT")] + vert
-            if pairs == bag.pairs:
-                return whole(n)
-            r.entries[0][1] = GP.Bag(pairs, bag.ov)
-            return GP.to_po(GP.encode(r))
-
-        # the re-composition kept the handle of every record it linked with a stored one
-        # (genie_place.link_instance), so the stored twin of a record is the stored record
-        # with its handle and class; a record without one is taken as composed
-        element = None
-        if isinstance(element_records, GP.Element):
-            element, element_records = element_records, element_records.records
-        if element_records is not None and len(element_records) == len(new):
-            twin = GP.link_instance(old, element_records) if old and new else [None] * len(new)
-        else:
-            element_records = None
-            by = {}
-            for i in range(1, len(old)):
-                by.setdefault((geom.get_handle(old[i]), old[i].type_code), []).append(i)
-            twin = [0 if old and new else None]
-            for n in new[1:]:
-                q = by.get((geom.get_handle(n), n.type_code))
-                twin.append(q.pop(0) if q else None)
+        element, element_records, twin = _merge_twins(old, new, element_records)
         memo, keep = _ed().EditableDocument._MERGE_DECODED, {}
         # the special tokens the composition substituted (genie_place._build_recs): '%AN%'
         # is the instance's own AN (its root handle + 1), '%Page%' empty
@@ -1836,13 +1958,17 @@ class LibraryEdits:
         out = []
         for k, n in enumerate(new):
             if twin[k] is None:
-                out.append(_new_object(n) if element_records is not None and k else whole(n))
+                out.append(
+                    _merge_new_object(n, shells)
+                    if element_records is not None and k
+                    else _merge_whole(n, shells)
+                )
                 continue
             o = old[twin[k]]
             try:
                 ro, rn = _ed().EditableDocument._decoded_stored(o, memo, keep), GP.decode(n)
-            except Exception:  # noqa: BLE001
-                out.append(whole(n))
+            except Exception:  # noqa: BLE001 -- swallow-ok: a record the strict walk cannot read: kept whole
+                out.append(_merge_whole(n, shells))
                 continue
             mem = None
             if element_records is not None and k and ro.entries and rn.entries:
@@ -1855,88 +1981,13 @@ class LibraryEdits:
                 except Exception:  # noqa: BLE001  # swallow-ok: the composed values then
                     mem = None
             if mem is not None and len(ro.entries) == len(rn.entries):
-                composed = rn.entries[0][1]
-                vals = GP._merge_bag(ro.entries[0][1], mem)
-                templ = GP.bag_keys(rn.entries[0][2])
-                have = GP.bag_keys(composed)
-                rest = [_fold_level(L, eo, en) for L, (eo, en) in enumerate(zip(ro.entries, rn.entries))]
-                # the derived values are set in the FOLDED template order (the stored
-                # order with the element's new keys after it), then the composed values
-                # without a template: a key the merge dropped comes back in that order
-                cd = {kk.lower(): v for kk, v in composed.pairs}
-                names = [kk for kk, _v in rest[0][2].pairs if kk.lower() in cd]
-                seen = {kk.lower() for kk in names}
-                names += [kk for kk, _v in composed.pairs if kk.lower() not in seen]
-                for kk in names:
-                    v = cd[kk.lower()]
-                    # the composed value as it is (an empty one too: a left-trimmed
-                    # blank COMMENT stays as '', genie_place)
-                    at = next((i for i, (k2, _v2) in enumerate(vals.pairs) if k2.lower() == kk.lower()), None)
-                    if at is None:
-                        vals.pairs.append(
-                            (next(k2 for k2, _ in composed.pairs if k2.lower() == kk.lower()), v)
-                        )
-                    else:
-                        vals.pairs[at] = (vals.pairs[at][0], v)
-                vals = GP.Bag(
-                    [(kk, v) for kk, v in vals.pairs if kk.lower() in have or kk.lower() not in templ],
-                    vals.ov,
-                )
-                if len(rest) >= 3:
-                    # the binding levels are derived again from the folded ones, top down,
-                    # as CtDraw derives after its merge; in the
-                    # element form a member's levels under the placed one (the level
-                    # under the element's own) from the placed level's templates as
-                    # typed, as genie_place._build_recs' member rule does (a nested
-                    # genie's root from the values: its own level is level 1)
-                    eff = None
-                    member_rule = element_form and not (n.class_flag and n.subtype_size & 0x200)
-                    for lvl in range(len(rest) - 2, 0, -1):
-                        GP.subst_level(rest[lvl], rest[lvl + 1], specials, outer_vals=eff)
-                        if eff is not None:
-                            eff = rest[lvl][1]
-                        elif member_rule:
-                            eff = GP.top_level_templates(rest[lvl])
-                if len(rest) >= 2:
-                    # a value whose template names a binding the fold kept (a stored one
-                    # the element no longer gives) is derived again from it, as CtDraw
-                    # derives after its merge
-                    was = {kk.lower(): v for kk, v in rn.entries[1][1].pairs}
-                    now = {kk.lower(): v for kk, v in rest[1][1].pairs}
-                    moved = {kk for kk in set(was) | set(now) if was.get(kk) != now.get(kk)}
-                    for key, tmpl in rn.entries[0][2].pairs if moved else ():
-                        refs = {t.lower() for t in GP.template_refs(GP.Bag([(key, tmpl)]))}
-                        if not refs & moved:
-                            continue
-                        v = GP.substitute(tmpl, rest[1][1], rest[1][0], key, specials)
-                        vals.set(key, v)
-                rest[0][1] = vals
-                rn.entries = rest
+                _fold_with_memory(ro, rn, mem, n, element_form, specials)
             elif ro.entries and rn.entries and len(ro.entries) == len(rn.entries):
                 rn.entries = [
                     _fold_level(L, eo, en) for L, (eo, en) in enumerate(zip(ro.entries, rn.entries))
                 ]
             elif ro.entries and rn.entries and len(ro.entries) > len(rn.entries) >= 1:
-                # the stored record has a binding level the element no longer gives it (a
-                # nested genie replaced by a plain group of the same handle and class):
-                # e0 and the outer levels pair from both ends, and the extra stored level
-                # stays without declarations, as CtDraw's load keeps it
-                # (a record that is no longer a nested member keeps its stored levels and
-                # their declarations; a GROUP's declarations are its members', none at
-                # that level any more; a state set keeps its own, and an element that lost
-                # its only parameter leaves the instance's levels as stored)
-                extra = len(ro.entries) - len(rn.entries)
-                box = bool(n.class_flag) and n.type_code == 0x08
-                ents = [_fold_level(0, ro.entries[0], rn.entries[0])]
-                for L in range(1, 1 + extra):
-                    eo = ro.entries[L]
-                    ents.append([GP.Bag([], 0) if box else eo[0].copy(), eo[1].copy(), eo[2].copy()])
-                for L in range(1, len(rn.entries)):
-                    lvl = _fold_level(L, ro.entries[L + extra], rn.entries[L])
-                    if not box:
-                        lvl[0] = ro.entries[L + extra][0].copy()
-                    ents.append(lvl)
-                rn.entries = ents
+                _fold_extra_levels(ro, rn, n)
             if k and ro.entries and rn.entries:
                 # the member's own Access values, after the fold: a key the composition
                 # lacks comes back at the end; k 0 = the instance root: its page load
@@ -1989,7 +2040,7 @@ class LibraryEdits:
                 out = [root] + out[1:] + [GP.to_po(writer.object_payload(o)) for o in extra]
         try:
             ro = GP.decode(inst[0])
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 -- swallow-ok: a record the strict walk cannot read
             return out
         out = _keep_root_name(out, ro.name)
         if not ro.entries or not any(len(ro.entries[0]) > b and ro.entries[0][b].pairs for b in (1, 2)):
@@ -2000,7 +2051,7 @@ class LibraryEdits:
             if not rn.entries:
                 writer.ensure_bag_section(root)
                 rn = GP.decode(root)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 -- swallow-ok: a record the strict walk cannot read
             return out
         if not rn.entries:
             return out
@@ -2018,28 +2069,14 @@ class LibraryEdits:
                     bag.pairs.append((key, v))
         return [GP.to_po(GP.encode(rn))] + out[1:]
 
-    @one_read
-    def update_genie_instances(self, elements=None, previous=None, placeholders=None) -> int:
-        """Recompose placed genies from their current library definition."""
+    def _genie_update_candidates(
+        self, objs, res, page_name: str, used: set, want, prev: dict, left: set
+    ) -> list:
+        """The placed genies update_genie_instances composes again: (lib, elem, idx, inst,
+        before, element). A genie it leaves as stored goes into ``left``."""
         from ..format import genie_place as GP
-        from ..format import links
         from ..format.symbols import reference_from_object
 
-        want = None if elements is None else {(a.lower(), b.lower()) for a, b in elements}
-        prev = {(a.lower(), b.lower()): v for (a, b), v in (previous or {}).items()}
-        self.genie_update_skipped = 0
-        res = self._resolver()
-        if res is None:
-            return 0
-        self._use_tag_formats()
-        objs = list(self.parsed.page.objects)
-        used = set(self._used_handles())
-        page_name = self.page.name if self.page is not None else ""
-        repl = []  # (start, end, new records)
-        stamps = {}
-        #: (library, element) lower case -> the element's current entry, and the keys
-        #: with an instance not brought up to date (their stored entry stays)
-        current, left = {}, set()
         cands = []  # (lib, elem, idx, inst, before, element)
         for i, (lib, elem) in self.genie_instances():
             if want is not None and (lib.lower(), elem.lower()) not in want:
@@ -2063,7 +2100,7 @@ class LibraryEdits:
                 except Exception:  # noqa: BLE001
                     from ..infra import logsetup
 
-                    logsetup.note_exception("editing.update_genie_instances/previous", page=self.path)
+                    logsetup.note_exception("editing._genie_update_candidates/previous", page=self.path)
                     was = None
                 same = bool(was) and (
                     [writer.object_payload(p) for p in was] == [writer.object_payload(p) for p in inst]
@@ -2078,7 +2115,7 @@ class LibraryEdits:
                 try:
                     ref = reference_from_object(inst[0])
                     el = GP.load_element(res.resolve(ref).library_path, ref.element, compose=True)
-                except Exception:  # noqa: BLE001 -- unresolvable / malformed: keep it
+                except Exception:  # noqa: BLE001 -- swallow-ok: unresolvable / malformed: keep it
                     el = None
             if el is None:
                 left.add((lib.lower(), elem.lower()))
@@ -2090,6 +2127,14 @@ class LibraryEdits:
                 # operation, so the instance's own composition below says nothing more
                 left.add((lib.lower(), elem.lower()))
             cands.append((lib, elem, idx, inst, before, el))
+        return cands
+
+    def _genie_update_handles(self, objs, cands: list, placeholders) -> tuple:
+        """The handles of the candidates and the placeholders placed again: (the
+        placeholders (start, end, link, record), the handles outside them, each
+        candidate's handles, each placeholder's handle)."""
+        from ..format import genie_place as GP
+
         # the handles of every instance composed again, at once, as CtDraw's load gives them
         # (genie_place.page_instance_handles: every record that links to no stored one is
         # deleted first, page-wide; then the new ones claim their element handles, then the
@@ -2124,7 +2169,7 @@ class LibraryEdits:
         except Exception:  # noqa: BLE001 -- each instance then allocates on its own
             from ..infra import logsetup
 
-            logsetup.note_exception("editing.update_genie_instances/handles", page=self.path)
+            logsetup.note_exception("editing._genie_update_handles", page=self.path)
             got = [None] * len(cases)
         all_hs = [None] * len(cands)
         ph_h = [None] * len(phs)
@@ -2133,13 +2178,32 @@ class LibraryEdits:
                 all_hs[i] = hs
             else:
                 ph_h[i] = hs[0] if hs else None
+        return phs, outside, all_hs, ph_h
+
+    def _genie_update_recompose(
+        self,
+        objs,
+        cands: list,
+        all_hs: list,
+        res,
+        page_name: str,
+        used: set,
+        outside: set,
+        left: set,
+        current: dict,
+        repl: list,
+    ) -> None:
+        """Compose each candidate again with its handles: its replacement into ``repl``,
+        its element's current link entry into ``current``, a genie left as stored into
+        ``left``."""
+        from ..format import genie_place as GP
         from ..infra import logsetup as _ls
 
         for (lib, elem, idx, inst, before, cel), hs in zip(cands, all_hs):
             with _ls.error_scope() as errs:
                 try:
                     new = GP.refresh_instance(inst, res, page_name, used, handles=hs, outside_handles=outside)
-                except Exception:  # noqa: BLE001 -- unresolvable / malformed: keep it
+                except Exception:  # noqa: BLE001 -- swallow-ok: unresolvable / malformed: keep it
                     new = None
             if not new:
                 left.add((lib.lower(), elem.lower()))
@@ -2166,39 +2230,36 @@ class LibraryEdits:
                     except Exception:  # noqa: BLE001
                         from ..infra import logsetup
 
-                        logsetup.note_exception("editing.update_genie_instances/stamp", page=self.path)
+                        logsetup.note_exception("editing._genie_update_recompose/stamp", page=self.path)
             if same:
                 continue
             used |= {geom.get_handle(p) for p in new if geom.get_handle(p) is not None}
             repl.append((idx[0], idx[-1] + 1, new))
-        #: the keys with an instance not brought up to date (apply_genie_changes: then no
-        #: 'nothing changes' memo)
-        self.genie_update_left = set(left)
-        for key, ent in current.items():
-            if key not in left:
-                stamps[links.strip_stamp(ent[1]).lower()] = ent
-        for (a, b, link, ph), h in zip(phs, ph_h):
-            if h is not None:
-                geom.set_handle(ph, h)
-            repl.append((a, b, [ph]))
-            stamps[_links.strip_stamp(link).lower()] = (bytes(16), _links.strip_stamp(link))
-        self.genie_stamps_updated = False
-        if not repl:
-            if previous is None and stamps:
-                pb = self.parsed.page
-                t = links.parse_link_table(pb.link_table_raw) if pb.link_count else None
-                if t is not None:
-                    ents = [stamps.get(links.strip_stamp(n).lower(), (g, n)) for g, n in t[1]]
-                    raw, cnt = links.serialize_link_table(t[0], ents)
-                    if (raw, cnt) != (pb.link_table_raw, pb.link_count):
-                        old_t = (pb.link_table_raw, pb.link_count)
 
-                        def put(state):
-                            pb.link_table_raw, pb.link_count = state
+    def _genie_update_link_stamps(self, stamps: dict) -> None:
+        """Only the link table's stamps brought up to date (no instance changed), as one
+        undo step."""
+        from ..format import links
 
-                        self._apply("update genie versions", lambda: put((raw, cnt)), lambda: put(old_t))
-                        self.genie_stamps_updated = True
-            return 0
+        pb = self.parsed.page
+        t = links.parse_link_table(pb.link_table_raw) if pb.link_count else None
+        if t is not None:
+            ents = [stamps.get(links.strip_stamp(n).lower(), (g, n)) for g, n in t[1]]
+            raw, cnt = links.serialize_link_table(t[0], ents)
+            if (raw, cnt) != (pb.link_table_raw, pb.link_count):
+                old_t = (pb.link_table_raw, pb.link_count)
+
+                def put(state):
+                    pb.link_table_raw, pb.link_count = state
+
+                self._apply("update genie versions", lambda: put((raw, cnt)), lambda: put(old_t))
+                self.genie_stamps_updated = True
+
+    def _genie_update_apply(self, objs, repl: list, stamps: dict) -> int:
+        """Put the replacements ``repl`` and the link entries ``stamps`` into the page, as
+        one undo step; how many instances changed."""
+        from ..format import links
+
         order = list(objs)
         # plain-group ancestors that followed the union rule take the new one, as CtDraw's
         # load refits them
@@ -2234,6 +2295,47 @@ class LibraryEdits:
 
         self._apply("update genies from library", lambda: apply(new_state), lambda: apply(old))
         return len(repl)
+
+    @one_read
+    def update_genie_instances(self, elements=None, previous=None, placeholders=None) -> int:
+        """Recompose placed genies from their current library definition."""
+        from ..format import links
+
+        want = None if elements is None else {(a.lower(), b.lower()) for a, b in elements}
+        prev = {(a.lower(), b.lower()): v for (a, b), v in (previous or {}).items()}
+        self.genie_update_skipped = 0
+        res = self._resolver()
+        if res is None:
+            return 0
+        self._use_tag_formats()
+        objs = list(self.parsed.page.objects)
+        used = set(self._used_handles())
+        page_name = self.page.name if self.page is not None else ""
+        repl = []  # (start, end, new records)
+        stamps = {}
+        #: (library, element) lower case -> the element's current entry, and the keys
+        #: with an instance not brought up to date (their stored entry stays)
+        current, left = {}, set()
+        cands = self._genie_update_candidates(objs, res, page_name, used, want, prev, left)
+        phs, outside, all_hs, ph_h = self._genie_update_handles(objs, cands, placeholders)
+        self._genie_update_recompose(objs, cands, all_hs, res, page_name, used, outside, left, current, repl)
+        #: the keys with an instance not brought up to date (apply_genie_changes: then no
+        #: 'nothing changes' memo)
+        self.genie_update_left = set(left)
+        for key, ent in current.items():
+            if key not in left:
+                stamps[links.strip_stamp(ent[1]).lower()] = ent
+        for (a, b, link, ph), h in zip(phs, ph_h):
+            if h is not None:
+                geom.set_handle(ph, h)
+            repl.append((a, b, [ph]))
+            stamps[links.strip_stamp(link).lower()] = (bytes(16), links.strip_stamp(link))
+        self.genie_stamps_updated = False
+        if not repl:
+            if previous is None and stamps:
+                self._genie_update_link_stamps(stamps)
+            return 0
+        return self._genie_update_apply(objs, repl, stamps)
 
     @staticmethod
     def _with_record_labels(entries, spans, after=None) -> list:
@@ -2280,6 +2382,7 @@ class LibraryEdits:
             try:
                 ref = reference_from_object(po)
             except Exception:  # noqa: BLE001
+                _note_exc("library.LibraryEdits.symbol_placements")
                 ref = None
             if ref is None or ref.ext != "ctl":
                 continue
@@ -2297,7 +2400,7 @@ class LibraryEdits:
         if res is None or not self.parsed.page.link_count:
             return set()
         placed = {(a.lower(), b.lower()) for _i, (a, b), _k in self.symbol_placements()}
-        stale = updatepages.stale_symbol_entries(self.parsed.page.link_table_raw, updatepages._Current(res))
+        stale = updatepages.stale_symbol_entries(self.parsed.page.link_table_raw, updatepages.Current(res))
         return stale & placed
 
     def _instances_misaligned(self, key) -> bool:
@@ -2671,7 +2774,7 @@ class LibraryEdits:
         placed = {(a.lower(), b.lower()) for _i, (a, b) in self.genie_instances()}
         if not placed:
             return {}
-        ch = updatepages.genie_changes(self.parsed.page.link_table_raw, updatepages._Current(res))
+        ch = updatepages.genie_changes(self.parsed.page.link_table_raw, updatepages.Current(res))
         out = {k: v for k, v in ch.items() if k in placed}
         for k in self.placeholder_hosts():
             out[k] = None
@@ -2855,6 +2958,7 @@ class LibraryEdits:
                 context=self._genie_memo_context(),
             )
         except Exception:  # noqa: BLE001 -- no memo, the work is done
+            _note_exc("library.LibraryEdits.genie_noop_key")
             return None
 
     def genie_page_digest(self, data: Optional[bytes] = None) -> bytes:
@@ -2904,7 +3008,7 @@ class LibraryEdits:
             if not pal:
                 return ()
             st = os.stat(pal)
-            return (os.path.normcase(os.path.abspath(pal)), st.st_mtime_ns, st.st_size, content_tag(pal))
+            return (path_key(pal), st.st_mtime_ns, st.st_size, content_tag(pal))
         except OSError:  # swallow-ok: a palette that went: keyed as none
             return ()
 
@@ -2918,7 +3022,7 @@ class LibraryEdits:
         placed = {(a.lower(), b.lower()) for _i, (a, b) in self.genie_instances()}
         if not placed:
             return set()
-        stale = updatepages.stale_genie_entries(self.parsed.page.link_table_raw, updatepages._Current(res))
+        stale = updatepages.stale_genie_entries(self.parsed.page.link_table_raw, updatepages.Current(res))
         return stale & placed
 
     def genie_sources(self, keys) -> dict:
@@ -2934,7 +3038,7 @@ class LibraryEdits:
             return {}
         want = {(a.lower(), b.lower()) for a, b in keys}
         t = links.parse_link_table(self.parsed.page.link_table_raw)
-        cur = updatepages._Current(res)
+        cur = updatepages.Current(res)
         out = {}
         from ..format.symbols import split_lib_element
 
@@ -3096,7 +3200,7 @@ class LibraryEdits:
                 new = GP.refresh_instance(
                     inst, res, page_name, used, parent_chain=self._ancestor_chain(i) or None
                 )
-            except Exception:  # noqa: BLE001 -- unresolvable / malformed: keep it
+            except Exception:  # noqa: BLE001 -- swallow-ok: unresolvable / malformed: keep it
                 new = None
             if not new:
                 if left is not None:
@@ -3183,7 +3287,7 @@ class LibraryEdits:
                     max(g.rect2[3] for g in b2),
                 )
                 u2 = self._alarm_bounds(a_old, u2)
-            cp = _parse_object(0, 0, 0, 0, writer.object_payload(anc))
+            cp = parse_object(0, 0, 0, 0, writer.object_payload(anc))
             gh = geom.parse_geom_header(cp.body_raw)
             old1 = geom.norm_rect(gh.rect1)
             body = bytearray(cp.body_raw)
@@ -3234,7 +3338,7 @@ class LibraryEdits:
             if data is None:
                 try:
                     data = self.serialize()
-                except Exception:  # noqa: BLE001 -- nothing to read yet
+                except Exception:  # noqa: BLE001 -- swallow-ok: nothing to read yet
                     data = b""
             seen = self._composite_seen = set(CS.links_in(bytes(data or b"")))
         return seen
@@ -3269,7 +3373,7 @@ class LibraryEdits:
         out = set(self._composite_links_seen())
         try:
             out |= CS.links_in(self.serialize())
-        except Exception:  # noqa: BLE001 -- the links seen still count
+        except Exception:  # noqa: BLE001 -- swallow-ok: nothing to read yet; the links seen still count
             pass
         return out
 
@@ -3292,6 +3396,7 @@ class LibraryEdits:
         try:
             ref = reference_from_object(objs[index])
         except Exception:  # noqa: BLE001
+            _note_exc("library.LibraryEdits.composite_link", index=index)
             ref = None
         got = composites.instance_ref(ref.raw) if ref is not None else None
         if got is None:
@@ -3326,6 +3431,7 @@ class LibraryEdits:
         try:
             return self._compose_context().flag_sizes()
         except Exception:  # noqa: BLE001 -- the default flag box still applies
+            _note_exc("library.LibraryEdits._composite_flag_sizes")
             from ..format import alarmind
 
             return [alarmind.DEFAULT_FLAG]
@@ -3369,7 +3475,7 @@ class LibraryEdits:
                 tpl.path,
                 values or {},
                 ctx=self._compose_context(),
-                background=CS.background_colour(_ini_back_color()),
+                background=CS.background_colour(ini_back_color()),
                 final=final,
                 force=force,
                 with_thumbnail=composite_with_thumbnail,
@@ -3383,7 +3489,7 @@ class LibraryEdits:
                 from ..infra import logsetup
 
                 logsetup.files_written("composed composite genie %s (%s)" % (tpl.name, res.hash), res.written)
-            except Exception:  # noqa: BLE001 -- logging never fails a compose
+            except Exception:  # noqa: BLE001 -- swallow-ok: logging never fails a compose
                 pass
         return res
 
@@ -3412,7 +3518,7 @@ class LibraryEdits:
             )
         else:
             lib = lib or res.library
-            copies = [_parse_object(0, 0, 0, 0, writer.object_payload(o)) for o in inst]
+            copies = [parse_object(0, 0, 0, 0, writer.object_payload(o)) for o in inst]
             if not writer.set_body_reference(copies[0], "%s.%s.<ctm" % (lib, res.hash)):
                 raise ValueError("The composite genie's link could not be rewritten.")
             recs = GP.refresh_instance(
@@ -3495,6 +3601,7 @@ class LibraryEdits:
                 ctx=self._compose_context(),
             )
         except Exception:  # noqa: BLE001
+            _note_exc("library.LibraryEdits.composite_status")
             return "unknown"
         if state != "current":
             return state
@@ -3514,6 +3621,7 @@ class LibraryEdits:
         try:
             cur = GP.current_link_entry(os.path.join(cache_dir, "cache.ctm"), link[2], link[1])[1]
         except Exception:  # noqa: BLE001
+            _note_exc("library.LibraryEdits._composite_page_stale")
             return False
         want = links.strip_stamp(cur).lower()
         for _g, n in t[1]:
@@ -3652,7 +3760,7 @@ class LibraryEdits:
         copies: List[PageObject] = []
         for spo in sub:
             blob = writer.object_payload(spo)
-            copies.append(_parse_object(0, 0, len(blob), 0, blob))
+            copies.append(parse_object(0, 0, len(blob), 0, blob))
         if params:
             have = {}
             for cp in copies:
@@ -3674,6 +3782,7 @@ class LibraryEdits:
         try:
             carried = GP.used_link_entries(copies, list(t[1]) if t else [], keep_super=False)
         except Exception:  # noqa: BLE001
+            _note_exc("library.LibraryEdits.paste_composite_copy")
             carried = []
         return self._append_placed(copies, self._copy_link_entries(copies, carried), "paste composite genie")
 
@@ -3688,6 +3797,7 @@ class LibraryEdits:
         try:
             ref = reference_from_object(po)
         except Exception:  # noqa: BLE001
+            _note_exc("library.LibraryEdits._genie_template_target")
             return None
         if ref is None or ref.ext != "ctm" or "@super" in ref.element.lower():
             return None  # CtDraw attaches in GENIE windows only
@@ -3801,6 +3911,7 @@ class LibraryEdits:
         try:
             pb = GP.open_library(path).element(element)  # cached per file version
         except Exception:  # noqa: BLE001
+            _note_exc("library.LibraryEdits.attached_super_genies", lib=path, element=element)
             return []
         if pb is None or not pb.link_count:
             return []
@@ -3812,6 +3923,7 @@ class LibraryEdits:
         try:
             targets = self.attached_super_genies(library, element)
         except Exception:  # noqa: BLE001
+            _note_exc("library.LibraryEdits.instantiate_super_genies", library=library, element=element)
             targets = []
         return create_super_genie_pages(
             os.path.dirname(os.path.abspath(self.path)),
@@ -3829,6 +3941,7 @@ class LibraryEdits:
         try:
             return SG.page_link(self.parsed.page.objects)
         except Exception:  # noqa: BLE001
+            _note_exc("library.LibraryEdits.supergenie_link")
             return None
 
     def supergenie_element(self) -> Optional[Tuple[str, str]]:
@@ -3932,7 +4045,7 @@ class LibraryEdits:
             for row in self.page_keyboard_commands():
                 extra += [row.get(k) or "" for k in ("KEY_SEQ", "CMD", "MSG_LOG")]
         except Exception:  # noqa: BLE001
-            pass
+            _note_exc("library.LibraryEdits.associations_in_use")
         with contextlib.suppress(Exception):
             # a library element's page keyboard commands: its trailer record C
             for bag in getattr(self.session.pe.trailer, "keyboards", None) or ():
@@ -3962,6 +4075,7 @@ class LibraryEdits:
                 try:
                     ref = reference_from_object(objs[i])
                 except Exception:  # noqa: BLE001
+                    _note_exc("library.LibraryEdits.super_genie_associations", index=i)
                     ref = None
                 if ref is not None and ref.ext == "ctm" and not SG.is_super_element(ref.element):
                     targets = self.attached_super_genies(ref.library, ref.element)

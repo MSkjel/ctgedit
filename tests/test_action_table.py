@@ -20,7 +20,16 @@ def test_every_action_has_an_enable_rule():
         assert not missing, "say when these are enabled (ui/window/view.py): %s" % missing
         stale = sorted((table | custom | always) - acts)
         assert not stale, "no such actions any more: %s" % stale
-        src = inspect.getsource(MainWindow._update_actions)
+        # (_update_actions and the _enable_* parts it calls, theirs too)
+        src, todo, done = "", ["_update_actions"], set()
+        while todo:
+            name = todo.pop()
+            if name in done:
+                continue
+            done.add(name)
+            part = inspect.getsource(getattr(MainWindow, name))
+            src += part
+            todo += re.findall(r"self\.(_enable_[a-z0-9_]+)\(", part)
         own = set(re.findall(r"self\.(act_[a-z0-9_]+)\.setEnabled", src))
         assert custom <= own | {"act_font_dialog"}, sorted(custom - own)
         assert not (own & table), sorted(own & table)

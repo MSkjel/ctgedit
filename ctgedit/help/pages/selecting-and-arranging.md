@@ -208,8 +208,10 @@ percentage or in pixels. The window stays open and follows the selection.
 
 Edit > Goto Object… ([[Ctrl+G]]) shows the page's objects as a tree. Type an AN or the start of a
 name in **Object AN** (use `Group.Name` for names inside groups). **Go To** selects and zooms to
-the object; **Properties…** opens it. **Columns** adds more detail, such as position, fill or
-animations, and makes those searchable too.
+the object; **Properties…** opens it. **Columns** adds more detail, such as position, fill,
+animations, the element and the genie parameters, and makes those searchable too. A nested genie's
+row names its element. The tool tip of a row inside nested genies shows each level's element and
+the values it gets, the same as the Objects panel's tool tip.
 
 ## Find and replace
 
@@ -217,13 +219,16 @@ Edit > Find… ([[Ctrl+F]]) and Replace… ([[Ctrl+H]]) open one window that sta
 
 1. **Find what** (not case-sensitive) and **Replace with**.
 2. **Look in**: this page, all open pages, or all pages of a project and its includes. Closed
-   pages are searched in the background by helper processes. **Replace All** on closed pages asks
-   first, backs each page up, and saves it.
+   pages are searched in the background by **Helper processes** (how many run at once, the same
+   setting as Settings > Pages and libraries); **Stop** ends the search. The fields of each
+   closed page read are kept, so a later search, with any text and options, lists that page at
+   once until the page or a library it uses changes. **Replace All** on closed pages asks first,
+   backs each page up, and saves it; **Open Backup Folder** shows the backups.
 3. **Options** (closed at first; closed, its line names any choice that isn't the default):
    - **Search in**: text, expressions and commands, genie parameters, names and metadata, page
      properties.
    - **Include**: objects inside genies, symbols and the page template.
-   - **Match**: anywhere, whole names and words, or whole fields. **Direction** for Find Next.
+   - **Match**: anywhere, whole names and words, or whole fields. **Find Next goes** forward or backward.
    - **Filters**: **Add Filter** adds a row: what it looks at (pages, fields, genies and
      symbols, or objects), **match** or **do not match**, and the text. The text is found
      anywhere in the name, not case-sensitive; with its .* on it is a regular expression (^ and
@@ -233,8 +238,11 @@ Edit > Find… ([[Ctrl+F]]) and Replace… ([[Ctrl+H]]) open one window that sta
      AN (`AN12`) or the group or genie it is in. A page a filter leaves out is never opened.
      For example, Find what `.+` (with .* on), Fields matching `^Tag$` and Genies and symbols
      matching `fx_pump` lists the Tag of every fx_pump genie.
-4. **Find All** lists matches, with a **Becomes** column when replacing. **Find Next** ([[F3]]),
-   **Replace**, **Replace All**, **Go To** and **Properties…** work from there.
+4. **Find All** lists matches, with a **Becomes** column when replacing. **Find Next** ([[F3]] while
+   the window has the focus),
+   **Replace**, **Replace All**, **Go To** and **Properties…** work from there. Change the text
+   or an option and the list follows. If closed pages have to be read again first, the list
+   empties until you search again.
 
 Text from a genie parameter is changed through that parameter. Rows that can't be replaced are
 grey, with the reason in the tool tip.

@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+from ..infra.paths import lib_path_dirs, path_key
+
+
 import os
 import re
 from dataclasses import dataclass, field
 from typing import Callable, Dict, Iterable, List, Optional, Tuple
+from ..infra.logsetup import note_exception as _note_exc
 
 #: the runtime's AN name of a pane (Workspace.ci: sANName = "Pane")
 PANE_AN_NAME = "pane"
-#: the genie that places a pane
-PANE_ELEMENT = ("sa_workspace", "pane")
 #: at most this many panes a window (Workspace.ci g_nMaxPanes)
 MAX_PANES = 50
 
@@ -205,6 +207,7 @@ def model_panes(page) -> List[Pane]:
         try:
             root = page.root_of(i)
         except Exception:  # noqa: BLE001 -- a broken forest: the record itself
+            _note_exc("sa_workspace.model_panes", index=i)
             root = i
         out.append(
             Pane(
@@ -318,16 +321,293 @@ def _env(env: Dict[str, str], key: str) -> Optional[str]:
     return None
 
 
-def check_panes(panes: List[Pane], ctx: PageContext) -> Report:
-    """Every check of the module docstring over ``panes`` of one page. The
-    page's own findings come first, then each pane's in page order (errors,
-    then warnings, then notes)."""
-    rep = Report(ctx.page_name, list(panes))
-    if not panes:
-        return rep
-    add = rep.findings.append
+def _check_pane_tabs(p: Pane, panes: List[Pane], by_lower: Dict[str, Pane], ctx: PageContext, add) -> None:
+    """The tabbed-pane fields of pane ``p``: its header pane and tab control."""
+    tab, ctl = p.tab_pane, p.tab_control
+    if tab:
+        header = by_lower.get(tab.lower())
+        if header is p:
+            add(
+                Finding(
+                    ERROR,
+                    "%s names itself as its Tab Header Pane Name. Enter the "
+                    "name of the pane that shows the tab bar." % p.label(),
+                    p,
+                    "Tab Header Pane Name",
+                    "tab-self",
+                )
+            )
+        elif header is None:
+            add(
+                Finding(
+                    ERROR,
+                    "%s: Tab Header Pane Name '%s' is not a pane on this page "
+                    "(pane names: %s), so its tabs are never linked."
+                    % (
+                        p.label(),
+                        tab,
+                        ", ".join(sorted(q.name for q in panes if q.name and q is not p)) or "none",
+                    ),
+                    p,
+                    "Tab Header Pane Name",
+                    "tab-pane-missing",
+                )
+            )
+        elif not ctl:
+            add(
+                Finding(
+                    WARNING,
+                    "%s has a Tab Header Pane Name but no Tab Control Name. "
+                    "Enter the name of the tab bar genie on the page of pane '%s'."
+                    % (p.label(), header.name),
+                    p,
+                    "Tab Control Name",
+                    "tab-control-empty",
+                )
+            )
+        else:
+            hp = header.default_page
+            names = ctx.object_names(hp) if hp and hp.lower() != "none" else None
+            if names is not None and ctl.lower() not in names:
+                add(
+                    Finding(
+                        WARNING,
+                        "%s: Tab Control Name '%s' is not an object on "
+                        "'%s', the default page of header pane '%s', so the tabs are "
+                        "not linked. Enter the name of the tab bar genie (Access > "
+                        "General > Name)." % (p.label(), ctl, hp, header.name),
+                        p,
+                        "Tab Control Name",
+                        "tab-control-missing",
+                    )
+                )
+    elif ctl:
+        add(
+            Finding(
+                INFO,
+                "%s has a Tab Control Name but no Tab Header Pane Name, so the "
+                "tab control is not used." % p.label(),
+                p,
+                "Tab Control Name",
+                "tab-control-unused",
+            )
+        )
+
+
+def _check_default_page(p: Pane, ctx: PageContext, own: str, add) -> None:
+    """Pane ``p``'s Default Page: not this page (``own``, lower case), a page
+    of the project, of this page's resolution."""
+    page = p.default_page
+    if page and page.lower() != "none":
+        if page.lower() == own:
+            add(
+                Finding(
+                    ERROR,
+                    "%s has this page as its Default Page. The pane shows an "
+                    "error page at runtime." % p.label(),
+                    p,
+                    "Default Page",
+                    "default-page-loop",
+                )
+            )
+        else:
+            exists = ctx.page_exists(page)
+            if exists is False:
+                add(
+                    Finding(
+                        ERROR,
+                        "%s: Default Page '%s' is not a page of this project or "
+                        "the projects compiled with it, so the pane is not created." % (p.label(), page),
+                        p,
+                        "Default Page",
+                        "default-page-missing",
+                    )
+                )
+            m = _RES_SUFFIX.search(page)
+            if m and ctx.resolution and m.group(1).upper() != ctx.resolution.upper():
+                add(
+                    Finding(
+                        WARNING,
+                        "%s: Default Page '%s' is a %s page, but this page is "
+                        "%s. Use the %s version of the page."
+                        % (
+                            p.label(),
+                            page,
+                            m.group(1).upper(),
+                            ctx.resolution.upper(),
+                            ctx.resolution.upper(),
+                        ),
+                        p,
+                        "Default Page",
+                        "default-page-resolution",
+                    )
+                )
+
+
+def _check_pane_values(p: Pane, ctx: PageContext, own: str, add) -> None:
+    """The values of pane ``p``: its booleans, modes, Default Page and Content
+    Types."""
+    for key, label in (("IsDefault", "Is Default Pane?"), ("HasScrollbars", "Display Scrollbars")):
+        raw = p.get(key)
+        if raw and not str_to_bool(raw)[1]:
+            add(
+                Finding(
+                    WARNING,
+                    "%s: %s is '%s'. Use TRUE, FALSE or a number; anything "
+                    "else counts as FALSE." % (p.label(), label, raw),
+                    p,
+                    label,
+                    "bool-value",
+                )
+            )
+    fm_raw = p.get("FillMode")
+    fm = p.fill_mode
+    if fm_raw and (fm is None or fm not in FILL_MODE_TEXT):
+        add(
+            Finding(
+                WARNING,
+                "%s: Fill Mode '%s' is not known, so the pane is Static. Use "
+                "Static, Autofill, AutofillContextMustMatch or StaticContextMustMatch "
+                "(or 0, 1, 3, 4)." % (p.label(), fm_raw),
+                p,
+                "Fill Mode",
+                "fill-mode",
+            )
+        )
+    dm_raw = p.get("DisplayMode")
+    dm = p.display_mode
+    if dm_raw and (dm is None or dm not in DISPLAY_MODE_TEXT):
+        add(
+            Finding(
+                WARNING,
+                "%s: Display Mode '%s' is not known, so the pane stretches "
+                "its page. Use Stretch, MaintainAspectRatio or MaintainSize (or 1, 2, "
+                "3)." % (p.label(), dm_raw),
+                p,
+                "Display Mode",
+                "display-mode",
+            )
+        )
+    if p.has_scrollbars and (dm if dm in DISPLAY_MODE_TEXT else 1) != 3:
+        add(
+            Finding(
+                INFO,
+                "%s: Display Scrollbars is TRUE, but scroll bars only appear "
+                "with Display Mode MaintainSize (3)." % p.label(),
+                p,
+                "Display Scrollbars",
+                "scrollbars",
+            )
+        )
+    _check_default_page(p, ctx, own, add)
+    if ctx.content_types is not None:
+        unknown = [c for c in p.content_types if c.lower() not in ctx.content_types]
+        if unknown:
+            add(
+                Finding(
+                    WARNING,
+                    "%s: Content Types %s %s not defined, so no page can "
+                    "have %s (Plant SCADA Studio > Visualization > Content Types)."
+                    % (
+                        p.label(),
+                        ", ".join("'%s'" % c for c in unknown),
+                        "is" if len(unknown) == 1 else "are",
+                        "it" if len(unknown) == 1 else "them",
+                    ),
+                    p,
+                    "Content Types",
+                    "content-type",
+                )
+            )
+    if fm in (1, 3) and not p.content_types and not p.is_default:
+        add(
+            Finding(
+                INFO,
+                "%s is an Autofill pane without Content Types, so it takes "
+                "content pages of every type. Enter the content types it shows (for "
+                "example FP for a faceplate pane)." % p.label(),
+                p,
+                "Content Types",
+                "autofill-no-types",
+            )
+        )
+
+
+def _check_names(rep: Report, panes: List[Pane], add) -> None:
+    """The pane names (missing, repeated, too many) and the default pane."""
+    by_name: Dict[str, List[Pane]] = {}
+    for p in panes:
+        if p.name:
+            by_name.setdefault(p.name.lower(), []).append(p)
+    # (the runtime counts the panes it CREATED: one per distinct name)
+    if len(by_name) > MAX_PANES:
+        add(
+            Finding(
+                ERROR,
+                "The page has %d panes. At most %d are created; the others stay "
+                "empty." % (len(by_name), MAX_PANES),
+                code="too-many",
+            )
+        )
+    defaults = [p for p in panes if p.is_default and p.name]
+    for p in panes:
+        if not p.name:
+            add(
+                Finding(
+                    ERROR,
+                    "%s has no Name, so the runtime skips it. Double-click the "
+                    "pane and enter a Name." % p.label(),
+                    p,
+                    "Name",
+                    "no-name",
+                )
+            )
+            continue
+        same = by_name.get(p.name.lower(), [])
+        if len(same) > 1 and same[0] is not p:
+            add(
+                Finding(
+                    ERROR,
+                    "%s has the same Name as another pane on this page ('%s', "
+                    "compared without case), so it is not created. Give each pane its "
+                    "own Name." % (p.label(), p.name),
+                    p,
+                    "Name",
+                    "duplicate-name",
+                )
+            )
+    if len(defaults) > 1:
+        first = defaults[0]
+        for p in defaults[1:]:
+            add(
+                Finding(
+                    WARNING,
+                    "%s and pane '%s' are both the default pane (Is Default "
+                    "Pane? = TRUE). Both get the default content, and the header bar "
+                    "can follow either. Set Is Default Pane? to FALSE on all but one."
+                    % (p.label(), first.name),
+                    p,
+                    "Is Default Pane?",
+                    "two-defaults",
+                )
+            )
+    if rep.master and not defaults:
+        add(
+            Finding(
+                WARNING,
+                "No pane is the default pane. The header bar takes its title "
+                "from the default pane, and pages without a content type open there. "
+                "Set Is Default Pane? to TRUE on the main content pane.",
+                code="no-default",
+            )
+        )
+
+
+def _check_page_events(rep: Report, ctx: PageContext, add) -> None:
+    """The page itself: a workspace master page (Workspace_Init() in On page
+    shown, content type Master), or one that hosts nested panes (HasPanes = 1).
+    Sets ``rep.master``."""
     rec = ctx.record
-    # ---- the page: a workspace master page, or one that hosts nested panes
     if rec is None:
         add(
             Finding(
@@ -406,275 +686,24 @@ def check_panes(panes: List[Pane], ctx: PageContext) -> Report:
                         code="haspanes-value",
                     )
                 )
-    # ---- names, the default pane
-    by_name: Dict[str, List[Pane]] = {}
-    for p in panes:
-        if p.name:
-            by_name.setdefault(p.name.lower(), []).append(p)
-    # (the runtime counts the panes it CREATED: one per distinct name)
-    if len(by_name) > MAX_PANES:
-        add(
-            Finding(
-                ERROR,
-                "The page has %d panes. At most %d are created; the others stay "
-                "empty." % (len(by_name), MAX_PANES),
-                code="too-many",
-            )
-        )
-    defaults = [p for p in panes if p.is_default and p.name]
-    for p in panes:
-        if not p.name:
-            add(
-                Finding(
-                    ERROR,
-                    "%s has no Name, so the runtime skips it. Double-click the "
-                    "pane and enter a Name." % p.label(),
-                    p,
-                    "Name",
-                    "no-name",
-                )
-            )
-            continue
-        same = by_name.get(p.name.lower(), [])
-        if len(same) > 1 and same[0] is not p:
-            add(
-                Finding(
-                    ERROR,
-                    "%s has the same Name as another pane on this page ('%s', "
-                    "compared without case), so it is not created. Give each pane its "
-                    "own Name." % (p.label(), p.name),
-                    p,
-                    "Name",
-                    "duplicate-name",
-                )
-            )
-    if len(defaults) > 1:
-        first = defaults[0]
-        for p in defaults[1:]:
-            add(
-                Finding(
-                    WARNING,
-                    "%s and pane '%s' are both the default pane (Is Default "
-                    "Pane? = TRUE). Both get the default content, and the header bar "
-                    "can follow either. Set Is Default Pane? to FALSE on all but one."
-                    % (p.label(), first.name),
-                    p,
-                    "Is Default Pane?",
-                    "two-defaults",
-                )
-            )
-    if rep.master and not defaults:
-        add(
-            Finding(
-                WARNING,
-                "No pane is the default pane. The header bar takes its title "
-                "from the default pane, and pages without a content type open there. "
-                "Set Is Default Pane? to TRUE on the main content pane.",
-                code="no-default",
-            )
-        )
+
+
+def check_panes(panes: List[Pane], ctx: PageContext) -> Report:
+    """Every check of the module docstring over ``panes`` of one page. The
+    page's own findings come first, then each pane's in page order (errors,
+    then warnings, then notes)."""
+    rep = Report(ctx.page_name, list(panes))
+    if not panes:
+        return rep
+    add = rep.findings.append
+    _check_page_events(rep, ctx, add)
+    _check_names(rep, panes, add)
     # ---- each pane's values
     own = (ctx.page_name or "").lower()
     by_lower = {p.name.lower(): p for p in panes if p.name}
     for p in panes:
-        for key, label in (("IsDefault", "Is Default Pane?"), ("HasScrollbars", "Display Scrollbars")):
-            raw = p.get(key)
-            if raw and not str_to_bool(raw)[1]:
-                add(
-                    Finding(
-                        WARNING,
-                        "%s: %s is '%s'. Use TRUE, FALSE or a number; anything "
-                        "else counts as FALSE." % (p.label(), label, raw),
-                        p,
-                        label,
-                        "bool-value",
-                    )
-                )
-        fm_raw = p.get("FillMode")
-        fm = p.fill_mode
-        if fm_raw and (fm is None or fm not in FILL_MODE_TEXT):
-            add(
-                Finding(
-                    WARNING,
-                    "%s: Fill Mode '%s' is not known, so the pane is Static. Use "
-                    "Static, Autofill, AutofillContextMustMatch or StaticContextMustMatch "
-                    "(or 0, 1, 3, 4)." % (p.label(), fm_raw),
-                    p,
-                    "Fill Mode",
-                    "fill-mode",
-                )
-            )
-        dm_raw = p.get("DisplayMode")
-        dm = p.display_mode
-        if dm_raw and (dm is None or dm not in DISPLAY_MODE_TEXT):
-            add(
-                Finding(
-                    WARNING,
-                    "%s: Display Mode '%s' is not known, so the pane stretches "
-                    "its page. Use Stretch, MaintainAspectRatio or MaintainSize (or 1, 2, "
-                    "3)." % (p.label(), dm_raw),
-                    p,
-                    "Display Mode",
-                    "display-mode",
-                )
-            )
-        if p.has_scrollbars and (dm if dm in DISPLAY_MODE_TEXT else 1) != 3:
-            add(
-                Finding(
-                    INFO,
-                    "%s: Display Scrollbars is TRUE, but scroll bars only appear "
-                    "with Display Mode MaintainSize (3)." % p.label(),
-                    p,
-                    "Display Scrollbars",
-                    "scrollbars",
-                )
-            )
-        page = p.default_page
-        if page and page.lower() != "none":
-            if page.lower() == own:
-                add(
-                    Finding(
-                        ERROR,
-                        "%s has this page as its Default Page. The pane shows an "
-                        "error page at runtime." % p.label(),
-                        p,
-                        "Default Page",
-                        "default-page-loop",
-                    )
-                )
-            else:
-                exists = ctx.page_exists(page)
-                if exists is False:
-                    add(
-                        Finding(
-                            ERROR,
-                            "%s: Default Page '%s' is not a page of this project or "
-                            "the projects compiled with it, so the pane is not created." % (p.label(), page),
-                            p,
-                            "Default Page",
-                            "default-page-missing",
-                        )
-                    )
-                m = _RES_SUFFIX.search(page)
-                if m and ctx.resolution and m.group(1).upper() != ctx.resolution.upper():
-                    add(
-                        Finding(
-                            WARNING,
-                            "%s: Default Page '%s' is a %s page, but this page is "
-                            "%s. Use the %s version of the page."
-                            % (
-                                p.label(),
-                                page,
-                                m.group(1).upper(),
-                                ctx.resolution.upper(),
-                                ctx.resolution.upper(),
-                            ),
-                            p,
-                            "Default Page",
-                            "default-page-resolution",
-                        )
-                    )
-        if ctx.content_types is not None:
-            unknown = [c for c in p.content_types if c.lower() not in ctx.content_types]
-            if unknown:
-                add(
-                    Finding(
-                        WARNING,
-                        "%s: Content Types %s %s not defined, so no page can "
-                        "have %s (Plant SCADA Studio > Visualization > Content Types)."
-                        % (
-                            p.label(),
-                            ", ".join("'%s'" % c for c in unknown),
-                            "is" if len(unknown) == 1 else "are",
-                            "it" if len(unknown) == 1 else "them",
-                        ),
-                        p,
-                        "Content Types",
-                        "content-type",
-                    )
-                )
-        if fm in (1, 3) and not p.content_types and not p.is_default:
-            add(
-                Finding(
-                    INFO,
-                    "%s is an Autofill pane without Content Types, so it takes "
-                    "content pages of every type. Enter the content types it shows (for "
-                    "example FP for a faceplate pane)." % p.label(),
-                    p,
-                    "Content Types",
-                    "autofill-no-types",
-                )
-            )
-        # ---- tabbed panes
-        tab, ctl = p.tab_pane, p.tab_control
-        if tab:
-            header = by_lower.get(tab.lower())
-            if header is p:
-                add(
-                    Finding(
-                        ERROR,
-                        "%s names itself as its Tab Header Pane Name. Enter the "
-                        "name of the pane that shows the tab bar." % p.label(),
-                        p,
-                        "Tab Header Pane Name",
-                        "tab-self",
-                    )
-                )
-            elif header is None:
-                add(
-                    Finding(
-                        ERROR,
-                        "%s: Tab Header Pane Name '%s' is not a pane on this page "
-                        "(pane names: %s), so its tabs are never linked."
-                        % (
-                            p.label(),
-                            tab,
-                            ", ".join(sorted(q.name for q in panes if q.name and q is not p)) or "none",
-                        ),
-                        p,
-                        "Tab Header Pane Name",
-                        "tab-pane-missing",
-                    )
-                )
-            elif not ctl:
-                add(
-                    Finding(
-                        WARNING,
-                        "%s has a Tab Header Pane Name but no Tab Control Name. "
-                        "Enter the name of the tab bar genie on the page of pane '%s'."
-                        % (p.label(), header.name),
-                        p,
-                        "Tab Control Name",
-                        "tab-control-empty",
-                    )
-                )
-            else:
-                hp = header.default_page
-                names = ctx.object_names(hp) if hp and hp.lower() != "none" else None
-                if names is not None and ctl.lower() not in names:
-                    add(
-                        Finding(
-                            WARNING,
-                            "%s: Tab Control Name '%s' is not an object on "
-                            "'%s', the default page of header pane '%s', so the tabs are "
-                            "not linked. Enter the name of the tab bar genie (Access > "
-                            "General > Name)." % (p.label(), ctl, hp, header.name),
-                            p,
-                            "Tab Control Name",
-                            "tab-control-missing",
-                        )
-                    )
-        elif ctl:
-            add(
-                Finding(
-                    INFO,
-                    "%s has a Tab Control Name but no Tab Header Pane Name, so the "
-                    "tab control is not used." % p.label(),
-                    p,
-                    "Tab Control Name",
-                    "tab-control-unused",
-                )
-            )
+        _check_pane_values(p, ctx, own, add)
+        _check_pane_tabs(p, panes, by_lower, ctx, add)
     rep.findings.sort(
         key=lambda f: (f.pane.index if f.pane is not None else -1, _LEVEL_ORDER.get(f.level, 3))
     )
@@ -723,7 +752,7 @@ def page_object_name_list(path: str) -> Optional[List[str]]:
         st = os.stat(path)
     except OSError:
         return None
-    key = os.path.normcase(os.path.abspath(path))
+    key = path_key(path)
     sig = (st.st_mtime_ns, st.st_size)
     hit = _NAMES_CACHE.get(key)
     if hit is not None and hit[0] == sig:
@@ -737,6 +766,7 @@ def page_object_name_list(path: str) -> Optional[List[str]]:
         objs = pp.page.objects if pp.page is not None else []
         parents = forest_parents(objs)
     except Exception:  # noqa: BLE001 -- a page that does not parse has no names
+        _note_exc("sa_workspace.page_object_name_list", page=path)
         return None
     own: List[str] = []
     for po in objs:
@@ -752,7 +782,7 @@ def page_object_name_list(path: str) -> Optional[List[str]]:
             try:
                 hdr = G.parse_geom_header(po.body_raw)
                 name = hdr.name if hdr is not None else ""
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001 -- swallow-ok: a record without a geometry header: no name
                 name = ""
         own.append(name or "")
     out: List[str] = []
@@ -784,14 +814,8 @@ def page_top_level_names(path: str) -> Optional[List[str]]:
     (a tab bar genie, an alarm list ...), page order; None = unreadable."""
     if page_object_name_list(path) is None:
         return None
-    hit = _NAMES_CACHE.get(os.path.normcase(os.path.abspath(path)))
+    hit = _NAMES_CACHE.get(path_key(path))
     return list(hit[2]) if hit is not None else []
-
-
-def _extra_dirs() -> List[str]:
-    """The extra library folders the editor searches too (CTG_LIB_PATH: a
-    page copied outside its project names its project there)."""
-    return [p for p in os.environ.get("CTG_LIB_PATH", "").split(os.pathsep) if p]
 
 
 def search_dirs(project_dir: str) -> List[str]:
@@ -809,10 +833,10 @@ def find_page_file(project_dir: str, page: str) -> Optional[str]:
     name = (page or "").strip()
     if not name:
         return None
-    from ..io.tagscope import find_table
+    from ..format.fileio import find_ci
 
     for d in search_dirs(project_dir):
-        p = find_table(d, name + ".ctg")
+        p = find_ci(d, name + ".ctg")
         if p:
             return p
     return None
@@ -829,34 +853,39 @@ def document_context(doc) -> PageContext:
     try:
         rec = doc.page_record()
     except Exception:  # noqa: BLE001
+        _note_exc("sa_workspace.document_context")
         rec = None
     try:
         env = {k: v for k, v in (doc.page_properties() or {}).items() if not str(k).startswith("!")}
     except Exception:  # noqa: BLE001
+        _note_exc("sa_workspace.document_context")
         env = {}
     template = ""
     try:
         _i, ref = doc.template_reference()
         template = ref.element if ref is not None else ""
     except Exception:  # noqa: BLE001
+        _note_exc("sa_workspace.document_context")
         template = ""
     width = 0
     try:
         width = int(doc.page.appearance.width or 0)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- swallow-ok: no page width: 0
         width = 0
     # the page's tag scope; a loose folder that is no project (no pages.DBF)
     # and names none cannot say which pages exist
     pages: set = set()
     types: set = set()
-    if PR.Project(project_dir).has_page_table() or _extra_dirs():
+    if PR.Project(project_dir).has_page_table() or lib_path_dirs():
         try:
             pages = {n.lower() for n in PR.chain_page_names(project_dir)}
         except Exception:  # noqa: BLE001
+            _note_exc("sa_workspace.document_context", project=project_dir)
             pages = set()
         try:
             types = {(r.get("NAME") or "").strip().lower() for r in PR.content_types(project_dir)} - {""}
         except Exception:  # noqa: BLE001
+            _note_exc("sa_workspace.document_context", project=project_dir)
             types = set()
 
     def exists(name: str) -> Optional[bool]:

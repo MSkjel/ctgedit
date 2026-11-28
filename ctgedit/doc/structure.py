@@ -30,9 +30,10 @@ from ..editing_base import (  # noqa: F401
     writer,
 )
 from ..editing_base import (  # noqa: F401
-    _parse_object,
+    parse_object,
 )
 from ..format.forest import whole_forest
+from ..infra.logsetup import note_exception as _note_exc
 
 
 class StructureEdits:
@@ -137,6 +138,7 @@ class StructureEdits:
             try:
                 entries = GP.page_link_entries([po], self._resolver())
             except Exception:  # noqa: BLE001 -- the record is still added
+                _note_exc("structure.StructureEdits.create_object")
                 entries = []
             return self._append_placed([po], entries, "add object")
         return self.add_object(po)
@@ -762,6 +764,7 @@ class StructureEdits:
         try:
             res = self._resolver()
         except Exception:  # noqa: BLE001 -- the default flag box still applies
+            _note_exc("structure.StructureEdits._alarm_bounds")
             res = None
         return AI.grown_bounds(tuple(bounds), s, AI.flag_sizes(self.path, res))
 
@@ -793,6 +796,7 @@ class StructureEdits:
         try:
             res = self._resolver()
         except Exception:  # noqa: BLE001 -- the default flag box still applies
+            _note_exc("structure.StructureEdits._regrow_alarm_root")
             res = None
         want = tuple(int(v) for v in AI.grown_bounds(u2, s, AI.flag_sizes(self.path, res)))
         if tuple(gh.rect2) != want:
@@ -1001,6 +1005,7 @@ class StructureEdits:
         try:
             ref = reference_from_object(objs[0])
         except Exception:  # noqa: BLE001
+            _note_exc("structure.StructureEdits._first_root_template")
             return None
         return 0 if ref is not None and ref.ext == "ctt" else None
 
@@ -1372,6 +1377,7 @@ class StructureEdits:
 
             used = GP.used_link_entries(records, self._link_entries(), keep_super=False)
         except Exception:  # noqa: BLE001 -- the paste falls back to the library
+            _note_exc("structure.StructureEdits.copy_payload")
             used = []
         if used:
             data["links"] = [[g.hex(), n] for g, n in used]
@@ -1388,7 +1394,7 @@ class StructureEdits:
         try:
             data = json.loads(payload)
             items = data["ctgedit_objects"]
-        except Exception:  # noqa: BLE001
+        except ValueError, KeyError, TypeError:
             return []
         recs: List[PageObject] = []
         for it in items:
@@ -1402,7 +1408,7 @@ class StructureEdits:
                 + an
                 + body
             )
-            recs.append(_parse_object(0, 0, len(blob), 0, blob))
+            recs.append(parse_object(0, 0, len(blob), 0, blob))
         if not recs or not whole_forest([p.class_flag for p in recs]):
             return []  # (a container would take the page's next records as its members)
         if not self.composites_allowed and any(
@@ -1436,7 +1442,7 @@ class StructureEdits:
         for ent in data.get("links") or ():
             try:
                 g, n = bytes.fromhex(ent[0]), str(ent[1])
-            except Exception:  # noqa: BLE001 -- a foreign / damaged entry is skipped
+            except Exception:  # noqa: BLE001 -- swallow-ok: a foreign / damaged entry is skipped
                 continue
             if len(g) == 16 and n:
                 if composed and self._entry_names(n, composed):
@@ -1602,6 +1608,7 @@ class StructureEdits:
             try:
                 sub = GP.resubstitute_an(out[k:end], old + 1, new + 1, page_name)
             except Exception:  # noqa: BLE001 -- a malformed copy stays as copied
+                _note_exc("structure.StructureEdits._fix_copies")
                 sub = None
             if sub is not None:
                 out[k:end] = sub
@@ -1624,4 +1631,5 @@ class StructureEdits:
         try:
             return GP.pasted_link_entries(recs, self._resolver(), carried)
         except Exception:  # noqa: BLE001 -- the records still paste
+            _note_exc("structure.StructureEdits._copy_link_entries")
             return []

@@ -30,8 +30,8 @@ def win(tmp_path):
 
     w = MainWindow()
     yield w
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
 
 
 def _copy_mixer(MIXER, tmp_path):
@@ -277,8 +277,8 @@ def test_start_page_lists_recent_pages(MIXER, EX, tmp_path):
         assert w.start_page.isVisible()
         assert len(w.start_page._cards) == 2
     finally:
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
 
 
 def test_library_panel_covers_the_include_chain(EX):
@@ -421,8 +421,8 @@ def test_drawing_objects_one_after_another_keeps_one_sheet(fx_page, tmp_path):
                 d.reject()
             except RuntimeError:
                 pass
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.close()
         app.processEvents()
 

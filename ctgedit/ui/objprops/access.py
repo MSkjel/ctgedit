@@ -8,48 +8,49 @@ from PySide6 import QtGui, QtWidgets
 
 from ..style.theme import set_note_role
 from .fields import (
-    _GREY_STYLES,
-    _L_AX_CLASS,
-    _L_AX_NAME,
-    _L_COND,
-    _L_DESC,
-    _L_NAME,
-    _L_SHORT,
-    _L_TOOLTIP,
-    _Field,
-    _Sub,
+    GREY_STYLES,
+    L_AX_CLASS,
+    L_AX_NAME,
+    L_COND,
+    L_DESC,
+    L_NAME,
+    L_SHORT,
+    L_TOOLTIP,
+    Field,
+    Sub,
 )
+from ...infra.logsetup import note_exception as _note_exc
 
-GENERAL = _Sub(
+GENERAL = Sub(
     "General",
     [
-        _Field("Name:", "__AN_NAME__", "name", limit=_L_NAME),
-        _Field("Description:", "DESC", "text", limit=_L_DESC),
-        _Field("Tool tip:", "COMMENT", "tooltip", limit=_L_TOOLTIP),
-        _Field("Object area:", "AREA", "text", limit=_L_SHORT),
-        _Field("Privilege level:", "PRIV", "text", limit=_L_SHORT),
-        _Field("Log device:", "DEVICE", "text", limit=_L_SHORT),
+        Field("Name:", "__AN_NAME__", "name", limit=L_NAME),
+        Field("Description:", "DESC", "text", limit=L_DESC),
+        Field("Tool tip:", "COMMENT", "tooltip", limit=L_TOOLTIP),
+        Field("Object area:", "AREA", "text", limit=L_SHORT),
+        Field("Privilege level:", "PRIV", "text", limit=L_SHORT),
+        Field("Log device:", "DEVICE", "text", limit=L_SHORT),
     ],
     family=("__AN_NAME__", "DESC", "COMMENT", "AREA", "PRIV", "DEVICE"),
 )
-DISABLE = _Sub(
+DISABLE = Sub(
     "Disable",
     [
-        _Field("Disable when:", "DISABLED", limit=_L_COND),
-        _Field("Disable on insufficient area or privilege", "DISMODE", "check", on="TRUE", loose=True),
-        _Field("Disable style:", "GREY_STYLE", "radio", choices=_GREY_STYLES),
+        Field("Disable when:", "DISABLED", limit=L_COND),
+        Field("Disable on insufficient area or privilege", "DISMODE", "check", on="TRUE", loose=True),
+        Field("Disable style:", "GREY_STYLE", "radio", choices=GREY_STYLES),
     ],
     family=("DISABLED", "DISMODE", "GREY_STYLE"),
 )
-IDENTIFICATION = _Sub(
+IDENTIFICATION = Sub(
     "Identification",
     [
-        _Field("Object name:", "ACTIVEXEXT_*NAME", "text", limit=_L_AX_NAME),
-        _Field("Event class:", "ACTIVEXEXT_*EVENTCLASS", "text", limit=_L_AX_CLASS),
+        Field("Object name:", "ACTIVEXEXT_*NAME", "text", limit=L_AX_NAME),
+        Field("Event class:", "ACTIVEXEXT_*EVENTCLASS", "text", limit=L_AX_CLASS),
     ],
     family=("ACTIVEXEXT_*NAME", "ACTIVEXEXT_*EVENTCLASS"),
 )
-PERSIST = _Field(
+PERSIST = Field(
     "Persist ActiveX data between page transitions", "ACTIVEXEXT_*PERSIST", "check", on="TRUE", off="FALSE"
 )
 
@@ -96,7 +97,7 @@ class AccessEditor:
             from ..help import set_help
 
             set_help(self.widget, HELP_GENERAL)
-        except Exception:  # noqa: BLE001
+        except RuntimeError:
             pass
 
     # -- layout ------------------------------------------------------------------------
@@ -131,7 +132,7 @@ class AccessEditor:
         if option("modify_an"):
             try:
                 why = s._doc.an_change_problem(s._index)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001  # swallow-ok: the message is shown
                 why = str(exc) or "The AN of this object cannot be changed."
             if why:
                 self.an.setToolTip(why)
@@ -269,6 +270,7 @@ class AccessEditor:
                     path = getattr(doc, "path", None)
                     self._page_area = _pa(path) if path else ""
             except Exception:  # noqa: BLE001
+                _note_exc("objprops.access.page_area")
                 self._page_area = ""
         return self._page_area
 
@@ -325,6 +327,7 @@ class AccessEditor:
                 pdir = _project_dir(self.sheet._doc)
                 self._devices = devices(pdir) if pdir else ()
             except Exception:  # noqa: BLE001 -- the menu is an aid only
+                _note_exc("objprops.access.devices")
                 self._devices = ()
         return self._devices
 
@@ -365,7 +368,7 @@ class AccessEditor:
     def _current_an(self) -> str:
         try:
             an = self.sheet._doc.page.objects[self.sheet._index].an
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001  # swallow-ok: no such object, no AN
             an = -1
         return str(an) if an is not None and an >= 0 else ""
 
@@ -381,7 +384,7 @@ class AccessEditor:
         if self._an_changed():
             try:
                 msg = s._doc.an_change_problem(s._index, self.an.text())
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001  # swallow-ok: the message is shown
                 msg = str(exc)
             if msg:
                 return msg, self.an
@@ -390,6 +393,7 @@ class AccessEditor:
         try:
             msg = s._doc.object_name_problem(s._index, self.name.text())
         except Exception:  # noqa: BLE001 -- never block on a failed check
+            _note_exc("objprops.access.object_name_problem")
             msg = ""
         return (msg, self.name) if msg else None
 
@@ -423,7 +427,7 @@ def _ax_defaults(doc, index):
     class ('AN%s' and '%0.8s_AN%s')."""
     try:
         an = doc.page.objects[index].an
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # swallow-ok: no such object, no AN
         an = -1
     an = str(an) if an is not None and an >= 0 else "?"
     path = getattr(doc, "path", "") or ""

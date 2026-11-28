@@ -10,8 +10,6 @@ from PySide6 import QtCore, QtWidgets
 from ...editing import ui_state
 
 LEVEL_EDGE = {"info": "accent", "success": "tip", "warning": "warn", "error": "danger"}
-#: Settings > Pages and libraries 'Tell me about a changed page:' (ui/disk_change_prompt)
-DISK_CHANGE_PROMPTS = (("bar", "In a bar over the page"), ("dialog", "With a question box"))
 
 
 def disk_change_prompt() -> str:

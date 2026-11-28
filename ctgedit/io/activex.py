@@ -7,9 +7,11 @@ import glob
 import os
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
+from ..infra.logsetup import note_exception as _note_exc
 
 ACTIVEX_TC = 0x0D
-_CFB = bytes.fromhex("d0cf11e0a1b11ae1")
+from ..format.cfb import SIGNATURE as _CFB
+
 #: ProcessAnalyst.ChartControl.1 (Citect Process Analyst Control)
 PROCESS_ANALYST_CLSID = "{37D4F22A-7950-45DF-B1F6-DD78E503D7A9}"
 
@@ -140,7 +142,7 @@ def _normal_vt(ti, td) -> int:
                 return 9
             if kind == 6:  # TKIND_ALIAS
                 return _normal_vt(ref, ta.tdescAlias)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 -- swallow-ok: a type the type info cannot follow: the default
             pass
         return 0x18
     return 0xFFFF
@@ -163,20 +165,20 @@ def _control_members(clsid: str) -> Optional[ControlMembers]:
             try:
                 tl = pythoncom.LoadTypeLib(src)
                 break
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001 -- swallow-ok: try the next type library source
                 tl = None
     if tl is None and info.typelib:
         try:
             major, _dot, minor = (info.version or "1.0").partition(".")
             tl = pythoncom.LoadRegTypeLib(pywintypes.IID(info.typelib), int(major or 1), int(minor or 0), 0)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 -- swallow-ok: no registered type library: no members
             return None
     if tl is None:
         return None
     try:
         co = tl.GetTypeInfoOfGuid(pywintypes.IID(clsid))
         ca = co.GetTypeAttr()
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- swallow-ok: the type library lacks the class: no members
         return None
     out = ControlMembers()
     have: Dict[str, ControlMember] = {}
@@ -185,7 +187,7 @@ def _control_members(clsid: str) -> Optional[ControlMembers]:
             flags = co.GetImplTypeFlags(n)
             ref = co.GetRefTypeInfo(co.GetRefTypeOfImplType(n))
             ra = ref.GetTypeAttr()
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 -- swallow-ok: an interface the type info cannot describe: skipped
             continue
         default, source = bool(flags & 1), bool(flags & 2)
         if not default:
@@ -194,7 +196,7 @@ def _control_members(clsid: str) -> Optional[ControlMembers]:
             try:
                 fd = ref.GetFuncDesc(f)
                 name = ref.GetNames(fd.memid)[0]
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001 -- swallow-ok: a member the type info cannot describe: skipped
                 continue
             if source:
                 if (
@@ -212,7 +214,7 @@ def _control_members(clsid: str) -> Optional[ControlMembers]:
             if m is None:
                 try:
                     doc = ref.GetDocumentation(fd.memid)[1] or ""
-                except Exception:  # noqa: BLE001
+                except Exception:  # noqa: BLE001 -- swallow-ok: no doc string
                     doc = ""
                 m = have[name] = ControlMember(name, doc=doc)
                 out.properties.append(m)
@@ -221,14 +223,14 @@ def _control_members(clsid: str) -> Optional[ControlMembers]:
                 m.readable = True
                 try:
                     m.vt = _normal_vt(ref, fd.rettype[0])
-                except Exception:  # noqa: BLE001
+                except Exception:  # noqa: BLE001 -- swallow-ok: a type the type info cannot follow: the default
                     pass
             else:
                 m.writable = True
                 if m.vt == 0xFFFF and fd.args:
                     try:
                         m.vt = _normal_vt(ref, fd.args[-1][0])
-                    except Exception:  # noqa: BLE001
+                    except Exception:  # noqa: BLE001 -- swallow-ok: a type the type info cannot follow: the default
                         pass
         if source:
             continue
@@ -236,7 +238,7 @@ def _control_members(clsid: str) -> Optional[ControlMembers]:
             try:
                 vd = ref.GetVarDesc(v)
                 name = ref.GetNames(vd.memid)[0]
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001 -- swallow-ok: a member the type info cannot describe: skipped
                 continue
             if vd.wVarFlags & (_V_RESTRICTED | _V_HIDDEN) or name in have:
                 continue
@@ -248,7 +250,7 @@ def _control_members(clsid: str) -> Optional[ControlMembers]:
             )
             try:
                 m.vt = _normal_vt(ref, vd.elemdescVar[0])
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001 -- swallow-ok: a type the type info cannot follow: the default
                 pass
             out.properties.append(m)
     return out
@@ -361,9 +363,10 @@ def _control_pages(folder: str) -> Optional[List[str]]:
     activex.DBF (the register's row per control: PAGE, AN, OBJ_NAME,
     OBJ_GUID) -- so only those pages are read; None without the table (then
     every page is scanned)."""
-    from .project import _cached_rows, _find_table
+    from ..format.fileio import find_ci
+    from .project import cached_rows
 
-    table = _find_table(folder, "activex.dbf")
+    table = find_ci(folder, "activex.dbf")
     if table is None:
         return None
     try:
@@ -371,7 +374,7 @@ def _control_pages(folder: str) -> Optional[List[str]]:
     except OSError:
         return []
     out, seen = [], set()
-    for row in _cached_rows(table):
+    for row in cached_rows(table):
         page = (row.get("PAGE") or "").strip().lower()
         if page and page not in seen and page + ".ctg" in names:
             seen.add(page)
@@ -387,6 +390,7 @@ def project_controls(project_dir: str) -> Tuple[ControlDonor, ...]:
     try:
         dirs = chain_dirs(project_dir)
     except Exception:  # noqa: BLE001
+        _note_exc("activex.project_controls", project=project_dir)
         dirs = [project_dir]
     files = []
     for d in dirs:
@@ -408,6 +412,7 @@ def project_controls(project_dir: str) -> Tuple[ControlDonor, ...]:
                     continue
             pg = parse_ctg(path).page
         except Exception:  # noqa: BLE001
+            _note_exc("activex.project_controls", page=path)
             continue
         if pg is None:
             continue
@@ -416,8 +421,9 @@ def project_controls(project_dir: str) -> Tuple[ControlDonor, ...]:
         try:
             parents = forest_parents(pg.objects)
         except Exception:  # noqa: BLE001
+            _note_exc("activex.project_controls", page=path)
             continue
-        from ..format.page import _geom_name_len
+        from ..format.page import geom_name_len
 
         for i, po in enumerate(pg.objects):
             if (
@@ -427,7 +433,7 @@ def project_controls(project_dir: str) -> Tuple[ControlDonor, ...]:
                 or po.subtype_size & 0x1
             ):
                 continue
-            o = _geom_name_len(po.body_raw, 0)
+            o = geom_name_len(po.body_raw, 0)
             if not o or po.body_raw[o : o + 3] != b"\0\0\0":
                 continue  # a placement transform: not a plain copy
             clsid = ole_clsid(po.body_raw)

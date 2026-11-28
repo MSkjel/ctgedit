@@ -7,9 +7,10 @@ import re
 from dataclasses import dataclass
 from typing import Dict, Iterable, Optional
 
+from ...format.projects import PAGE_NAME_LEN as NAME_LIMIT
+from ...format.projects import is_project_dir
 from ...format.textcodec import CODEC
 
-NAME_LIMIT = 64
 _ILLEGAL = set('\\/:*?"<>|')
 _RESERVED = (
     {"con", "prn", "aux", "nul"} | {"com%d" % i for i in range(1, 10)} | {"lpt%d" % i for i in range(1, 10)}
@@ -68,9 +69,7 @@ def validate_page_name(
         bad_chars = "".join(sorted(set(n[e.start : e.end])))
         return Verdict(ERROR, "These characters cannot be stored: %s" % bad_chars)
     if has_pages_dbf is None:
-        has_pages_dbf = bool(project_dir) and any(
-            os.path.isfile(os.path.join(project_dir, fn)) for fn in ("pages.DBF", "pages.dbf")
-        )
+        has_pages_dbf = is_project_dir(project_dir)
     if has_pages_dbf and len(enc) > NAME_LIMIT:
         return Verdict(ERROR, "Too long: %d of %d characters" % (len(enc), NAME_LIMIT))
     if existing is None:

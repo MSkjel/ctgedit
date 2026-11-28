@@ -105,13 +105,15 @@ class AllowedListDialog(QtWidgets.QDialog):
             for p in paths:
                 self.add(os.path.normpath(p))
             return
-        text, ok = QtWidgets.QInputDialog.getText(
+        from ..messages import ask_text
+
+        text = ask_text(
             self,
             "Allow a Database",
             "The database as the question names it, for example DSN=Plant or\n"
             "Driver={SQL Server}; Server=srv1; Database=History:",
         )
-        if ok:
+        if text is not None:
             self.add(text)
 
     def _remove(self) -> None:

@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from ..format import cfb, dbfschema
+
+from ..format.fileio import find_ci
+
 import datetime as _dt
 import os
 import re
@@ -66,45 +70,30 @@ LIB_TABLE = {
 DUMMY_TC = 0xFFFF
 
 # the fields of every page table (Bin\DIR.DBF / the project DBF headers)
-TABLE_FIELDS: Dict[str, List[str]] = {
-    "pgdynobj": "PAGE TYPE AN GROUP SZX SZXMINPC SZXMAXPC SZXORG SZXMODE SZY SZYMINPC SZYMAXPC "
-    "SZYORG SZYMODE ROT ROTSL ROTMINPC ROTMAXPC ROTXORG ROTYORG ROTMODE ROTSLMODE MVX "
-    "MVXSL MVXMINPT MVXMAXPT MVXMODE MVXSLMODE MVY MVYSL MVYMINPT MVYMAXPT MVYMODE "
-    "MVYSLMODE VISIBLE VISMODE COL_A COL_B COL_C COL_D COL_E COL_ARR COL_EXP COLMODE "
-    "TXT_A TXT_B TXT_C TXT_D TXT_E TXT_STR SET_ARR TXTMODE FIL FILMINPC FILMAXPC "
-    "FILMODE DISABLED DISMODE GREY_STYLE DESC COMMENT AREA PRIV MSG_LOG DEVICE".split(),
-    "pgadv": "PAGE AN CMD COMMENT SYMBOL".split(),
-    "pgalmind": "PAGE AN EXPR INCLUDE INSIDE WIDTH PADDING COLOUR FLAG_ON FLAG_LOC EQHIER".split(),
-    "pgansym": "PAGE AN EXPR OFF_SYMBOL SYMBOL_1 SYMBOL_2 SYMBOL_3 SYMBOL_4 SYMBOL_5 SYMBOL_6 "
-    "SYMBOL_7 SYMBOL_8 MODE COMMENT VISIBLE".split(),
-    "pgbar": "PAGE AN EXPR BAR COMMENT VISIBLE".split(),
-    "pgbutton": "PAGE AN TEXT FONT WIDTH HEIGHT CMD PRIV MSG_LOG DEVICE UP_AN DOWN_AN LEFT_AN "
-    "RIGHT_AN COMMENT DOWN_CMD REPEAT_CMD DISMODE DISABLED GREY_STYLE VIS_MODE "
-    "VISIBLE AREA RPT_RATE MVX MVXMINPT MVXMAXPT MVXMODE MVY MVYMINPT MVYMAXPT "
-    "MVYMODE".split(),
-    "pgcol": "PAGE AN VAR_A VAR_B VAR_C COLR000 COLR001 COLR010 COLR011 COLR100 COLR101 COLR110 "
-    "COLR111 COMMENT VISIBLE".split(),
-    "pgkey": "PAGE AN KEY_SEQ CMD PRIV MSG_LOG DEVICE UP_AN DOWN_AN LEFT_AN RIGHT_AN COMMENT AREA".split(),
-    "pgnum": "PAGE AN EXPR FONT COMMENT VISIBLE".split(),
-    "pgsizmve": "PAGE AN SIZEX SIZEY POSITIONX POSITIONY COMMENT HOTOFFSETX HOTOFFSETY".split(),
-    "pgslider": "PAGE AN TAG THUMB X_SPAN Y_SPAN PRIV MODE COMMENT VISIBLE".split(),
-    "pgstr": "PAGE AN EXPR OFF_TEXT OFF_FONT ON_TEXT ON_FONT COMMENT VISIBLE".split(),
-    "pgsym": "PAGE AN VAR_A VAR_B VAR_C SYMB000 SYMB001 SYMB010 SYMB011 SYMB100 SYMB101 SYMB110 "
-    "SYMB111 MODE COMMENT VISIBLE".split(),
-    "pgtext": "PAGE AN VAR_A VAR_B VAR_C STR000 STR001 STR010 STR011 STR100 STR101 STR110 STR111 "
-    "FONT000 FONT001 FONT010 FONT011 FONT100 FONT101 FONT110 FONT111 COMMENT "
-    "VISIBLE".split(),
-    "pgtouch": "PAGE AN ACTION RPT_RATE CMD DOWN_CMD DBLCLK_CMD REPEAT_CMD MSG_LOG MSG_LOGDN "
-    "MSG_LOGDBL MSG_LOGRPT".split(),
-    "pgtrend": "PAGE AN TRENDNO PEN1 PEN2 PEN3 PEN4 PEN5 PEN6 PEN7 PEN8 CMD COMMENT VISIBLE PRIV "
-    "AREA DEVICE DESC PERIODIC CLUSTER".split(),
-    "pgvertex": "PAGE INDEX AN EXPR X1 Y1 X2 Y2".split(),
-}
-PAGE_TABLES = tuple(TABLE_FIELDS)
+#: the page tables a page's register writes, in that order
+PAGE_TABLES = (
+    "pgdynobj",
+    "pgadv",
+    "pgalmind",
+    "pgansym",
+    "pgbar",
+    "pgbutton",
+    "pgcol",
+    "pgkey",
+    "pgnum",
+    "pgsizmve",
+    "pgslider",
+    "pgstr",
+    "pgsym",
+    "pgtext",
+    "pgtouch",
+    "pgtrend",
+    "pgvertex",
+)
+#: each one's fields, in the order its form has them (format/dbf_schema.json)
+TABLE_FIELDS: Dict[str, List[str]] = {t: [n for n, *_r in dbfschema.fields(t)] for t in PAGE_TABLES}
 ACTIVEX_TC = 0x0D
-ACTIVEX_FIELDS = ["PAGE", "AN", "OBJ_NAME", "OBJ_GUID"]
 LANG_MAX = 100  # PGLANG.NATIVE width; longer strings are refused
-_CFB_SIG = bytes.fromhex("d0cf11e0a1b11ae1")
 _FIXED = {"PAGE", "AN", "TYPE", "GROUP", "INDEX"}
 #: = editing.USER_MARKED_KEYS: the Access fields of a genie member
 _USER_MARKED = {"DESC", "COMMENT", "AREA", "PRIV", "DEVICE"}
@@ -143,13 +132,13 @@ _VALUE_BAG_PAGES = 8
 
 
 def value_bag_memo(page_name: Optional[str]) -> tuple:
-    """The memo :func:`_value_bag` reads for ``page_name``: the value bags the page's last
+    """The memo :func:`value_bag` reads for ``page_name``: the value bags the page's last
     page_rows kept, with a dict of this caller's own (a reader of the same records, the
     language strings or the page model, reads them, not walks them again)."""
     return (_VALUE_BAGS.get((page_name or "").lower()) or {}, {})
 
 
-def _value_bag(po, memo: Optional[tuple] = None) -> List[tuple]:
+def value_bag(po, memo: Optional[tuple] = None) -> List[tuple]:
     """The record's level-0 SUBSTITUTED value bag (e0.b1) as (key, value) pairs:
     genie_place.decode(po).entries[0][1] (empty when the record does not
     decode), read without decoding the rest of the record. ``memo`` = (the
@@ -205,7 +194,7 @@ def _value_bag_walk(po) -> tuple:
                 )
             )
         return tuple(pairs)
-    except Exception:  # noqa: BLE001 -- decode fails alike
+    except Exception:  # noqa: BLE001 -- swallow-ok: decode fails alike
         return ()
 
 
@@ -303,7 +292,7 @@ def page_rows(ctg, page_name: str, resolver=None) -> Dict[str, List[Dict[str, st
         an = _an(po)
         if an is None:
             continue
-        bag = _value_bag(po, memo)
+        bag = value_bag(po, memo)
         pa = par[i]
         if tc < 0x1000 or tc == DUMMY_TC:
             row = {
@@ -361,7 +350,7 @@ def page_rows(ctg, page_name: str, resolver=None) -> Dict[str, List[Dict[str, st
 # --------------------------------------------------------------------------- activex + pglang
 def ole_clsid(body: bytes) -> str:
     """The CLSID of the OLE storage embedded in an ActiveX record ('' if none)."""
-    k = body.find(_CFB_SIG)
+    k = body.find(cfb.SIGNATURE)
     if k < 0 or len(body) < k + 512:
         return ""
     b = body[k:]
@@ -387,7 +376,7 @@ def activex_rows(ctg, page_name: str) -> List[Dict[str, str]]:
         if an is None:
             continue
         name = ""
-        for k, v in _value_bag(po):
+        for k, v in value_bag(po):
             if k.upper().startswith("ACTIVEXEXT_") and k.upper().endswith("NAME"):
                 name = v
                 break
@@ -455,7 +444,7 @@ def lang_strings(ctg, page_name: Optional[str] = None) -> List[str]:
         t = G.parse_text_tail(po)
         if t and t.get("text"):
             srcs.append(t["text"])
-        for k, v in _value_bag(po, memo):
+        for k, v in value_bag(po, memo):
             K = k.upper()
             if K in ("TXT_OFF", "TXT_ON", "TXT_STR") or K.startswith("STATE_") or K.startswith("ARRAY_"):
                 srcs.append(v)
@@ -489,32 +478,13 @@ def _journaled(what: str):
     return deco
 
 
-def find_file(folder: str, name: str) -> Optional[str]:
-    """The file ``name`` in ``folder`` whatever its case ('pages.DBF' or 'pages.dbf'), or
-    None."""
-    p = os.path.join(folder, name)
-    if os.path.exists(p):
-        return p
-    low = name.lower()
-    try:
-        for f in os.listdir(folder):
-            if f.lower() == low:
-                return os.path.join(folder, f)
-    except OSError:
-        pass
-    return None
-
-
-_find_file = find_file
-
-
-def _open_ndx(folder: str, table: str, writable: bool = True, case: bool = False):
+def open_ndx(folder: str, table: str, writable: bool = True, case: bool = False):
     """The table's index (None: none or unusable). ``writable=False`` for a
     lookup that writes nothing: a plain read handle on the live project. ``case``: its
     keys compare with case (pglang under [LANGUAGE] CaseSensitive)."""
     from ..format.dbf import Ndx
 
-    p = _find_file(folder, table + ".NDX")
+    p = find_ci(folder, table + ".NDX")
     if p is None or os.path.getsize(p) < 1024:
         return None
     try:
@@ -523,7 +493,7 @@ def _open_ndx(folder: str, table: str, writable: bool = True, case: bool = False
         return None
 
 
-def _page_records(dbf, ndx, field: str, value: str) -> List[Tuple[int, bytes]]:
+def page_records(dbf, ndx, field: str, value: str) -> List[Tuple[int, bytes]]:
     """(record index, bytes) of every record whose ``field`` equals ``value``
     case-insensitively: through the index when it is keyed on that field, else
     a scan of the field column."""
@@ -603,75 +573,17 @@ def _append(dbf, ndx, recs: List[bytes]) -> List[int]:
     return idx
 
 
-def _set_comp_state(path: str, value: bytes) -> Optional[str]:
-    """Patch PROJECT.CIT's CompState stream in place (a mini-stream stream:
-    'COMPILED' -> 'UNCOMPILED' stays inside its 64-byte mini sector).
-    Returns the previous value, or None when the file cannot be patched."""
-    from ..format import journal
+def _set_comp_state(cit: str) -> Optional[str]:
+    """PROJECT.CIT's CompState -> UNCOMPILED (:func:`~ctgedit.io.projectcit.patch_streams`);
+    the previous value, or None when the file cannot be patched."""
+    from . import projectcit
 
-    with journal.open_patch(path) as fh:
-        b = fh.read()
-        if b[:8] != _CFB_SIG:
-            return None
-        ssz = 1 << struct.unpack_from("<H", b, 30)[0]
-        mssz = 1 << struct.unpack_from("<H", b, 32)[0]
-        nfat = struct.unpack_from("<I", b, 44)[0]
-        dir_start = struct.unpack_from("<I", b, 48)[0]
-        cutoff = struct.unpack_from("<I", b, 56)[0]
-        minifat_start = struct.unpack_from("<I", b, 60)[0]
-        difat = [x for x in struct.unpack_from("<109I", b, 76) if x < 0xFFFFFFFA][:nfat]
-
-        def off(sec):
-            return (sec + 1) * ssz
-
-        fat: List[int] = []
-        for sec in difat:
-            fat += struct.unpack_from("<%dI" % (ssz // 4), b, off(sec))
-
-        def chain(start, table):
-            out, seen = [], set()
-            while start < 0xFFFFFFFA and start < len(table) and start not in seen:
-                seen.add(start)
-                out.append(start)
-                start = table[start]
-            return out
-
-        ents = [off(sec) + j * 128 for sec in chain(dir_start, fat) for j in range(ssz // 128)]
-        if not ents:
-            return None
-        root_start = struct.unpack_from("<I", b, ents[0] + 116)[0]
-        for eo in ents:
-            nl = struct.unpack_from("<H", b, eo + 64)[0]
-            if b[eo + 66] != 2 or nl < 2:
-                continue
-            if b[eo : eo + nl - 2].decode("utf-16-le", "replace") != "CompState":
-                continue
-            start, size = struct.unpack_from("<II", b, eo + 116)
-            if size >= cutoff or len(value) >= cutoff:
-                return None
-            minifat: List[int] = []
-            for sec in chain(minifat_start, fat):
-                minifat += struct.unpack_from("<%dI" % (ssz // 4), b, off(sec))
-            ministream = chain(root_start, fat)
-            spans = []
-            for ms in chain(start, minifat):
-                sec_i, within = divmod(ms * mssz, ssz)
-                if sec_i >= len(ministream):
-                    return None
-                spans.append(off(ministream[sec_i]) + within)
-            old = b"".join(b[so : so + mssz] for so in spans)[:size]
-            if old == value:
-                return old.decode("latin-1")
-            if not spans or len(value) > len(spans) * mssz:
-                return None
-            data = value.ljust(len(spans) * mssz, b"\0")
-            for k, so in enumerate(spans):
-                fh.seek(so)
-                fh.write(data[k * mssz : (k + 1) * mssz])
-            fh.seek(eo + 120)
-            fh.write(struct.pack("<I", len(value)))
-            return old.decode("latin-1")
-    return None
+    old = projectcit.read_streams(cit).get("CompState")
+    if old is None:
+        return None
+    if old != b"UNCOMPILED" and not projectcit.patch_streams(cit, {"CompState": b"UNCOMPILED"}):
+        return None
+    return old.decode("latin-1")
 
 
 def export_page_rows(project_dir: str, page_name: str) -> Dict[str, List[Dict[str, str]]]:
@@ -687,22 +599,22 @@ def _export_page_rows(project_dir: str, page_name: str) -> Dict[str, List[Dict[s
 
     out: Dict[str, List[Dict[str, str]]] = {}
     page = page_name
-    pp = _find_file(project_dir, "pages.DBF")
+    pp = find_ci(project_dir, "pages.DBF")
     if pp:
         with Dbf(pp, writable=False) as pages:
             live = [r for _i, r in pages.find("NAME", page_name) if r[:1] != b"*"]
             if live:
                 page = pages.field(live[-1], "NAME")
     for table in PAGE_TABLES + ("activex",):
-        path = _find_file(project_dir, table + ".DBF")
+        path = find_ci(project_dir, table + ".DBF")
         if path is None:
             continue
         with Dbf(path, writable=False) as dbf:
             if "PAGE" not in dbf.fmap:
                 continue
-            ndx = _open_ndx(project_dir, table, writable=False)
+            ndx = open_ndx(project_dir, table, writable=False)
             try:
-                recs = sorted(_page_records(dbf, ndx, "PAGE", page))
+                recs = sorted(page_records(dbf, ndx, "PAGE", page))
             finally:
                 if ndx is not None:
                     ndx.close()
@@ -733,16 +645,16 @@ def restore_page_rows(
     with projectlock.project(project_dir), journal.transaction("restore the rows of page %s" % page_name):
         wrote = False
         for table in PAGE_TABLES + ("activex",):
-            path = _find_file(project_dir, table + ".DBF")
+            path = find_ci(project_dir, table + ".DBF")
             if path is None:
                 continue
             back = tables.get(table) or []
             dbf = Dbf(path)
-            ndx = _open_ndx(project_dir, table)
+            ndx = open_ndx(project_dir, table)
             try:
                 if "PAGE" not in dbf.fmap:
                     continue
-                cur = {i: r for i, r in _page_records(dbf, ndx, "PAGE", page_name) if r[:1] != b"*"}
+                cur = {i: r for i, r in page_records(dbf, ndx, "PAGE", page_name) if r[:1] != b"*"}
                 if not back and not cur:
                     continue
                 n_upd = n_app = 0
@@ -777,7 +689,7 @@ def restore_page_rows(
                 dbf.close()
         if wrote:
             recno = None
-            pp = _find_file(project_dir, "pages.DBF")
+            pp = find_ci(project_dir, "pages.DBF")
             if pp:
                 with Dbf(pp, writable=False) as pages:
                     live = [i for i, r in pages.find("NAME", page_name) if r[:1] != b"*"]
@@ -826,6 +738,164 @@ def register_page(
     return rep
 
 
+def _page_row(project_dir: str, page_name: str, track) -> Tuple[object, Optional[int]]:
+    """The open pages.DBF (None when the project has none) and the record number of
+    ``page_name``'s live row in it (None when it has no row)."""
+    from ..format.dbf import Dbf
+
+    # the PAGE key is the page name AS OPENED (the file's spelling): CtDraw's row
+    # builder copies the page object's own name and never reads pages.DBF.
+    # The pages.DBF row is found without case.
+    pages_recno = None
+    pp = find_ci(project_dir, "pages.DBF")
+    pages = track(Dbf(pp)) if pp else None
+    if pages is not None:
+        live = [(i, r) for i, r in pages.find("NAME", page_name) if r[:1] != b"*"]
+        if live:
+            i, r = live[-1]
+            pages_recno = i + 1
+    return pages, pages_recno
+
+
+def _write_page_tables(project_dir: str, parsed, page: str, rep: dict, when, track) -> bool:
+    """The page's rows in each of PAGE_TABLES made to match ``parsed``; whether any
+    table changed."""
+    from ..format.dbf import Dbf
+
+    rows = page_rows(parsed, page)
+    wrote = False
+    tables_written = 0
+    for table in PAGE_TABLES:
+        new = rows[table]
+        path = find_ci(project_dir, table + ".DBF")
+        if path is None:
+            rep["tables"][table] = {"action": "missing_table" if new else "absent", "new": len(new)}
+            continue
+        dbf = track(Dbf(path))
+        ndx = track(open_ndx(project_dir, table))
+        has_an = "AN" in dbf.fmap
+        old = [
+            (i, r)
+            for i, r in page_records(dbf, ndx, "PAGE", page)
+            if r[:1] != b"*" and (not has_an or dbf.field(r, "AN"))
+        ]
+        old.sort()
+        plan = _match_rows(dbf, old, dbf.encode_many(new))
+        upd, dele, app = plan
+        for i, rec in upd:
+            dbf.write(i, rec)
+        for i in dele:
+            dbf.delete(i)
+        idx = _append(dbf, ndx, app)
+        changed = bool(upd or dele or app)
+        if changed:
+            dbf.touch(when)
+            wrote = True
+            tables_written += 1
+            kill_point("in_register:%d" % tables_written)
+        rep["tables"][table] = {
+            "action": "updated" if changed else "unchanged",
+            "old": len(old),
+            "new": len(new),
+            "updated": [i + 1 for i, _r in upd],
+            "deleted": [i + 1 for i in dele],
+            "appended": [i + 1 for i in idx],
+        }
+    return wrote
+
+
+def _write_activex(project_dir: str, parsed, page: str, rep: dict, when, track) -> List[int]:
+    """The page's activex rows, keyed (PAGE, AN): changed rows rewritten, new ones
+    appended, a row without AN deleted. The record numbers it changed."""
+    from ..format.dbf import Dbf
+
+    ax_changes: List[int] = []
+    ax_new = activex_rows(parsed, page)
+    axp = find_ci(project_dir, "activex.DBF")
+    if ax_new and axp:
+        ax = track(Dbf(axp))
+        axn = track(open_ndx(project_dir, "activex"))
+        have = {}
+        for i, r in sorted(page_records(ax, axn, "PAGE", page)):
+            if r[:1] == b"*":
+                continue
+            a = ax.field(r, "AN")
+            if not a:
+                ax.delete(i)
+                ax_changes.append(i + 1)
+                rep["activex"].append({"AN": "", "action": "deleted", "record": i + 1})
+            elif a not in have:
+                have[a] = (i, r)
+        appends = []
+        for row in ax_new:
+            enc = ax.encode(row)
+            cur = have.get(row["AN"])
+            if cur is None:
+                appends.append(enc)
+            elif cur[1][1:] != enc[1:]:
+                ax.write(cur[0], enc)
+                ax_changes.append(cur[0] + 1)
+                rep["activex"].append({"AN": row["AN"], "action": "updated", "record": cur[0] + 1})
+        for i, enc in zip(_append(ax, axn, appends), appends):
+            ax_changes.append(i + 1)
+            rep["activex"].append({"AN": ax.field(enc, "AN"), "action": "appended", "record": i + 1})
+        if ax_changes:
+            ax.touch(when)
+    return ax_changes
+
+
+def _write_pglang(project_dir: str, parsed, page: str, rep: dict, when, track) -> bool:
+    """The page's native strings missing from the project-wide pglang.DBF appended;
+    whether any was."""
+    from ..format.dbf import Dbf
+
+    lp = find_ci(project_dir, "pglang.DBF")
+    if not lp:
+        return False
+    strs = lang_strings(parsed, page)
+    if not strs:
+        return False
+    lg = track(Dbf(lp))
+    exact = lang_case_sensitive()
+    lgn = track(open_ndx(project_dir, "pglang", case=exact))
+    add = [
+        lg.encode({"NATIVE": x})
+        for x in strs
+        if not [r for r in page_records(lg, lgn, "NATIVE", x) if not exact or lg.field(r[1], "NATIVE") == x]
+    ]
+    if not add:
+        return False
+    _append(lg, lgn, add)
+    lg.touch(when)
+    rep["pglang"] = [lg.field(a, "NATIVE") for a in add]
+    return True
+
+
+def _write_change_log(
+    project_dir: str, page: str, pages, pages_recno, ax_changes: List[int], rep: dict, when, track
+) -> bool:
+    """The change log entries (the pages row, the activex rows) appended and the
+    pages.DBF date set; whether the change log was written."""
+    from ..format.dbf import Dbf
+
+    wrote = False
+    entries = []
+    if pages_recno is not None:
+        entries.append({"NAME": "pages", "KEY": page, "RECORD_NO": str(pages_recno)})
+    entries += [{"NAME": "activex", "KEY": page, "RECORD_NO": str(r)} for r in ax_changes]
+    cp = find_ci(project_dir, "changes.DBF")
+    if cp and entries:
+        ch = track(Dbf(cp))
+        chn = track(open_ndx(project_dir, "changes"))
+        _append(ch, chn, [ch.encode(e) for e in entries])
+        ch.touch(when)
+        rep["changes"] = entries
+        wrote = True
+    if pages is not None and pages_recno is not None:
+        pages.touch(when)
+    return wrote
+
+
 def _register_page(
     project_dir: str,
     page_name: str,
@@ -837,8 +907,6 @@ def _register_page(
     languages: bool = True,
     require_page_row: bool = True,
 ) -> dict:
-    from ..format.dbf import Dbf
-
     t0 = time.perf_counter()
     parsed = _parse(ctg)
     rep: dict = {
@@ -857,141 +925,26 @@ def _register_page(
         return x
 
     try:
-        # the PAGE key is the page name AS OPENED (the file's spelling): CtDraw's row
-        # builder copies the page object's own name and never reads pages.DBF.
-        # The pages.DBF row is found without case.
-        page, pages_recno = page_name, None
-        pp = _find_file(project_dir, "pages.DBF")
-        pages = track(Dbf(pp)) if pp else None
-        if pages is not None:
-            live = [(i, r) for i, r in pages.find("NAME", page_name) if r[:1] != b"*"]
-            if live:
-                i, r = live[-1]
-                pages_recno = i + 1
+        page = page_name
+        pages, pages_recno = _page_row(project_dir, page_name, track)
         rep["page"], rep["pages_recno"] = page, pages_recno
         if pages is not None and pages_recno is None and require_page_row:
             rep["unregistered"] = True
             return rep
-
-        rows = page_rows(parsed, page)
-        wrote = False
-        tables_written = 0
-        for table in PAGE_TABLES:
-            new = rows[table]
-            path = _find_file(project_dir, table + ".DBF")
-            if path is None:
-                rep["tables"][table] = {"action": "missing_table" if new else "absent", "new": len(new)}
-                continue
-            dbf = track(Dbf(path))
-            ndx = track(_open_ndx(project_dir, table))
-            has_an = "AN" in dbf.fmap
-            old = [
-                (i, r)
-                for i, r in _page_records(dbf, ndx, "PAGE", page)
-                if r[:1] != b"*" and (not has_an or dbf.field(r, "AN"))
-            ]
-            old.sort()
-            plan = _match_rows(dbf, old, dbf.encode_many(new))
-            upd, dele, app = plan
-            for i, rec in upd:
-                dbf.write(i, rec)
-            for i in dele:
-                dbf.delete(i)
-            idx = _append(dbf, ndx, app)
-            changed = bool(upd or dele or app)
-            if changed:
-                dbf.touch(when)
-                wrote = True
-                tables_written += 1
-                kill_point("in_register:%d" % tables_written)
-            rep["tables"][table] = {
-                "action": "updated" if changed else "unchanged",
-                "old": len(old),
-                "new": len(new),
-                "updated": [i + 1 for i, _r in upd],
-                "deleted": [i + 1 for i in dele],
-                "appended": [i + 1 for i in idx],
-            }
-
-        # activex: keyed (PAGE, AN) -- rewrite changed rows, append new ones
-        ax_changes: List[int] = []
-        ax_new = activex_rows(parsed, page)
-        axp = _find_file(project_dir, "activex.DBF")
-        if ax_new and axp:
-            ax = track(Dbf(axp))
-            axn = track(_open_ndx(project_dir, "activex"))
-            have = {}
-            for i, r in sorted(_page_records(ax, axn, "PAGE", page)):
-                if r[:1] == b"*":
-                    continue
-                a = ax.field(r, "AN")
-                if not a:
-                    ax.delete(i)
-                    ax_changes.append(i + 1)
-                    rep["activex"].append({"AN": "", "action": "deleted", "record": i + 1})
-                elif a not in have:
-                    have[a] = (i, r)
-            appends = []
-            for row in ax_new:
-                enc = ax.encode(row)
-                cur = have.get(row["AN"])
-                if cur is None:
-                    appends.append(enc)
-                elif cur[1][1:] != enc[1:]:
-                    ax.write(cur[0], enc)
-                    ax_changes.append(cur[0] + 1)
-                    rep["activex"].append({"AN": row["AN"], "action": "updated", "record": cur[0] + 1})
-            for i, enc in zip(_append(ax, axn, appends), appends):
-                ax_changes.append(i + 1)
-                rep["activex"].append({"AN": ax.field(enc, "AN"), "action": "appended", "record": i + 1})
-            if ax_changes:
-                ax.touch(when)
-                wrote = True
-
-        # pglang: project-wide native strings, append the missing ones
-        lp = _find_file(project_dir, "pglang.DBF") if languages else None
-        if lp:
-            strs = lang_strings(parsed, page)
-            if strs:
-                lg = track(Dbf(lp))
-                exact = lang_case_sensitive()
-                lgn = track(_open_ndx(project_dir, "pglang", case=exact))
-                add = [
-                    lg.encode({"NATIVE": x})
-                    for x in strs
-                    if not [
-                        r
-                        for r in _page_records(lg, lgn, "NATIVE", x)
-                        if not exact or lg.field(r[1], "NATIVE") == x
-                    ]
-                ]
-                if add:
-                    _append(lg, lgn, add)
-                    lg.touch(when)
-                    wrote = True
-                    rep["pglang"] = [lg.field(a, "NATIVE") for a in add]
-
-        # the change log (pages row + activex rows) and the pages.DBF date
-        if log_change:
-            entries = []
-            if pages_recno is not None:
-                entries.append({"NAME": "pages", "KEY": page, "RECORD_NO": str(pages_recno)})
-            entries += [{"NAME": "activex", "KEY": page, "RECORD_NO": str(r)} for r in ax_changes]
-            cp = _find_file(project_dir, "changes.DBF")
-            if cp and entries:
-                ch = track(Dbf(cp))
-                chn = track(_open_ndx(project_dir, "changes"))
-                _append(ch, chn, [ch.encode(e) for e in entries])
-                ch.touch(when)
-                rep["changes"] = entries
-                wrote = True
-            if pages is not None and pages_recno is not None:
-                pages.touch(when)
-
+        wrote = _write_page_tables(project_dir, parsed, page, rep, when, track)
+        ax_changes = _write_activex(project_dir, parsed, page, rep, when, track)
+        if ax_changes:
+            wrote = True
+        if languages and _write_pglang(project_dir, parsed, page, rep, when, track):
+            wrote = True
+        if log_change and _write_change_log(
+            project_dir, page, pages, pages_recno, ax_changes, rep, when, track
+        ):
+            wrote = True
         if mark_uncompiled and wrote:
-            cit = _find_file(project_dir, "PROJECT.CIT")
+            cit = find_ci(project_dir, "PROJECT.CIT")
             if cit:
-                prev = _set_comp_state(cit, b"UNCOMPILED")
+                prev = _set_comp_state(cit)
                 rep["compstate"] = {"previous": prev, "now": "UNCOMPILED" if prev is not None else None}
     finally:
         errors = []
@@ -1048,7 +1001,7 @@ def pack_project_tables(project_dir: str, progress=None) -> dict:
     except OSError as e:
         rep["failed"].append(("", e.strerror or str(e)))
         return rep
-    ch = _find_file(project_dir, "changes.DBF")
+    ch = find_ci(project_dir, "changes.DBF")
     logged = {str(r.get("NAME") or "").strip().lower() for r in (read_dbf_rows(ch) if ch else ())}
     with projectlock.project(project_dir):
         for i, fn in enumerate(names):
@@ -1059,7 +1012,7 @@ def pack_project_tables(project_dir: str, progress=None) -> dict:
                 rep["kept"].append(table)
                 continue
             path = os.path.join(project_dir, fn)
-            ndx = _find_file(project_dir, table + ".NDX")
+            ndx = find_ci(project_dir, table + ".NDX")
             idx = [ndx] if ndx is not None and os.path.getsize(ndx) >= 1024 else []
             case = False
             if idx:
@@ -1086,18 +1039,18 @@ def rename_page_rows(project_dir: str, renames: Dict[str, str], *, when: Optiona
 
     rep: dict = {}
     for table in PAGE_TABLES + ("activex",):
-        path = _find_file(project_dir, table + ".DBF")
+        path = find_ci(project_dir, table + ".DBF")
         if path is None:
             continue
         with Dbf(path) as dbf:
             if "PAGE" not in dbf.fmap:
                 continue
-            ndx = _open_ndx(project_dir, table, writable=False)
+            ndx = open_ndx(project_dir, table, writable=False)
             try:
                 hits = [
                     (i, new)
                     for old, new in renames.items()
-                    for i, r in _page_records(dbf, ndx, "PAGE", old)
+                    for i, r in page_records(dbf, ndx, "PAGE", old)
                     if r[:1] != b"*"
                 ]
             finally:
@@ -1125,9 +1078,9 @@ def delete_page_rows(
     with projectlock.project(project_dir):
         for table, path in page_tables(project_dir):
             dbf = Dbf(path)
-            ndx = _open_ndx(project_dir, table)
+            ndx = open_ndx(project_dir, table)
             try:
-                rows = sorted(i for i, r in _page_records(dbf, ndx, "PAGE", page_name) if r[:1] != b"*")
+                rows = sorted(i for i, r in page_records(dbf, ndx, "PAGE", page_name) if r[:1] != b"*")
                 for i in rows:
                     dbf.delete(i)
                 if rows:
@@ -1145,15 +1098,15 @@ def page_keyboard_rows(project_dir: str, page_name: str) -> List[Dict[str, str]]
     from ..format import projectlock
     from ..format.dbf import Dbf
 
-    path = _find_file(project_dir, "pgkey.DBF")
+    path = find_ci(project_dir, "pgkey.DBF")
     if path is None:
         return []
     with projectlock.project(project_dir), Dbf(path, writable=False) as d:
-        ndx = _open_ndx(project_dir, "pgkey", writable=False)
+        ndx = open_ndx(project_dir, "pgkey", writable=False)
         try:
             return [
                 d.decode(r)
-                for _i, r in sorted(_page_records(d, ndx, "PAGE", page_name))
+                for _i, r in sorted(page_records(d, ndx, "PAGE", page_name))
                 if r[:1] != b"*" and not d.field(r, "AN")
             ]
         finally:
@@ -1168,15 +1121,15 @@ def set_page_keyboard_rows(
     """Replace a page's page-wide keyboard commands."""
     from ..format.dbf import Dbf
 
-    path = _find_file(project_dir, "pgkey.DBF")
+    path = find_ci(project_dir, "pgkey.DBF")
     if path is None:
         return 0
     dbf = Dbf(path)
-    ndx = _open_ndx(project_dir, "pgkey")
+    ndx = open_ndx(project_dir, "pgkey")
     try:
         old = sorted(
             (i, r)
-            for i, r in _page_records(dbf, ndx, "PAGE", page_name)
+            for i, r in page_records(dbf, ndx, "PAGE", page_name)
             if r[:1] != b"*" and not dbf.field(r, "AN")
         )
         new = [dbf.encode(dict(r, PAGE=page_name, AN="")) for r in rows]
@@ -1208,11 +1161,11 @@ def log_changes(project_dir: str, entries: List[Dict[str, str]], *, when: Option
     False when the project has no change log."""
     from ..format.dbf import Dbf
 
-    cp = _find_file(project_dir, "changes.DBF")
+    cp = find_ci(project_dir, "changes.DBF")
     if not cp or not entries:
         return False
     ch = Dbf(cp)
-    chn = _open_ndx(project_dir, "changes")
+    chn = open_ndx(project_dir, "changes")
     try:
         _append(ch, chn, [ch.encode(e) for e in entries])
         ch.touch(when)
@@ -1225,8 +1178,8 @@ def log_changes(project_dir: str, entries: List[Dict[str, str]], *, when: Option
 
 def mark_uncompiled(project_dir: str) -> Optional[str]:
     """PROJECT.CIT CompState -> UNCOMPILED; the previous state, or None."""
-    cit = _find_file(project_dir, "PROJECT.CIT")
-    return _set_comp_state(cit, b"UNCOMPILED") if cit else None
+    cit = find_ci(project_dir, "PROJECT.CIT")
+    return _set_comp_state(cit) if cit else None
 
 
 def register_files(project_dir: str) -> List[str]:
@@ -1238,7 +1191,7 @@ def register_files(project_dir: str) -> List[str]:
         names += [t + ".DBF", t + ".NDX"]
     seen = set()
     for n in names:
-        p = _find_file(project_dir, n)
+        p = find_ci(project_dir, n)
         if p is not None and os.path.normcase(p) not in seen:
             seen.add(os.path.normcase(p))
             out.append(p)
@@ -1283,7 +1236,7 @@ def apply_page_state(
         pname = (disk or {}).get("NAME") or name
         keys = state.get("page_keys")
         if keys is not None:
-            if _find_file(project_dir, "pgkey.DBF") is None:
+            if find_ci(project_dir, "pgkey.DBF") is None:
                 if keys:
                     raise PageRecordError(
                         "project %s has no pgkey.DBF, so the page "

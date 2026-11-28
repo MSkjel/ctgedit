@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from .infra import workers as _workers
+
+
+from .format.projects import is_project_dir
+
 import base64  # noqa: F401 (re-exported)
 import contextlib
 import hashlib
@@ -9,21 +14,22 @@ import json
 import math  # noqa: F401 (re-exported)
 import os
 import struct
-import tempfile
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable, List, Optional, Sequence, Tuple  # noqa: F401 (re-exported)
 
-from .format.page import parse_ctg, ParsedCtg, PageObject, _parse_object  # noqa: F401 (re-exported)
+from .format.page import parse_ctg, ParsedCtg, PageObject, parse_object  # noqa: F401 (re-exported)
 from .format import writer, factory  # noqa: F401 (re-exported)
 from .format import geometry as geom
 from .format import inputs  # noqa: F401 (re-exported)
 from .model.document import ObjectKind, Page  # noqa: F401 (re-exported)
 from .format.textcodec import CODEC  # noqa: F401 (re-exported)
+from .format import codes as codes  # noqa: F401 (the doc/ mixins take it from here)
 from .format import textcodec
+from .format.symbols import SymbolResolver
 from .format.fileio import write_atomic
 from .features.symbol_sets import SymbolSetEditing, SymbolSetError  # noqa: F401 (re-exported)
-from .format import codes as _codes  # noqa: F401 (re-exported through the star import)
+from .infra.logsetup import note_exception as _note_exc
 
 
 #: user text holds characters the page's ANSI code page cannot store (the
@@ -31,14 +37,20 @@ from .format import codes as _codes  # noqa: F401 (re-exported through the star 
 UnencodableTextError = textcodec.UnencodableTextError
 
 
-def _check_page_name(stem: str, folder: str) -> None:
-    """Refuse (:class:`UnencodableTextError`) a page name the project's
-    pages.DBF cannot store -- its NAME is ANSI text: registering the page would
-    need a '?' in its name -- before any file is written. A page outside a
-    project (no pages.DBF) is never registered and may keep any name."""
-    if textcodec.unencodable(stem) and any(
-        os.path.exists(os.path.join(folder, n)) for n in ("pages.DBF", "pages.dbf")
-    ):
+def check_page_name(stem: str, folder: str) -> None:
+    """Refuse a page name the project's pages.DBF cannot store, before any file is written:
+    one longer than its NAME (ValueError) or with characters its ANSI text cannot hold
+    (:class:`UnencodableTextError`). A page outside a project (no pages.DBF) is never
+    registered and may keep any name."""
+    from .format.projects import PAGE_NAME_LEN
+
+    if not is_project_dir(folder):
+        return
+    if len(stem.encode(textcodec.CODEC, "replace")) > PAGE_NAME_LEN:
+        raise ValueError(
+            "Page names can be at most %d characters (%s has %d)." % (PAGE_NAME_LEN, stem, len(stem))
+        )
+    if textcodec.unencodable(stem):
         textcodec.encode_field(stem, "a page name (pages.DBF keeps it as the page's NAME)")
 
 
@@ -102,7 +114,7 @@ class LibraryLinkError(ValueError):
     object; the message says why (the page is unchanged)."""
 
 
-def _fresh_identity(parsed: ParsedCtg, created: bool = False) -> bytes:
+def fresh_identity(parsed: ParsedCtg, created: bool = False) -> bytes:
     """Give a page a new identity (save stamp and GUID), as CtDraw's save does."""
     from .format.element import ctdraw_timestamp
     from .infra import identity
@@ -121,7 +133,7 @@ def _fresh_identity(parsed: ParsedCtg, created: bool = False) -> bytes:
     return ident
 
 
-def _prune_link_table(pb) -> list:
+def prune_link_table(pb) -> list:
     """Drop link table entries nothing on the page uses any more."""
     from .format import genie_place as GP
     from .format import links
@@ -149,9 +161,9 @@ def _prune_link_table(pb) -> list:
     return [e for e in t[1] if e not in keep]
 
 
-def _identity_state(parsed: ParsedCtg) -> tuple:
-    """What a Save As changes on the document (_fresh_identity +
-    _prune_link_table), so a failed write can put it back."""
+def identity_state(parsed: ParsedCtg) -> tuple:
+    """What a Save As changes on the document (fresh_identity +
+    prune_link_table), so a failed write can put it back."""
     pb, at, ct = parsed.page, parsed.attributes, parsed.container
     return (
         (pb.page_identity, pb.link_table_raw, pb.link_count) if pb is not None else None,
@@ -160,7 +172,7 @@ def _identity_state(parsed: ParsedCtg) -> tuple:
     )
 
 
-def _set_identity_state(parsed: ParsedCtg, state: tuple) -> None:
+def set_identity_state(parsed: ParsedCtg, state: tuple) -> None:
     page, attrs, cont = state
     if page is not None and parsed.page is not None:
         parsed.page.page_identity, parsed.page.link_table_raw, parsed.page.link_count = page
@@ -173,11 +185,11 @@ CLIPBOARD_MIME = "application/x-ctgedit-objects"
 
 #: bumped whenever ctgedit writes a library element: every document's cached
 #: SymbolResolver (and placement link info) is rebuilt on its next use
-_LIBRARY_GENERATION = [0]
+LIBRARY_GENERATION = [0]
 
 
 def libraries_changed() -> None:
-    _LIBRARY_GENERATION[0] += 1
+    LIBRARY_GENERATION[0] += 1
     # the shared folder listings and what a derive computed from the libraries / project
     # tables are computed again (View > Refresh must bring back a page as a fresh editor
     # draws it: tests/test_derive_threads.py; the tag formats are keyed by project only, so
@@ -206,10 +218,10 @@ def ctdraw_cache_warning() -> str:
     session and never re-reads the file: with a Graphics Builder running, it keeps
     showing (and on its next save of that element WRITES BACK) the old version."""
     try:
-        from .backend.graphics_builder import _ctdraw_pids
+        from .backend.graphics_builder import ctdraw_pids
 
-        running = bool(_ctdraw_pids())
-    except Exception:  # noqa: BLE001
+        running = bool(ctdraw_pids())
+    except Exception:  # noqa: BLE001 -- swallow-ok: no pywin32: not running
         running = False
     if not running:
         return ""
@@ -240,7 +252,7 @@ def ctf_matches(ours: bytes, disk: bytes) -> bool:
         from .format.container import Container
 
         c = Container.parse(ours)
-    except Exception:  # noqa: BLE001 -- not a container: never equal
+    except Exception:  # noqa: BLE001 -- swallow-ok: not a container: never equal
         return False
     if c.word2 < 0x0C:  # a legacy page head: no masking
         return False
@@ -266,28 +278,14 @@ def ctf_matches(ours: bytes, disk: bytes) -> bool:
     return bytes(fixed) == disk
 
 
-def _ctf_verdict(ctg: bytes, old_ctf: bytes, page_path: str, resolver=None) -> bool:
+def ctf_verdict(ctg: bytes, old_ctf: bytes, page_path: str, resolver=None) -> bool:
     """build_ctf(``ctg``) reproduces ``old_ctf`` (:func:`ctf_matches`)."""
     from .format import ctf as CTF
 
     return ctf_matches(CTF.build_ctf(ctg, page_path, resolver=resolver), old_ctf)
 
 
-def _page_resolver(page_path: str):
-    """The resolver EditableDocument._resolver gives a document of this page
-    (the include chain + CTG_LIB_PATH; None with CTG_NO_SYMBOLS=1)."""
-    if os.environ.get("CTG_NO_SYMBOLS") == "1":
-        return None
-    try:
-        from .format.symbols import SymbolResolver
-
-        extra = [p for p in os.environ.get("CTG_LIB_PATH", "").split(os.pathsep) if p]
-        return SymbolResolver.for_page(page_path, extra_paths=extra)
-    except Exception:  # noqa: BLE001
-        return None
-
-
-def _sha1(data: bytes) -> str:
+def sha1(data: bytes) -> str:
     return hashlib.sha1(data).hexdigest()
 
 
@@ -318,9 +316,9 @@ def ctf_check_main(argv=None) -> int:
             ctg = fh.read()
         with open(page[:-1] + "F", "rb") as fh:
             old = fh.read()
-        res["ctg"], res["ctf"] = _sha1(ctg), _sha1(old)
-        res["ok"] = bool(_ctf_verdict(ctg, old, page, resolver=_page_resolver(page)))
-    except Exception as e:  # noqa: BLE001 -- reported to the editor
+        res["ctg"], res["ctf"] = sha1(ctg), sha1(old)
+        res["ok"] = bool(ctf_verdict(ctg, old, page, resolver=SymbolResolver.for_page_env(page)))
+    except Exception as e:  # noqa: BLE001 -- swallow-ok: reported to the editor
         res["error"] = "%s: %s" % (type(e).__name__, e)
     try:
         write_atomic(out, json.dumps(res).encode("utf-8"))
@@ -329,11 +327,15 @@ def ctf_check_main(argv=None) -> int:
     return 0 if "error" not in res else 1
 
 
-class CtfPrecheck:
+class CtfPrecheck(_workers.CheckProcess):
     """One page's fast-display trust check, run in a helper process."""
 
+    KIND = "ctf"
+    FOLDER = "ctfcheck"
+    SWEEP_SUFFIX = ".json"
     #: the check process now running (the editor starts the next when it ends)
     _running: List["CtfPrecheck"] = []
+    _swept = False
     #: seconds a save waits for a running check before computing it itself
     WAIT = 30.0
 
@@ -345,13 +347,6 @@ class CtfPrecheck:
         self.out = None
         self.done = False
 
-    # -- the process -----------------------------------------------------------
-    @classmethod
-    def busy(cls) -> bool:
-        """A check process is running (none is started beside it)."""
-        cls._running[:] = [c for c in cls._running if c.proc is not None and c.proc.poll() is None]
-        return bool(cls._running)
-
     def started(self) -> bool:
         return self.proc is not None or self.done
 
@@ -360,55 +355,23 @@ class CtfPrecheck:
         again later); True when it runs, ran, or is not needed any more."""
         if self.started():
             return True
-        from .infra import workers
-
-        if self.busy() or workers.others_busy("ctf"):
+        if not self.may_start():
             return False
-        from .infra.paths import data_dir
-
-        folder = data_dir("ctfcheck")
         try:
-            os.makedirs(folder, exist_ok=True)
-            self._sweep(folder)
-            fd, self.out = tempfile.mkstemp(prefix="%d-" % os.getpid(), suffix=".json", dir=folder)
-            os.close(fd)
-            os.remove(self.out)
-            self.proc = workers.track("ctf", workers.start(ctf_check_command(self.path, self.out)))
+            self.out = self.answer_file()
+            self.launch(ctf_check_command(self.path, self.out))
         except Exception:  # noqa: BLE001 -- the save computes it itself
+            _note_exc("editing_base.CtfPrecheck.start", path=self.path)
             self.proc = None
             self.done = True
-            return True
-        self._running.append(self)
         return True
-
-    _swept = False
-
-    @classmethod
-    def _sweep(cls, folder: str) -> None:
-        """Once per run: remove result files older than a day (a check whose
-        page was closed with the editor -- nobody asked for its verdict)."""
-        if cls._swept:
-            return
-        cls._swept = True
-        import time
-
-        old = time.time() - 86400
-        with contextlib.suppress(OSError):
-            for name in os.listdir(folder):
-                p = os.path.join(folder, name)
-                with contextlib.suppress(OSError):
-                    if name.endswith(".json") and os.path.getmtime(p) < old:
-                        os.remove(p)
 
     def is_alive(self) -> bool:
         return self.proc is not None and self.proc.poll() is None
 
     def cancel(self) -> None:
         """Not needed any more (the page was saved / closed): stop the process."""
-        if self.proc is not None and self.proc.poll() is None:
-            with contextlib.suppress(Exception):
-                self.proc.kill()
-                self.proc.wait(5)
+        self.kill()
         self._discard_out()
         self.done = True
 
@@ -428,13 +391,10 @@ class CtfPrecheck:
         if self.proc is not None:
             try:
                 self.proc.wait(self.WAIT if timeout is None else timeout)
-            except Exception:  # noqa: BLE001 -- too slow: compute it here
+            except Exception:  # noqa: BLE001 -- swallow-ok: too slow: compute it here
                 with contextlib.suppress(Exception):
                     self.proc.kill()
-            res = None
-            with contextlib.suppress(Exception):
-                with open(self.out, "rb") as fh:
-                    res = json.loads(fh.read().decode("utf-8"))
+            res = self.read_answer()
             self._discard_out()
             if (
                 isinstance(res, dict)
@@ -464,11 +424,11 @@ class CtfPrecheck:
                 old = fh.read()
         except OSError:
             return None
-        if _sha1(ctg) != self.box.get("ctg") or _sha1(old) != self.box.get("ctf"):
+        if sha1(ctg) != self.box.get("ctg") or sha1(old) != self.box.get("ctf"):
             return None
         try:
             res = self._resolver() if self._resolver is not None else None
-            return _ctf_verdict(ctg, old, self.path, resolver=res)
+            return ctf_verdict(ctg, old, self.path, resolver=res)
         except Exception:  # noqa: BLE001
             from .infra import logsetup
 
@@ -486,7 +446,7 @@ def create_super_genie_pages(
     if not targets:
         return out
     pdir = os.path.abspath(project_dir)
-    is_project = any(os.path.exists(os.path.join(pdir, n)) for n in ("pages.DBF", "pages.dbf"))
+    is_project = is_project_dir(pdir)
     background = None
     try:
         from .io import projectcit
@@ -519,6 +479,7 @@ def create_super_genie_pages(
         try:
             where = SG.page_in_chain(pdir, name)
         except Exception:  # noqa: BLE001
+            _note_exc("editing_base.create_super_genie_pages", page=name)
             where = None
         if where is not None:
             rep.update(
@@ -559,6 +520,7 @@ def create_super_genie_pages(
             rep.update(status="created", detail=doc.save_warning or "")
             rep["files"] = list(getattr(doc, "save_files", None) or [])
         except Exception as e:  # noqa: BLE001 -- the placement / save never fails on it
+            _note_exc("editing_base.create_super_genie_pages")
             rep.update(status="failed", detail="%s: %s" % (type(e).__name__, e))
     from .infra import logsetup
 
@@ -717,7 +679,7 @@ def metadata_problem(items) -> Optional[Tuple[int, str]]:
     return None
 
 
-def _name_key(po: PageObject) -> Tuple[str, str]:
+def name_key(po: PageObject) -> Tuple[str, str]:
     """(key, value) of the bag pair holding an object's name."""
     pairs = writer.value_bag(po)
     if pairs is None:
@@ -731,7 +693,7 @@ def _name_key(po: PageObject) -> Tuple[str, str]:
     return legacy or ("", "")
 
 
-def _rename_header(po: PageObject, name: str) -> bool:
+def rename_header(po: PageObject, name: str) -> bool:
     """The geometry-header name splice (geometry.set_object_name) with the
     record's bag view re-scanned: every byte after the name moves."""
     ok = geom.set_object_name(po, name)
@@ -797,7 +759,7 @@ PAGE_KEY_LABELS = {
 }
 
 
-def _find_options(options: dict) -> dict:
+def find_options(options: dict) -> dict:
     """FindOptions keyword arguments: ``scopes`` as a frozenset, a filter given as a pattern
     or an (include, exclude) pair as a NameFilter."""
     out = dict(options)
@@ -867,11 +829,11 @@ def read_with_identity(path: str):
 
 
 @dataclass
-class _Command:
+class Command:
     label: str
     do: Callable[[], None]
     undo: Callable[[], None]
-    #: what the step keeps alive, roughly (bytes; -1 = not measured yet: _command_bytes)
+    #: what the step keeps alive, roughly (bytes; -1 = not measured yet: command_bytes)
     nbytes: int = -1
     #: when the step was made (time.time(): the History panel's time column)
     when: float = field(default_factory=time.time)
@@ -896,7 +858,7 @@ UNDO_KEEP_MIN = 10
 _SCALARS = (int, float, bool, type(None))
 
 
-def _command_bytes(cmd: _Command) -> int:
+def command_bytes(cmd: Command) -> int:
     """About how many bytes a step's do / undo closures keep (saved record states, payloads,
     copied lists), measured once."""
     if cmd.nbytes >= 0:
@@ -988,13 +950,13 @@ class RecordForest:
         return out
 
 
-def _ini_back_color() -> str:
+def ini_back_color() -> str:
     """citect.ini [CtDraw.RSC] BackColor ('' when it cannot be read)."""
     try:
         from .io.citect_config import ini_value
 
         return ini_value("CtDraw.RSC", "BackColor", "")
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- swallow-ok: no install or an unreadable ini: no colour
         return ""
 
 
@@ -1057,6 +1019,8 @@ class DocumentUiState:
     steps_after_template: bool = False
     #: the Simulate window's page model of it, with the edit serials it was made at
     sim_model_cache: Any = None
+    #: View > Preview States: the values set by hand, by condition (features/state_preview)
+    preview_values: dict = field(default_factory=dict)
     #: the canvas's Previous View / Next View for it: [(QTransform, scene centre)], at most
     #: 50 each (ui/editor/viewnav.py)
     view_history: list = field(default_factory=list)

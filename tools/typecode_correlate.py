@@ -10,8 +10,8 @@ from collections import Counter, defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ctgedit.format.page import parse_ctg, _extract_bmp  # noqa: E402
-from ctgedit.io.reader import _read_geometry  # noqa: E402
+from ctgedit.format.page import parse_ctg, extract_bmp  # noqa: E402
+from ctgedit.io.reader import read_geometry  # noqa: E402
 
 EXAMPLE_DIR = r"C:\ProgramData\AVEVA Plant SCADA 2023 R2\User\Example"
 
@@ -73,7 +73,7 @@ def family_flags(keys: set[str]) -> set[str]:
 def thumb_image(pb):
     if not HAVE_PIL or not pb.thumbnail:
         return None
-    bmp = _extract_bmp(pb.thumbnail)
+    bmp = extract_bmp(pb.thumbnail)
     if not bmp:
         return None
     try:
@@ -177,7 +177,7 @@ def main():
             has_font[tc][0 if o.font_face else 1] += 1
             has_text_expr[tc][0 if o.text_exprs else 1] += 1
 
-            g = _read_geometry(o.body_raw, 0)
+            g = read_geometry(o.body_raw, 0)
             r1 = g["rect1"] if g else None
             r2 = g["rect2"] if g else None
             box = None

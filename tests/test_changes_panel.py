@@ -19,8 +19,8 @@ def win(fx_page):
     if w.doc.dirty:
         w.save()
     yield w
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.hide()
 
 
@@ -41,7 +41,7 @@ def test_five_moved_genies_are_five_changed_rows_moved(win):
     assert all(c.summary.startswith("moved 5, 0") for c in cs.changes)
     assert {c.index for c in cs.changes} == set(g)
     # counted by unit, with the records in brackets
-    assert cs.message().startswith("5 objects changed since the save (")
+    assert cs.message() == "5 objects changed since the save."
     win.dock_changes.show()
     QtWidgets.QApplication.processEvents()
     win._changes_refresh()

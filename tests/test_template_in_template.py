@@ -7,8 +7,7 @@ import pytest
 
 from ctgedit.format import genie_place as GP
 from ctgedit.format import geometry as geom
-from ctgedit.format import links
-from ctgedit.format import writer
+from ctgedit.format import links, writer
 
 TPL = ("fx_style", "normal@xga")
 RECT = (300, 300, 400, 360)

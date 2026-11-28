@@ -363,8 +363,8 @@ def test_ctrl_z_in_a_field_after_enter_undoes(tmp_path, fx_page):
         assert doc.page.objects[r].geometry.x == 346
     finally:
         win.doc.dirty = False
-        if win in MainWindow._instances:
-            MainWindow._instances.remove(win)
+        if win in MainWindow.instances:
+            MainWindow.instances.remove(win)
         win.close()
 
 
@@ -771,8 +771,8 @@ def test_the_page_properties_button_is_the_menus_action(tmp_path, fx_page):
         assert hits == [1] and b.text() == win.act_page_props.text().replace("&", "")
     finally:
         win.doc.dirty = False
-        if win in MainWindow._instances:
-            MainWindow._instances.remove(win)
+        if win in MainWindow.instances:
+            MainWindow.instances.remove(win)
         win.close()
 
 
@@ -1025,8 +1025,8 @@ def test_a_tab_switch_inside_the_pause_leaves_the_other_page_alone(tmp_path, fx_
     finally:
         for e in win._docs:
             e["doc"].dirty = False
-        if win in MainWindow._instances:
-            MainWindow._instances.remove(win)
+        if win in MainWindow.instances:
+            MainWindow.instances.remove(win)
         win.close()
 
 
@@ -1196,8 +1196,8 @@ def test_add_animation_flashes_the_header_in_the_window(tmp_path, fx_page):
         assert len(builds) == 1  # (the window's refresh, no second one)
     finally:
         win.doc.dirty = False
-        if win in MainWindow._instances:
-            MainWindow._instances.remove(win)
+        if win in MainWindow.instances:
+            MainWindow.instances.remove(win)
         win.close()
 
 

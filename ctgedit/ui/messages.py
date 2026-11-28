@@ -155,10 +155,8 @@ def list_box(parent, title: str, text: str, items, warning: bool = True) -> None
     """A result with a list behind it: ``text`` says what happened in a sentence or two, the
     first item is shown when it is the only one, and the whole list is behind Show Details
     (never a wall of reasons by default). A seam: tests replace it."""
-    import os
-
     items = [str(x) for x in items if str(x)]
-    if os.environ.get("CTG_NO_MODAL_QUESTIONS") == "1":
+    if _unanswered():
         # (the tests: a box they did not replace fails at once, never waits)
         raise RuntimeError("an unexpected message: %s: %s %s" % (title, text, items))
     body = text
@@ -176,18 +174,73 @@ def list_box(parent, title: str, text: str, items, warning: bool = True) -> None
     box.exec()
 
 
-def choose(parent, title: str, text: str, actions, default: Optional[str] = None) -> Optional[str]:
-    """A question answered by buttons named for what they do (``actions``: 'Replace All 3',
-    'Only the Selected One'), never Yes / No, and Cancel. ``default``: the action Enter
-    picks (None: Cancel). The action clicked, None for Cancel. A seam: tests replace it."""
+def ask_text(parent, title: str, label: str, text: str = "") -> Optional[str]:
+    """A line of text asked for, ``text`` given to edit; None when cancelled."""
+    value, ok = _input("getText", parent, title, label, QtWidgets.QLineEdit.Normal, text)
+    return value if ok else None
+
+
+def ask_item(
+    parent, title: str, label: str, items, current: int = 0, editable: bool = False
+) -> Optional[str]:
+    """One of ``items`` chosen in a list (``current`` first; ``editable``: or a text typed);
+    None when cancelled."""
+    value, ok = _input("getItem", parent, title, label, list(items), current, editable)
+    return value if ok else None
+
+
+def _input(name: str, parent, title: str, label: str, *args):
     import os
 
-    if os.environ.get("CTG_NO_MODAL_QUESTIONS") == "1":
+    fn = getattr(QtWidgets.QInputDialog, name)
+    if isinstance(fn, types.BuiltinFunctionType) and os.environ.get("CTG_NO_MODAL_QUESTIONS") == "1":
+        # (the tests: a question they did not answer fails at once, never waits)
+        raise RuntimeError("an unanswered question: %s: %s" % (title, label))
+    return fn(parent, title, label, *args)
+
+
+def warn(parent, title: str, text: str) -> None:
+    """A notice that something was refused or could not be done, with OK."""
+    _notice("warning", parent, title, text)
+
+
+def inform(parent, title: str, text: str) -> None:
+    """A notice of what happened, with OK."""
+    _notice("information", parent, title, text)
+
+
+def _notice(kind: str, parent, title: str, text: str) -> None:
+
+    fn = _stand_in(kind)
+    if fn is not None:
+        fn(parent, title, text)
+        return
+    if _unanswered():
+        # (the tests: a notice they did not expect fails at once, never waits)
+        raise RuntimeError("an unexpected message: %s: %s" % (title, text))
+    getattr(QtWidgets.QMessageBox, kind)(parent, title, text)
+
+
+def choose(
+    parent,
+    title: str,
+    text: str,
+    actions,
+    default: Optional[str] = None,
+    detail: str = "",
+    warning: bool = False,
+) -> Optional[str]:
+    """A question answered by buttons named for what they do (``actions``: 'Replace All 3',
+    'Only the Selected One'), never Yes / No, and Cancel. ``default``: the action Enter
+    picks (None: Cancel); ``detail``: a second paragraph; ``warning``: its icon is the
+    warning's. The action clicked, None for Cancel. A seam: tests replace it."""
+    if _unanswered():
         # (the tests: a question they did not answer fails at once, never waits)
         raise RuntimeError("an unanswered question: %s: %s" % (title, text))
-    box = QtWidgets.QMessageBox(
-        QtWidgets.QMessageBox.Question, title, text, QtWidgets.QMessageBox.NoButton, parent
-    )
+    icon = QtWidgets.QMessageBox.Warning if warning else QtWidgets.QMessageBox.Question
+    box = QtWidgets.QMessageBox(icon, title, text, QtWidgets.QMessageBox.NoButton, parent)
+    if detail:
+        box.setInformativeText(detail)
     buttons = {box.addButton(a, QtWidgets.QMessageBox.AcceptRole): a for a in actions}
     cancel = box.addButton(QtWidgets.QMessageBox.Cancel)
     box.setDefaultButton(next((b for b, a in buttons.items() if a == default), cancel))
@@ -196,11 +249,64 @@ def choose(parent, title: str, text: str, actions, default: Optional[str] = None
     return buttons.get(box.clickedButton())
 
 
-def confirm(parent, title: str, text: str, action: str, safe_default: bool = True) -> bool:
+def ask_with_again(
+    parent,
+    title: str,
+    text: str,
+    actions,
+    dismiss: str,
+    *,
+    detail: str = "",
+    default: Optional[str] = None,
+    icon: str = "question",
+    again: bool = True,
+    properties=None,
+    exec_=None,
+):
+    """A question answered by the buttons named for what they do (``actions``) or ``dismiss``
+    ('Later', 'Not Now'), with a 'Don't ask again' box (``again``). (the action clicked, or None
+    for ``dismiss`` or Esc; whether 'Don't ask again' was ticked). ``default``: the action
+    Enter picks (None: ``dismiss``); ``icon``: 'question', 'information' or 'warning';
+    ``properties``: dynamic properties of the box; ``exec_``: shows the box (a seam: tests
+    answer it)."""
+    M = QtWidgets.QMessageBox
+    icons = {"question": M.Question, "information": M.Information, "warning": M.Warning}
+    box = M(icons.get(icon, M.Question), title, text, M.NoButton, parent)
+    for k, v in (properties or {}).items():
+        box.setProperty(k, v)
+    if detail:
+        box.setInformativeText(detail)
+    buttons = {box.addButton(a, M.AcceptRole if i == 0 else M.ActionRole): a for i, a in enumerate(actions)}
+    later = box.addButton(dismiss, M.RejectRole)
+    box.setEscapeButton(later)
+    box.setDefaultButton(next((b for b, a in buttons.items() if a == default), later))
+    tick = None
+    if again:
+        tick = QtWidgets.QCheckBox("Don't ask again", box)  # (owned by the box)
+        box.setCheckBox(tick)
+    (exec_ or _exec_box)(box)
+    return buttons.get(box.clickedButton()), bool(tick is not None and tick.isChecked())
+
+
+def _exec_box(box) -> None:
+    if _unanswered():
+        raise RuntimeError("an unanswered question: %s: %s" % (box.windowTitle(), box.text()))
+    box.exec()
+
+
+def confirm(
+    parent,
+    title: str,
+    text: str,
+    action: str,
+    safe_default: bool = True,
+    detail: str = "",
+    warning: bool = False,
+) -> bool:
     """A question answered by a button named for what it does (``action``: 'Delete') or
     Cancel; ``safe_default``: Enter is Cancel (an action that discards or removes). True
-    when ``action`` was clicked."""
-    return choose(parent, title, text, [action], None if safe_default else action) == action
+    when ``action`` was clicked (:func:`choose`)."""
+    return choose(parent, title, text, [action], None if safe_default else action, detail, warning) == action
 
 
 def with_extension(parent, title: str, path: str, ext: str) -> Optional[str]:
@@ -231,6 +337,18 @@ def open_folder(path: str) -> None:
     QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(path))
 
 
+def reveal(path: str) -> None:
+    """Show the file ``path`` selected in Explorer; its folder when the file is not there."""
+    import os
+    import subprocess
+
+    if os.path.exists(path) and os.name == "nt":
+        with contextlib.suppress(OSError):
+            subprocess.Popen(["explorer", "/select,", os.path.normpath(path)])  # noqa: S603,S607
+            return
+    open_folder(os.path.dirname(os.path.abspath(path)))
+
+
 def open_folder_action(label: str, path: str) -> tuple:
     """An ``actions`` entry of a box: ``label`` opens ``path`` in Explorer."""
     return (label, lambda: open_folder(path))
@@ -253,6 +371,16 @@ def open_log_button(parent=None) -> QtWidgets.QToolButton:
 
     b.clicked.connect(run)
     return b
+
+
+def _unanswered() -> bool:
+    """A box would wait for an answer no one gives: the tests (CTG_NO_MODAL_QUESTIONS=1) when
+    no stand-in for QMessageBox.exec answers the boxes."""
+    import os
+
+    return os.environ.get("CTG_NO_MODAL_QUESTIONS") == "1" and not isinstance(
+        QtWidgets.QMessageBox.exec, types.FunctionType
+    )
 
 
 def _stand_in(name: str):

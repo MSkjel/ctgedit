@@ -24,11 +24,11 @@ def win(fx_install):
     w = MainWindow()
     w.resize(1280, 720)
     yield w
-    for x in list(MainWindow._instances):
+    for x in list(MainWindow.instances):
         for e in getattr(x, "_docs", []):
             e["doc"].dirty = False
-        if x in MainWindow._instances:
-            MainWindow._instances.remove(x)
+        if x in MainWindow.instances:
+            MainWindow.instances.remove(x)
         x.hide()
 
 

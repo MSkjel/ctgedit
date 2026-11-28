@@ -267,13 +267,11 @@ def index_problems(table_path: str, field: str, width: int, label: str = "") -> 
     """How the index beside ``table_path`` (``<table>.NDX``, any case) differs from one on
     ``field`` of ``width``, one line ([] when it is right): no index, or one on another
     field or key length."""
+    from .fileio import find_ci
+
     folder = os.path.dirname(os.path.abspath(table_path))
     stem = os.path.splitext(os.path.basename(table_path))[0].lower()
-    try:
-        names = os.listdir(folder)
-    except OSError:
-        names = []
-    ndx = next((os.path.join(folder, f) for f in sorted(names) if f.lower() == stem + ".ndx"), "")
+    ndx = find_ci(folder, stem + ".NDX") or ""
     label = (label + ": ") if label else ""
     nk = ndx_key(ndx) if ndx else None
     if nk is None:

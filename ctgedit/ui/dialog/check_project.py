@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from ...infra.paths import path_key
+
+from ..names import plural
+
 import os
 from typing import Callable, Dict, List, Optional
 
@@ -33,12 +37,11 @@ class CheckProjectDialog(QtWidgets.QDialog):
         self.renames = {k.lower(): v for k, v in (renames or {}).items()}
         #: () -> the open documents
         self._documents = documents or (lambda: [])
-        #: open_page(path) -> document or None; goto(doc, index)
+        #: open_page(path) -> its document (raises, the reason in its text); goto(doc, index)
         self._open_page, self._goto = open_page, goto
         #: replaced(docs): the open pages a replace changed
         self._replaced = replaced
         self._rows: List[dict] = []
-        self._job = None
         #: Replace References in the open pages: (replaced, read only, problems)
         self._open_result = (0, 0, [])
         #: the last replace's summary, shown before the next check's
@@ -52,10 +55,13 @@ class CheckProjectDialog(QtWidgets.QDialog):
             os.path.join(project_dir, "_") if project_dir else "",
             what="The project whose pages are checked",
             horizontal=True,
+            remember="check",
+            fixed=bool(self.renames),
         )
-        self._scope.includes.setChecked(bool(includes))
+        if self.renames:
+            self._scope.includes.setChecked(bool(includes))
         top.addRow("Project:", self._scope)
-        self._filter = SearchField("Filter findings", regex_key="Check Project filter")
+        self._filter = SearchField("Filter findings", regex_key="Check Project filter", enter_filters=True)
         self._filter.setToolTip("Show only the findings whose page, object or text contains this")
         self._only_refs = QtWidgets.QCheckBox("Only references to renamed pages")
         self._only_refs.setVisible(bool(self.renames))
@@ -85,11 +91,11 @@ class CheckProjectDialog(QtWidgets.QDialog):
         self._status.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
         srow = QtWidgets.QHBoxLayout()
         srow.addWidget(self._status, 1)
-        self._b_stop = QtWidgets.QToolButton()
-        self._b_stop.setText("Stop")
-        self._b_stop.setVisible(False)
-        self._b_stop.clicked.connect(self.stop)
-        srow.addWidget(self._b_stop)
+        from ..jobs.helper_job import DialogJob
+
+        self._helper = DialogJob(self._status, "Stop checking: the findings so far stay")
+        srow.addWidget(self._helper.stop_button)
+        srow.addWidget(self._helper.log_button)
         lay.addLayout(srow)
 
         btns = QtWidgets.QHBoxLayout()
@@ -127,6 +133,9 @@ class CheckProjectDialog(QtWidgets.QDialog):
         self.setMinimumWidth(640)
         self.resize(900, 560)
         self._sync_buttons()
+        if not renames:
+            # (the check starts when asked: it reads every page of the project)
+            self._helper.say("Click Check to check the pages, tables and Cicode files of the project.")
 
     # -- the rows ------------------------------------------------------------------------
     def rows(self) -> List[dict]:
@@ -167,17 +176,28 @@ class CheckProjectDialog(QtWidgets.QDialog):
         return it.data(0, QtCore.Qt.UserRole) if it is not None else None
 
     def _sync_buttons(self) -> None:
-        busy = self._job is not None
-        self._b_check.setEnabled(not busy and bool(self._scope.project_dirs()))
+        from ..style.theme import enable
+
+        busy = self._helper.running()
+        enable(
+            self._b_check,
+            not busy and bool(self._scope.project_dirs()),
+            "" if busy else "Pick a project first.",
+        )
         row = self.current_row()
-        self._b_goto.setEnabled(row is not None and not row.get("table") and not row.get("file"))
+        enable(
+            self._b_goto,
+            row is not None and not row.get("table") and not row.get("file"),
+            "Pick a finding on a page."
+            if row is None
+            else "This finding is in a project table or a Cicode file.",
+        )
         self._b_replace.setEnabled(not busy and bool(self.references()))
-        self._b_stop.setVisible(busy)
 
     def _scope_changed(self) -> None:
         self._rows = []
         self._fill()
-        self._status.setText("")
+        self._helper.say("")
 
     # -- checking ----------------------------------------------------------------------------
     def check(self) -> bool:
@@ -187,46 +207,37 @@ class CheckProjectDialog(QtWidgets.QDialog):
         from ..jobs.helper_job import HelperJob
         from ..simulate.window import engine_setting
 
-        if self._job is not None:
+        if self._helper.running():
             return False
         req = {"format": CW.FORMAT, "projects": self._scope.project_dirs(), "engine": engine_setting() or ""}
         job = HelperJob(self, CW.command, req, data_dir("check"), label="Check Project")
-        job.progress.connect(
-            lambda i, n, name: self._status.setText(
+        if not self._helper.run(
+            job,
+            finished=self.take,
+            failed="The pages could not be checked.",
+            progress=lambda i, n, name: (
                 "Checking the project's tables…"
                 if i >= n
                 else "Checking page %d of %d (%s)…" % (i + 1, n, name)
-            )
-        )
-        job.finished.connect(lambda res: self._checked(job, res))
-        if not job.start():
-            self._status.setText("The pages could not be checked: the helper process did not start.")
+            ),
+        ):
             return False
-        self._job = job
         self._rows = []
         self._fill()
         return True
 
     def stop(self) -> None:
-        if self._job is not None:
-            self._job.stop()
-            self._status.setText("Stopping…")
+        self._helper.stop()
 
     def searching(self) -> bool:
-        return self._job is not None
-
-    def _checked(self, job, res: dict) -> None:
-        if job is not self._job:
-            return
-        self._job = None
-        self.take(res)
+        return self._helper.running()
 
     def take(self, res: dict) -> None:
         """Show a check's answer (check_worker.check)."""
         if res.get("error"):
             self._rows = []
             self._fill()
-            self._status.setText("The pages could not be checked: %s" % res["error"])
+            self._helper.say("The pages could not be checked: %s" % res["error"], failed=True)
             return
         rows = list(res.get("rows") or ())
         rows.sort(
@@ -247,7 +258,7 @@ class CheckProjectDialog(QtWidgets.QDialog):
         )
         if self.renames:
             k = len(self.references())
-            parts.append("%d reference%s to renamed pages." % (k, "" if k == 1 else "s"))
+            parts.append("%s to renamed pages." % (plural(k, "reference")))
         if res.get("more"):
             parts.append("Only the first %d are listed." % len(rows))
         for proj, why in (res.get("engine") or {}).items():
@@ -257,25 +268,26 @@ class CheckProjectDialog(QtWidgets.QDialog):
         if res.get("stopped"):
             parts.append("Stopped before every page was checked.")
         before, self._after_check = self._after_check, ""
-        self._status.setText(" ".join(([before] if before else []) + parts))
+        self._helper.say(" ".join(([before] if before else []) + parts))
 
     # -- going to a finding --------------------------------------------------------------------
     def go_to(self) -> None:
         r = self.current_row()
         if r is None or r.get("table") or r.get("file") or self._open_page is None:
             return
-        doc = self._open_page(r["page"])
-        if doc is None:
-            self._status.setText("%s could not be opened. The window's status bar says why." % r["name"])
+        try:
+            doc = self._open_page(r["page"])
+        except Exception as e:  # noqa: BLE001 -- swallow-ok: said in the status line
+            self._helper.say("%s could not be opened: %s" % (r["name"], e), failed=True)
             return
         if self._goto is not None:
             self._goto(doc, int(r["index"]))
 
     # -- replacing the references ------------------------------------------------------------
     def _open_doc(self, path: str):
-        key = os.path.normcase(os.path.abspath(path))
+        key = path_key(path)
         for d in self._documents() or ():
-            if getattr(d, "path", "") and os.path.normcase(os.path.abspath(d.path)) == key:
+            if getattr(d, "path", "") and path_key(d.path) == key:
                 return d
         return None
 
@@ -285,7 +297,7 @@ class CheckProjectDialog(QtWidgets.QDialog):
         from ...workers import check_worker as CW
 
         refs = self.references()
-        if not refs or self._job is not None:
+        if not refs or self._helper.running():
             return False
         tables = [
             {
@@ -372,22 +384,15 @@ class CheckProjectDialog(QtWidgets.QDialog):
             "builder_open": builder_open_pages(),
         }
         job = HelperJob(self, CW.command, req, data_dir("check"), label="Replace References")
-        job.progress.connect(
-            lambda i, n, name: self._status.setText("Replacing in page %d of %d (%s)…" % (i + 1, n, name))
-        )
-        job.finished.connect(lambda res: self._replaced_closed(job, res))
-        if not job.start():
-            self._status.setText("The closed pages could not be changed: the helper process did not start.")
+        if not self._helper.run(
+            job,
+            finished=self._replace_done,
+            failed="The closed pages could not be changed.",
+            progress=lambda i, n, name: "Replacing in page %d of %d (%s)…" % (i + 1, n, name),
+        ):
             return False
-        self._job = job
         self._sync_buttons()
         return True
-
-    def _replaced_closed(self, job, res: dict) -> None:
-        if job is not self._job:
-            return
-        self._job = None
-        self._replace_done(res)
 
     def _replace_done(self, res: dict) -> None:
         """Say what Replace References did, then check again (the list shows what is left)."""
@@ -421,10 +426,8 @@ class CheckProjectDialog(QtWidgets.QDialog):
         if self.check():
             self._after_check = said
         else:
-            self._status.setText(said)
+            self._helper.say(said)
 
     def done(self, r) -> None:
-        if self._job is not None:
-            self._job.stop()
-            self._job = None
+        self._helper.close()
         super().done(r)

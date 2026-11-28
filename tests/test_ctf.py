@@ -259,7 +259,7 @@ def test_a_bitmaps_dibs_are_deflated_again_as_ctdraw_saves_them():
     rect = struct.pack("<4h", 0, 0, 16, 16)
     part = rect + struct.pack("<III", 0x101, len(raw1), len(z1)) + z1 + struct.pack("<I", len(z2)) + z2
     out = CTF.bitmap_redeflated(part, 0)
-    y1, y2 = CTF._compress(raw1), CTF._compress(raw2)
+    y1, y2 = CTF.compress(raw1), CTF.compress(raw2)
     assert out == rect + struct.pack("<III", 0x101, len(raw1), len(y1)) + y1 + struct.pack("<I", len(y2)) + y2
     # not deflated, or not a stream: as it is
     plain = rect + struct.pack("<III", 0x100, 4, 4) + b"abcd"

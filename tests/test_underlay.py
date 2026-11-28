@@ -91,8 +91,8 @@ def _close(w):
             pass
     for e in getattr(w, "_docs", []):
         e["doc"].dirty = False
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.hide()
     # deleted now: a window only hidden stayed for the whole process, and each theme switch
     # restyled them all

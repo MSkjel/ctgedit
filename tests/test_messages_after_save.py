@@ -1,5 +1,7 @@
 """Messages after a library save."""
 
+from ctgedit.ui.window import open_tabs as open_tabs_mod
+from ctgedit.ui.jobs.update_run import UpdatePagesRun
 import os
 import types
 
@@ -72,8 +74,8 @@ def window(fx_install, monkeypatch):
     finally:
         for e in list(w._docs):
             e["doc"].dirty = False
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         UpdatePagesRun.users_busy = ""
         UpdatePagesRun.users_queue.clear()
         UpdatePagesRun.chain_busy = False
@@ -119,14 +121,14 @@ def test_the_close_question_names_the_element_and_no_open_for_a_save_s_update(fx
     assert window._only_auto_changes(row), [w for w, _c in row.ui.auto_changes]
     assert not window._ask_to_close(_tab(window, row))
     text = window.closing[-1]
-    assert text.startswith("fxparts.fx_row was updated automatically: fxnest.n1 updated from its library"), (
-        text
-    )
+    assert text.startswith(
+        "Genie fxparts.fx_row (FxLib) was updated automatically: fxnest.n1 updated from its library"
+    ), text
     assert "when it was opened" not in text and ".ctm" not in text
     assert window._only_auto_changes(page)
     assert not window._ask_to_close(_tab(window, page))
     text = window.closing[-1]
-    assert text.startswith("FxParts.ctg was updated automatically: "), text
+    assert text.startswith("FxParts was updated automatically: "), text
     assert "fxnest.n1 updated from its library" in text and "when it was opened" not in text
 
 
@@ -135,7 +137,7 @@ def test_the_close_question_of_an_edited_element_names_the_element(fx_install, w
     row = window.doc
     _edit_text(row, "%RowNum% EDITED")
     assert not window._ask_to_close(_tab(window, row))
-    assert window.closing[-1].startswith("Save changes to fxparts.fx_row before closing it?")
+    assert window.closing[-1].startswith("Save changes to Genie fxparts.fx_row (FxLib) before closing it?")
 
 
 # -- (2) the read behind the delay ----------------------------------------------------------
@@ -319,13 +321,12 @@ def test_a_page_save_s_message_stays_after_a_used_by_window_reads_again(fx_insta
     its line in the status bar); the page save's 'Saved ...' comes back when that read
     ends."""
     from ctgedit.ui.prefs.settings import app_settings
-    from ctgedit.ui.window import library as L
 
     app_settings().setValue("opt/users_read_window_ms", 60000)
     window.open_document(fx_install.page("FxParts"))
     page = window.doc
     window._show_used_by(fx_install.file("FxLib", "fxparts.ctm"), "fx_row")
-    dlgs = L._used_by_windows()
+    dlgs = open_tabs_mod.used_by_windows()
     assert dlgs
     dlgs[0].show()  # (the window under test is not shown: its Used By window is)
     window.show_tab(_tab(window, page))
@@ -350,12 +351,11 @@ def test_a_used_by_window_reads_again_after_the_save_s_read_not_inside_it(fx_ins
     """A Used By window open on the genie being saved: its own read after the save waits for
     the save's read (whose progress lets timers run) and reads the users after it, once."""
     from ctgedit.io import genieusage as GU
-    from ctgedit.ui.window import library as L
 
     lib = fx_install.file("FxLib", "fxnest.ctm")
     window._open_element(lib, "n0")
     window._show_used_by(lib, "n0")
-    dlgs = L._used_by_windows()
+    dlgs = open_tabs_mod.used_by_windows()
     assert dlgs
     dlgs[0].show()  # (the window under test is not shown: its Used By window is)
     depth, most, reads = [0], [0], []
@@ -381,7 +381,7 @@ def test_a_used_by_window_reads_again_after_the_save_s_read_not_inside_it(fx_ins
     assert not dlgs[0].stale, "the Used By window read its users again"
     assert most[0] == 1, reads
     assert len(reads) == 2, reads  # (the save's read, then the window's)
-    assert L.LibraryCommands._USERS_READS[0] == 0
+    assert UpdatePagesRun.users_reads == 0
 
 
 # -- (4) a Cancel of the search ---------------------------------------------------------------
@@ -478,7 +478,7 @@ def test_a_symbol_save_s_update_of_an_open_page_is_an_automatic_change(fx_instal
     assert all(getattr(c, "automatic", False) for c in page._undo)
     assert not window._ask_to_close(_tab(window, page))
     assert window.closing[-1].startswith(
-        "FxSymbols.ctg was updated automatically: symbols updated from their library (fxsym.fx_box). Save"
+        "FxSymbols was updated automatically: symbols updated from their library (fxsym.fx_box). Save"
     )
     # (the bar's Undo takes it back, as for an element tab)
     window.show_tab(_tab(window, page))

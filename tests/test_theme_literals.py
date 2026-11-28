@@ -41,7 +41,6 @@ DATA = {
     },
     "browser/preview.py": {"#d4d0c8": "a page's default colour (CtDraw's)"},
     "window/view.py": {"#d4d0c8": "a page's default colour (CtDraw's)"},
-    "window/library.py": {"255,255,255": "a picture flattened on white for a JPEG (data)"},
     "simulate/alarm_panels.py": {"#202020": "a swatch's frame"},
     "simulate/canvas.py": {
         "220,30,30": "the simulator's error mark over the page (page art)",

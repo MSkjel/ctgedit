@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..infra.paths import lib_path_dirs
+
 import base64
 import os
 from typing import Dict, List, Optional
@@ -33,7 +35,7 @@ def _template_records(path: str, objs) -> set:
         from ..format.symbols import SymbolResolver
         from ..io.readerparts import symbols as RS
 
-        extra = [d for d in os.environ.get("CTG_LIB_PATH", "").split(os.pathsep) if d]
+        extra = lib_path_dirs()
         return RS.template_records(objs, SymbolResolver.for_page(path, extra))
     except Exception:  # noqa: BLE001 -- swallow-ok: no template known, every record counts
         return set()

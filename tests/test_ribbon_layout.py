@@ -37,8 +37,8 @@ def _window(fx_page=None, page=True):
 def _close(w):
     from ctgedit.ui.main_window import MainWindow
 
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.hide()
     w.deleteLater()
 

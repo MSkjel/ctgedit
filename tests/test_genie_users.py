@@ -167,7 +167,7 @@ def test_update_saves_the_genie_then_the_page_and_everything_is_current(
     assert not again.elements and not again.pages
     # the backup holds the library and the page; restoring puts both back
     m = backups.read_manifest(bk)
-    assert {bool(e.get("library")) for e in m["entries"]} == {True, False}
+    assert {bool(e.get("original")) for e in m["entries"]} == {True, False}
     res = UP.restore_backup(bk)
     assert res.libraries == [os.path.abspath(lib)] and not res.failed
     assert open(lib, "rb").read() == lib_before

@@ -1,5 +1,6 @@
 """Touch and keyboard commands as child records."""
 
+from ctgedit.format.fileio import find_ci
 import os
 import shutil
 import struct
@@ -336,11 +337,11 @@ def _trim_register(src_project, dst, page):
     from ctgedit.format.dbf import Dbf, Ndx, create_ndx
 
     for f in ("pages.DBF", "changes.DBF", "PROJECT.CIT"):
-        shutil.copy(PR._find_file(src_project, f), os.path.join(dst, f))
+        shutil.copy(find_ci(src_project, f), os.path.join(dst, f))
     for t in ("pgtouch", "pgkey", "pgdynobj"):
-        d = Dbf(PR._find_file(src_project, t + ".DBF"), writable=False)
-        n = PR._open_ndx(src_project, t)
-        recs = [r for _i, r in PR._page_records(d, n, "PAGE", page)]
+        d = Dbf(find_ci(src_project, t + ".DBF"), writable=False)
+        n = PR.open_ndx(src_project, t)
+        recs = [r for _i, r in PR.page_records(d, n, "PAGE", page)]
         if n is not None:
             n.close()
         with open(d.path, "rb") as fh:
@@ -358,7 +359,7 @@ def _trim_register(src_project, dst, page):
         dd.close()
     shutil.copy(os.path.join(src_project, page + ".ctg"), os.path.join(dst, page + ".ctg"))
     # (the page's include chain: the project's include.DBF)
-    shutil.copy(PR._find_file(src_project, "include.DBF"), os.path.join(dst, "include.DBF"))
+    shutil.copy(find_ci(src_project, "include.DBF"), os.path.join(dst, "include.DBF"))
 
 
 def _rows(dst, table, page, an):
@@ -646,8 +647,8 @@ def test_double_click_text_with_touch_opens_its_sheet(tmp_path):
         assert dlg._tabs.currentWidget() is dlg._input
         dlg.reject()
     finally:
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.close()
 
 

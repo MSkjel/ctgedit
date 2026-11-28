@@ -264,8 +264,8 @@ def test_a_stale_pages_update_is_applied_from_its_remembered_answer(fx_install, 
         for ent in w._docs:  # (the update made it dirty: no save question)
             ent["doc"].dirty = False
         w.doc = None
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.close()
 
 

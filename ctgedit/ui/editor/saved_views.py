@@ -1,6 +1,8 @@
 """Saved views (View > Saved Views)."""
 
 from __future__ import annotations
+
+from ...infra.paths import path_key
 from ..style.theme import sp as _sp  # (the spacing scale)
 
 import hashlib
@@ -9,10 +11,6 @@ import os
 
 from PySide6 import QtCore, QtWidgets
 
-#: at most this many views per page: the default of Settings > Canvas > Zoom and scroll >
-#: Saved views a page keeps (ui/prefs/timing_options.SAVED_VIEWS_MAX)
-MAX_VIEWS = 40
-
 
 def page_name(doc):
     """What views are stored for: the page file (a library element: its library file +
@@ -20,7 +18,7 @@ def page_name(doc):
     path = getattr(doc, "path", None)
     if not path:
         return None
-    name = os.path.normcase(os.path.abspath(path))
+    name = path_key(path)
     element = getattr(doc, "element_name", None)
     if element:
         name += "|" + str(element).lower()

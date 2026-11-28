@@ -2,19 +2,18 @@
 
 from __future__ import annotations
 
+from ..infra.paths import path_key
+
+from ..format.fileio import file_stamp, find_ci
+
 import os
 import stat as _stat
 import threading
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
+from ..infra.logsetup import note_exception as _note_exc
 
 OWN, INCLUDE, INCLUDER, COMPILED = "own", "include", "includer", "compiled"
-#: the relations in the order a scope lists them
-RELATIONS = (OWN, INCLUDE, INCLUDER, COMPILED)
-
-
-def _norm(path: str) -> str:
-    return os.path.normcase(os.path.abspath(path))
 
 
 def project_name(path: str) -> str:
@@ -47,7 +46,7 @@ class TagScope:
     @property
     def key(self) -> tuple:
         """What identifies the scope for caches built over it."""
-        return tuple(_norm(p.dir) for p in self.projects)
+        return tuple(path_key(p.dir) for p in self.projects)
 
     def dirs(self) -> List[str]:
         return [p.dir for p in self.projects]
@@ -64,8 +63,8 @@ class TagScope:
         return [p for p in self.projects if p.relation in (INCLUDER, COMPILED)]
 
     def project_for_dir(self, directory: str) -> Optional[ScopeProject]:
-        k = _norm(directory)
-        return next((p for p in self.projects if _norm(p.dir) == k), None)
+        k = path_key(directory)
+        return next((p for p in self.projects if path_key(p.dir) == k), None)
 
     def by_name(self, name: str) -> Optional[ScopeProject]:
         low = (name or "").lower()
@@ -77,7 +76,7 @@ class TagScope:
         return [(p, path) for p, path, _st in self.stamped_tables(table)]
 
     def stamped_tables(self, table: str) -> List[Tuple[ScopeProject, str, tuple]]:
-        """(project, path, :func:`table_stamp`) of every project of the scope
+        """(project, path, :func:`file_stamp`) of every project of the scope
         that has ``table``, in scope order (one stat each)."""
         out = []
         for p in self.projects:
@@ -88,42 +87,13 @@ class TagScope:
 
 
 # ------------------------------------------------------------------ table files
-def find_table(folder: str, name: str) -> Optional[str]:
-    """``folder``'s table ``name`` ('variable.dbf') whatever its case, or None.
-    One stat on Windows (case-insensitive names); a folder listing elsewhere."""
-    p = os.path.join(folder, name)
-    if os.name == "nt":
-        return p if os.path.isfile(p) else None
-    if os.path.isfile(p):
-        return p
-    low = name.lower()
-    try:
-        for f in os.listdir(folder):
-            if f.lower() == low:
-                return os.path.join(folder, f)
-    except OSError:
-        pass
-    return None
-
-
-def table_stamp(path: Optional[str]):
-    """(normalised path, mtime_ns, size) of a table, None when absent."""
-    if not path:
-        return None
-    try:
-        st = os.stat(path)
-    except OSError:
-        return None
-    return (_norm(path), st.st_mtime_ns, st.st_size)
-
-
 def stamp_in(folder: str, name: str):
     """(path, stamp) of ``folder``'s table ``name`` whatever its case, (None,
-    None) when absent: :func:`find_table` + :func:`table_stamp` in one stat on
+    None) when absent: :func:`~ctgedit.format.fileio.find_ci` + :func:`file_stamp` in one stat on
     Windows (the scope checks run on every edit)."""
     if os.name != "nt":
-        p = find_table(folder, name)
-        st = table_stamp(p)
+        p = find_ci(folder, name)
+        st = file_stamp(p)
         return (p, st) if st is not None else (None, None)
     p = os.path.join(folder, name)
     try:
@@ -132,7 +102,7 @@ def stamp_in(folder: str, name: str):
         return None, None
     if not _stat.S_ISREG(st.st_mode):
         return None, None
-    return p, (_norm(p), st.st_mtime_ns, st.st_size)
+    return p, (path_key(p), st.st_mtime_ns, st.st_size)
 
 
 # ------------------------------------------------------------------ root choice
@@ -161,7 +131,7 @@ def _last_database() -> str:
         from . import citect_config
 
         return (citect_config.ini_value("ctedit", "lastdatabase") or "").strip()
-    except Exception:  # noqa: BLE001 -- no install, an unreadable ini
+    except Exception:  # noqa: BLE001 -- swallow-ok: no install, an unreadable ini
         return ""
 
 
@@ -172,18 +142,12 @@ def _catalog_for(project_dir: str):
     from .catalog import catalog_for
 
     parent = os.path.dirname(os.path.abspath(project_dir))
-    user = (
-        parent
-        if (
-            os.path.isfile(os.path.join(parent, "MASTER.DBF"))
-            or os.path.isfile(os.path.join(parent, "master.dbf"))
-        )
-        else None
-    )
+    user = parent if find_ci(parent, "MASTER.DBF") else None
     cat = catalog_for(user)
     try:
         info = cat.project_for_dir(project_dir)
     except Exception:  # noqa: BLE001
+        _note_exc("tagscope._catalog_for", project=project_dir)
         info = None
     return cat, info
 
@@ -197,6 +161,7 @@ def _topology_stamps(cat) -> tuple:
     try:
         projects = cat.projects()
     except Exception:  # noqa: BLE001
+        _note_exc("tagscope._topology_stamps")
         projects = []
     for p in projects:
         out.append((p.name.lower(), stamp_in(p.dir, "include.dbf")[1]))
@@ -218,7 +183,7 @@ def _fresh_catalog(project_dir: str):
         try:
             cat.reload()
         except Exception:  # noqa: BLE001
-            pass
+            _note_exc("tagscope._fresh_catalog")
         cat, info = _catalog_for(project_dir)
         st = _topology_stamps(cat)
         with _LOCK:
@@ -238,6 +203,7 @@ def _roots_of(cat, info) -> List:
             if any(p.key == info.key for p in cat.closure(r)):
                 out.append(r)
         except Exception:  # noqa: BLE001
+            _note_exc("tagscope._roots_of")
             continue
     return sorted(out, key=lambda p: p.name.lower())
 
@@ -249,6 +215,7 @@ def roots(project_dir: str) -> List[str]:
         cat, info, _st = _fresh_catalog(project_dir)
         return [r.name for r in _roots_of(cat, info)]
     except Exception:  # noqa: BLE001
+        _note_exc("tagscope.roots", project=project_dir)
         return []
 
 
@@ -272,6 +239,7 @@ def _down(project_dir: str) -> List[str]:
     try:
         return include_search_dirs(project_dir)
     except Exception:  # noqa: BLE001 -- a broken registry still has the project
+        _note_exc("tagscope._down", project=project_dir)
         return []
 
 
@@ -283,7 +251,7 @@ def _own_scope(project_dir: str, root: Optional[str]):
     seen = set()
 
     def add(name: str, d: str, rel: str) -> None:
-        k = _norm(d)
+        k = path_key(d)
         if k in seen or not os.path.isdir(d):
             return
         seen.add(k)
@@ -292,6 +260,7 @@ def _own_scope(project_dir: str, root: Optional[str]):
     try:
         cat, info, st = _fresh_catalog(pdir)
     except Exception:  # noqa: BLE001 -- no catalog: the folder and its includes
+        _note_exc("tagscope._own_scope", project=pdir)
         cat, info, st = None, None, ()
     add(info.name if info is not None else project_name(pdir), pdir, OWN)
     for d in _down(pdir):
@@ -302,11 +271,13 @@ def _own_scope(project_dir: str, root: Optional[str]):
         try:
             closure = cat.closure(chosen)
         except Exception:  # noqa: BLE001
+            _note_exc("tagscope._own_scope", project=pdir)
             closure = []
         inside = {p.key for p in closure}
         try:
             ups = [p for p in cat.dependents(info) if p.key in inside]
         except Exception:  # noqa: BLE001
+            _note_exc("tagscope._own_scope", project=pdir)
             ups = []
         for p in ups:
             add(p.name, p.dir, INCLUDER)
@@ -318,16 +289,14 @@ def _own_scope(project_dir: str, root: Optional[str]):
             for p in cat.dependents(info):
                 add(p.name, p.dir, INCLUDER)
         except Exception:  # noqa: BLE001
-            pass
+            _note_exc("tagscope._own_scope", project=pdir)
     return (out, chosen.name if chosen is not None else None, tuple(c.name for c in cands), st)
 
 
 def _extra_dirs() -> List[str]:
-    return [
-        os.path.abspath(p)
-        for p in os.environ.get("CTG_LIB_PATH", "").split(os.pathsep)
-        if p and os.path.isdir(p)
-    ]
+    from ..infra.paths import lib_path_dirs
+
+    return [os.path.abspath(p) for p in lib_path_dirs() if os.path.isdir(p)]
 
 
 _SCOPES: Dict[tuple, tuple] = {}
@@ -338,30 +307,31 @@ def scope(project_dir: str, root: Optional[str] = None) -> TagScope:
     """The tag scope of the page folder ``project_dir`` (see the module doc);
     ``root`` = the compiled project to use when several include it."""
     pdir = os.path.abspath(project_dir or os.curdir)
-    extra = tuple(d for d in _extra_dirs() if _norm(d) != _norm(pdir))
+    extra = tuple(d for d in _extra_dirs() if path_key(d) != path_key(pdir))
     key = (
-        _norm(pdir),
+        path_key(pdir),
         (root or "").lower(),
         (chosen_root(pdir) or "").lower(),
-        tuple(_norm(d) for d in extra),
+        tuple(path_key(d) for d in extra),
         _last_database().lower(),
     )
     try:
         sig = tuple(_fresh_catalog(d)[2] for d in (pdir,) + extra)
     except Exception:  # noqa: BLE001
+        _note_exc("tagscope.scope", project=pdir)
         sig = None
     with _LOCK:
         hit = _SCOPES.get(key)
         if hit is not None and sig is not None and hit[0] == sig:
             return hit[1]
     projects, chosen, cands, _st = _own_scope(pdir, root)
-    seen = {_norm(p.dir) for p in projects}
+    seen = {path_key(p.dir) for p in projects}
     for d in extra:
         more = _own_scope(d, None)[0]
         for p in more:
-            if _norm(p.dir) not in seen:
-                seen.add(_norm(p.dir))
-                rel = OWN if _norm(p.dir) == _norm(d) else p.relation
+            if path_key(p.dir) not in seen:
+                seen.add(path_key(p.dir))
+                rel = OWN if path_key(p.dir) == path_key(d) else p.relation
                 projects.append(ScopeProject(p.name, p.dir, rel))
     sc = TagScope(pdir, chosen, cands, tuple(projects))
     with _LOCK:

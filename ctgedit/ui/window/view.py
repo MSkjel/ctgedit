@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
+from ...infra.paths import path_key
+
 import contextlib
-from ..main_window_base import (  # noqa: F401
+from ..main_window_base import (
     ElementDocument,
     QtCore,
     QtGui,
-    QtWidgets,
     TITLE_APP,
-    app_settings,
     os,
     set_note_role,
 )
-from ..main_window_base import _PaintWatch
+from ..main_window_base import PaintWatch
 from ..prefs import keymap as _keymap
 
 
@@ -97,6 +97,8 @@ class ViewState:
         )
         # Mark Changes Since Save and the Changes panel follow the page (changes_dock)
         self._changes_refresh()
+        # Preview States, the Click Map and a tag's marks follow the page (page_debug)
+        self._debug_views_refresh()
         is_elem = isinstance(self.doc, ElementDocument)
         self.scene.set_element_mode(is_elem, self.doc.hotspot if is_elem else None)
         # the hidden objects follow their objects through a delete, a paste, a reorder
@@ -180,7 +182,7 @@ class ViewState:
         ):
             return False
         self._panels_after_paint = doc
-        _PaintWatch(self.view.viewport(), self._panels_painted)
+        PaintWatch(self.view.viewport(), self._panels_painted)
         QtCore.QTimer.singleShot(self.POST_OPEN_FALLBACK_MS, self, self._panels_painted)
         return True
 
@@ -253,7 +255,7 @@ class ViewState:
             from ...io.citect_config import live_user_dir
 
             live = live_user_dir()
-        if live and os.path.normcase(os.path.abspath(user_dir)) != os.path.normcase(os.path.abspath(live)):
+        if live and path_key(user_dir) != path_key(live):
             self._other_install = True
             lbl.setText("⚠ " + text + "  (not the active install)")
             set_note_role(lbl, "warn", "padding:0 6px;")
@@ -317,7 +319,7 @@ class ViewState:
         if getattr(self, "_an_count_key", None) != key:
             try:
                 self._an_count = doc.animation_point_count()
-            except Exception:  # noqa: BLE001 -- a hint only
+            except Exception:  # noqa: BLE001  # swallow-ok: a hint only
                 self._an_count = 0
             self._an_count_key = key
         n = self._an_count
@@ -347,6 +349,8 @@ class ViewState:
 
     def _update_sel_label(self) -> None:
         self._update_an_count()
+        if getattr(self, "preview_states", None) is not None:
+            self.preview_states.set_selection(self._sel)
         if not self._sel:
             self.lbl_sel.setText("No selection")
         elif len(self._sel) == 1 and self.doc and self._sel[0] < len(self.doc.page.objects):
@@ -389,7 +393,8 @@ class ViewState:
     #: 'sel' = something is selected, 'multi' = two or more units (a genie + its members =
     #: one), 'three' = three or more units, 'page' = a page (not a library element) is
     #: open. Commands with a rule of their own are set by
-    #: name in _update_actions (CUSTOM_ENABLE); ALWAYS_ENABLED need nothing open.
+    #: name in _update_actions and its _enable_* parts (CUSTOM_ENABLE); ALWAYS_ENABLED
+    #: need nothing open.
     #: tests/test_action_table.py fails on an action in none of the three.
     ENABLE_WHEN = {
         "doc": (
@@ -480,6 +485,8 @@ class ViewState:
         "three": ("act_dist_h", "act_dist_v"),
         "page": (
             "act_check_page",
+            "act_preview_states",
+            "act_click_map",
             "act_check_workspace",
             "act_check_display",
             "act_simulate",
@@ -495,7 +502,7 @@ class ViewState:
             "act_move_to_window",
         ),
     }
-    #: set by their own rule in _update_actions
+    #: set by their own rule in _update_actions and its _enable_* parts
     CUSTOM_ENABLE = (
         "act_revert",
         "act_undo",
@@ -664,8 +671,29 @@ class ViewState:
         has_sel = bool(self._sel) and has_doc
         # align/distribute act on UNITS (a genie+members = one), so count roots
         n_units = len({self.doc.root_of(i) for i in self._sel}) if has_doc else 0
-        multi = n_units > 1
         is_page = has_doc and not isinstance(self.doc, ElementDocument)
+        docs = getattr(self, "_docs", [])
+        self._enable_by_rule(has_doc, has_sel, n_units, is_page, docs)
+        self._label_run(has_doc and not is_page)
+        find = self.__dict__.get("_find_dlg")
+        if find is not None:
+            with contextlib.suppress(RuntimeError):
+                find.page_changed()  # (This page / All open pages need a page)
+        self._enable_drawing_actions(has_doc, has_sel, n_units > 1)
+        self._enable_document_actions(has_doc, docs)
+        self._enable_step_and_view_actions(has_doc, has_sel)
+        self._enable_selection_actions(has_doc, has_sel, n_units, is_page)
+        # the open Adjust Position and Size window follows the selection, and
+        # so do the other selection windows (Align, Font, Swap / Adjust Colours)
+        self._sync_adjust_dialog()
+        self._sync_selection_windows()
+        self._sync_goto_dialog()
+        from ..panels import status_items
+
+        status_items.refresh(self)  # (the status bar's fields)
+
+    def _enable_by_rule(self, has_doc: bool, has_sel: bool, n_units: int, is_page: bool, docs) -> None:
+        """The commands of ENABLE_WHEN, by their rule."""
         in_project = False
         if is_page:
             with contextlib.suppress(Exception):
@@ -673,11 +701,10 @@ class ViewState:
         elif not has_doc:
             # (no page: Compile and Run act on the project of the most recent page)
             in_project = self._compile_target() is not None
-        docs = getattr(self, "_docs", [])
         state = {
             "doc": has_doc,
             "sel": has_sel,
-            "multi": multi,
+            "multi": n_units > 1,
             "three": n_units > 2,
             "page": is_page,
             "project": in_project,
@@ -686,11 +713,9 @@ class ViewState:
         for rule, names in self.ENABLE_WHEN.items():
             for nm in names:
                 getattr(self, nm).setEnabled(state[rule])
-        self._label_run(has_doc and not is_page)
-        find = self.__dict__.get("_find_dlg")
-        if find is not None:
-            with contextlib.suppress(RuntimeError):
-                find.page_changed()  # (This page / All open pages need a page)
+
+    def _enable_drawing_actions(self, has_doc: bool, has_sel: bool, multi: bool) -> None:
+        """The drawing tools, Insert and Align."""
         # the drawing tools and Insert need a page to draw on
         select = getattr(self, "tool_actions", {}).get("select")
         for a in (
@@ -704,6 +729,9 @@ class ViewState:
         for a in self.align_actions:
             a.setEnabled(align)
         self.act_align_dialog.setEnabled(align)
+
+    def _enable_document_actions(self, has_doc: bool, docs) -> None:
+        """Revert, the document tabs' commands and New Page from the last template."""
         self.act_revert.setEnabled(
             bool(has_doc and not getattr(self.doc, "is_new", False) and os.path.exists(self.doc.path))
         )
@@ -728,6 +756,10 @@ class ViewState:
         self.act_pin_tab.setText("Unpin Tab" if t is not None and t.get("pinned") else "Pin Tab")
         for n, a in enumerate(getattr(self, "goto_tab_actions", ())):
             a.setEnabled(n < len(docs))
+
+    def _enable_step_and_view_actions(self, has_doc: bool, has_sel: bool) -> None:
+        """Undo and Redo, Previous / Next View, Paste Appearance, the underlay's commands and
+        the undo history."""
         self.act_undo.setEnabled(bool(has_doc and self.doc.can_undo()))
         self.act_redo.setEnabled(bool(has_doc and self.doc.can_redo()))
         # Previous / Next View: the page shown has views to go back or forward to
@@ -750,10 +782,30 @@ class ViewState:
         hd = getattr(self, "history_dock", None)
         if hd is not None and not self.dock_history.isHidden():
             hd.show_document(self.doc if has_doc else None)
-        # everything else that needs a page / a selection / a kind (a command
-        # that cannot apply is greyed out instead of silently doing nothing)
+
+    def _enable_selection_actions(self, has_doc: bool, has_sel: bool, n_units: int, is_page: bool) -> None:
+        """Everything else that needs a page / a selection / a kind (a command that cannot
+        apply is greyed out instead of silently doing nothing)."""
         traits = self._classify_selection() if has_sel else set()
         one = has_sel and n_units == 1
+        self._enable_paste_composite(has_doc)
+        # Ungroup dissolves every selected group / genie at once (a shape
+        # owning only touch / keyboard records is not a group)
+        any_container = bool(
+            has_sel
+            and any(
+                0 <= i < len(self.doc.page.objects) and self._drawable_members(self.doc.root_of(i))
+                for i in self._sel
+            )
+        )
+        self.act_ungroup.setEnabled(any_container)
+        self._enable_library_actions(has_doc, has_sel, is_page, traits, one)
+        self._enable_picture_and_text_actions(has_sel, traits, one)
+        # Edit > Repeat: the last repeatable command, while it can run (ui/prefs/keymap)
+        self.act_repeat.setEnabled(_keymap.repeat_ok(self))
+
+    def _enable_paste_composite(self, has_doc: bool) -> None:
+        """Paste Composite Genie, with its tips."""
         # a composite genie goes only into a page, template or super genie
         # (help 1172148_1); it DOES turn -- CtDraw offers Rotate / Mirror for it
         from ...editing import COMPOSITE_NOT_HERE
@@ -772,17 +824,10 @@ class ViewState:
         refused = has_doc and not allowed
         self.act_paste_composite.setStatusTip(COMPOSITE_NOT_HERE if refused else tips[0])
         self.act_paste_composite.setToolTip(COMPOSITE_NOT_HERE if refused else tips[1])
-        first = self._sel[0] if has_sel else None
-        # Ungroup dissolves every selected group / genie at once (a shape
-        # owning only touch / keyboard records is not a group)
-        any_container = bool(
-            has_sel
-            and any(
-                0 <= i < len(self.doc.page.objects) and self._drawable_members(self.doc.root_of(i))
-                for i in self._sel
-            )
-        )
-        self.act_ungroup.setEnabled(any_container)
+
+    def _enable_library_actions(self, has_doc: bool, has_sel: bool, is_page: bool, traits, one: bool) -> None:
+        """The template, genie and library element commands (``traits`` = the selection's,
+        ``one`` = one unit selected)."""
         has_tpl = is_page and self._page_has_template()
         # (a selection of several units: every placed symbol's link is cut, as one step)
         self.act_cut_link.setEnabled(has_sel or has_tpl)
@@ -818,6 +863,10 @@ class ViewState:
             and not getattr(self.doc, "read_only", False)
         )
         self.act_update_users.setEnabled(self.act_used_by.isEnabled())
+
+    def _enable_picture_and_text_actions(self, has_sel: bool, traits, one: bool) -> None:
+        """The Bitmap Editor, Tools > Pictures and the Text menu."""
+        first = self._sel[0] if has_sel else None
         self.act_bitmap_editor.setEnabled(
             bool(
                 one
@@ -838,16 +887,6 @@ class ViewState:
         for a in [self.act_font_dialog] + self.text_flag_actions + self.justify_actions + self.effect_actions:
             a.setEnabled(text_ok)
         self.act_edit_text.setEnabled(bool(text_ok and one))
-        # Edit > Repeat: the last repeatable command, while it can run (ui/prefs/keymap)
-        self.act_repeat.setEnabled(_keymap.repeat_ok(self))
-        # the open Adjust Position and Size window follows the selection, and
-        # so do the other selection windows (Align, Font, Swap / Adjust Colours)
-        self._sync_adjust_dialog()
-        self._sync_selection_windows()
-        self._sync_goto_dialog()
-        from ..panels import status_items
-
-        status_items.refresh(self)  # (the status bar's fields)
 
     # ------------------------------------------------------------- selection
     # The selection is ``_sel``: record indices of the page shown. Each time it is set, a note
@@ -990,7 +1029,7 @@ class ViewState:
         if self.act_show_tools.isChecked():
             self.act_show_tools.setChecked(False)
             self._toggle_toolbox()
-        self.statusBar().showMessage("UI layout reset", 4000)
+        self.statusBar().showMessage("UI layout reset.", 4000)
 
     # -------------------------------------- what changed since the save
     def changes_since_save(self):
@@ -1002,529 +1041,6 @@ class ViewState:
         """View > Mark Changes Since Save: new, changed and removed objects marked on the
         canvas, kept up to date with every edit while ticked (ui/panels/changes_dock)."""
         self._changes_mark()
-
-    # -------------------------------------- hidden in the editor / isolate / frame
-    # The objects hidden in the editor (the Objects panel's eyes, Isolate Selection, Hide or
-    # Show Selection) are ``_hidden_roots``: record indices of the page shown, any object (a
-    # genie member hides itself only). They follow their objects: each hide takes a note of
-    # the records it hides (_hidden_snap), and a refresh after a delete, a paste or a reorder
-    # finds those records again (_resolve_hidden), else the object of the same AN. Saved per
-    # page by AN in 'browser/hidden_an/<path>' (an index for an object without an AN, as
-    # -1 - index); a page shown in a new tab hides them again (_saved_hidden). Editor-only:
-    # nothing of it is ever saved into the page.
-
-    def _hidden_key(self, doc=None):
-        doc = doc if doc is not None else self.doc
-        path = getattr(doc, "path", "") or ""
-        if not path:
-            return None
-        key = "browser/hidden_an/%s" % os.path.abspath(path)
-        element = getattr(doc, "element_name", "") if isinstance(doc, ElementDocument) else ""
-        return key + ("|" + element if element else "")
-
-    @staticmethod
-    def _records_of(doc) -> list:
-        """The document's records (the identities a hidden object is followed by)."""
-        parsed = getattr(doc, "parsed", None)
-        pg = getattr(parsed, "page", None)
-        recs = getattr(pg, "objects", None)
-        if recs is not None and len(recs) == len(doc.page.objects):
-            return recs
-        return doc.page.objects
-
-    def _snap_hidden(self) -> None:
-        """Note the records the hidden set holds now (what _resolve_hidden follows)."""
-        doc = self.doc
-        if doc is None or not self._hidden_roots:
-            self._hidden_snap = None
-            return
-        recs = self._records_of(doc)
-        objs = doc.page.objects
-        n = min(len(recs), len(objs))
-        self._hidden_roots = {i for i in self._hidden_roots if 0 <= i < n}
-        self._hidden_snap = (
-            doc,
-            frozenset(self._hidden_roots),
-            getattr(doc, "derive_serial", 0),
-            len(recs),
-            [(i, recs[i], objs[i].an) for i in sorted(self._hidden_roots)],
-        )
-
-    def _resolve_hidden(self) -> None:
-        """The hidden set as record indices of the current model: each hidden record where it
-        is now (a delete or an insert before it moved it), else the object of its AN; gone
-        ones are dropped. A set given from elsewhere (a tab switch) is taken as it is."""
-        doc = self.doc
-        cur = set(self._hidden_roots)
-        if doc is None or not cur:
-            self._hidden_snap = None
-            return
-        snap = self.__dict__.get("_hidden_snap")
-        recs = self._records_of(doc)
-        if snap is None or snap[0] is not doc or snap[1] != frozenset(cur):
-            self._snap_hidden()
-            return
-        if snap[2] == getattr(doc, "derive_serial", 0) and snap[3] == len(recs):
-            return  # nothing derived since the note
-        pos = {id(po): i for i, po in enumerate(recs)}
-        objs = doc.page.objects
-        by_an = None
-        new = set()
-        for _i, po, an in snap[4]:
-            j = pos.get(id(po))
-            if j is None and an > 0:
-                if by_an is None:
-                    by_an = {}
-                    for k, o in enumerate(objs):
-                        if o.an > 0 and not o.raw.get("_non_drawable"):
-                            by_an.setdefault(o.an, k)
-                j = by_an.get(an)
-            if j is not None and j < len(objs):
-                new.add(j)
-        self._hidden_roots = new
-        self._snap_hidden()
-        if new != cur:
-            self._save_hidden()
-
-    def _save_hidden(self) -> None:
-        """'browser/hidden_an/<path>': the hidden objects by AN (-1 - index without one)."""
-        doc = self.doc
-        key = self._hidden_key(doc) if doc is not None else None
-        if key is None:
-            return
-        objs = doc.page.objects
-        vals = sorted(
-            {objs[i].an if objs[i].an > 0 else -1 - i for i in self._hidden_roots if 0 <= i < len(objs)}
-        )
-        try:
-            st = app_settings()
-            if vals:
-                st.setValue(key, vals)
-            else:
-                st.remove(key)
-        except Exception:  # noqa: BLE001
-            from ...infra import logsetup
-
-            logsetup.note_exception("view._save_hidden")
-
-    def _saved_hidden(self, doc) -> set:
-        """The objects of ``doc`` hidden when it was last shown (its saved ANs that are
-        still on the page)."""
-        key = self._hidden_key(doc)
-        if key is None or doc.page is None:
-            return set()
-        try:
-            vals = app_settings().value(key, [], type=list) or []
-        except Exception:  # noqa: BLE001 -- swallow-ok: a garbled list hides nothing
-            return set()
-        objs = doc.page.objects
-        by_an = {}
-        for k, o in enumerate(objs):
-            if o.an > 0 and not o.raw.get("_non_drawable"):
-                by_an.setdefault(o.an, k)
-        out = set()
-        for v in vals:
-            try:
-                v = int(v)
-            except TypeError, ValueError:
-                continue
-            j = by_an.get(v) if v > 0 else (-1 - v)
-            if j is not None and 0 <= j < len(objs):
-                out.add(j)
-        return out
-
-    def _set_hidden(self, indices, save: bool = True) -> None:
-        """Hide exactly ``indices`` in the editor: the canvas, the Objects panel's eyes and
-        the hidden chip follow; remembered for the page."""
-        doc = self.doc
-        n = len(doc.page.objects) if doc is not None else 0
-        self._hidden_roots = {i for i in indices if 0 <= i < n}
-        self._snap_hidden()
-        self.scene.set_hidden(self._hidden_roots)
-        self.objects_dock.set_hidden(self._hidden_roots)
-        self._update_hidden_chip()
-        if save:
-            self._save_hidden()
-
-    def isolate_selection(self) -> None:
-        """View > Isolate Selection: every root but the selected units' hides (the Objects
-        tree's eyes), so a unit is edited alone; the same command again, Show All or the
-        hidden chip brings the rest back."""
-        if self.doc is None or not self._sel:
-            return
-        page = self.doc.page
-        keep = {self.doc.root_of(i) for i in self._sel if 0 <= i < len(page.objects)}
-        hide = {r for r in page.roots() if r not in keep and not page.objects[r].raw.get("_non_drawable")}
-        if not hide or hide == self._hidden_roots:
-            self._show_all_roots()
-            return
-        self._set_hidden(hide)
-        self.statusBar().showMessage(
-            "%d object%s hidden: the selection is alone on the page (Isolate Selection again, "
-            "or Show All, brings them back)." % (len(hide), "" if len(hide) == 1 else "s"),
-            6000,
-        )
-
-    def _solo_row(self, index: int) -> None:
-        """Alt+click on an eye: only that object shows (every other top-level object, and the
-        objects beside it in the groups it is in, hide); again: everything shows."""
-        if self.doc is None or not 0 <= index < len(self.doc.page.objects):
-            return
-        page = self.doc.page
-        chain = [index] + page.ancestors(index)
-        on_path = set(chain)
-        hide = {r for r in page.roots() if r not in on_path and not page.objects[r].raw.get("_non_drawable")}
-        for a in chain[1:]:
-            hide.update(
-                m
-                for m in page.objects[a].members
-                if m not in on_path and not page.objects[m].raw.get("_non_drawable")
-            )
-        if not hide or hide == self._hidden_roots:
-            self._show_all_roots()
-            return
-        self._set_hidden(hide)
-        from ..names import kind_name
-
-        o = page.objects[index]
-        self.statusBar().showMessage(
-            "Only %s%s shows. Alt+click its eye again to show everything."
-            % (kind_name(o), (" AN %d" % o.an) if o.an > 0 else ""),
-            6000,
-        )
-
-    def _on_hide_toggled(self, index: int, hidden: bool) -> None:
-        """An eye of the Objects panel (any row: a member hides itself only)."""
-        s = set(self._hidden_roots)
-        if hidden:
-            s.add(index)
-        else:
-            s.discard(index)
-            if self.doc is not None and 0 <= index < len(self.doc.page.objects):
-                # (shown again: a hidden group around it shows it too)
-                s.difference_update(self.doc.page.ancestors(index))
-        self._set_hidden(s)
-
-    def hide_or_show_selection(self) -> None:
-        """Hide or Show Selection (Space in the Objects panel): the selected objects hide in
-        the editor; when they are all hidden already, they show again. They stay selected
-        (the same key brings them back)."""
-        if self.doc is None or not self._sel:
-            return
-        page = self.doc.page
-        sel = [i for i in self._sel if 0 <= i < len(page.objects)]
-        covered = set()
-        for h in self._hidden_roots:
-            if 0 <= h < len(page.objects):
-                covered.update(page.subtree(h))
-        s = set(self._hidden_roots)
-        if sel and all(i in covered for i in sel):
-            for i in sel:
-                s.discard(i)
-                s.difference_update(page.ancestors(i))
-            self._set_hidden(s)
-            msg = "%d object%s shown again." % (len(sel), "" if len(sel) == 1 else "s")
-        else:
-            s.update(sel)
-            self._set_hidden(s)
-            msg = (
-                "%d object%s hidden in the editor (they stay on the page). The same key "
-                "shows them again." % (len(sel), "" if len(sel) == 1 else "s")
-            )
-        self.statusBar().showMessage(msg, 6000)
-
-    def _show_all_roots(self) -> None:
-        if self.doc is None:
-            self._hidden_roots = set()
-            self._hidden_snap = None
-            self.scene.set_hidden(set())
-            self.objects_dock.set_hidden(set())
-            self._update_hidden_chip()
-            return
-        self._set_hidden(set())
-
-    def _update_hidden_chip(self) -> None:
-        chip = getattr(self, "_hidden_chip", None)
-        if chip is None:
-            return
-        n = len(self._hidden_roots)
-        chip.setVisible(n > 0)
-        chip.setText("%d hidden  [show]" % n)
-
-    # -------------------------------------------------------- the Objects panel
-    def _wire_objects_dock(self) -> None:
-        """The Objects panel's requests and its right-click menu (after the commands are
-        made: MainWindow.__init__)."""
-        d = self.objects_dock
-        d.activated.connect(self._on_object_activated)
-        d.revealRequested.connect(self._reveal_index)  # (a double-click: Scrolls to it)
-        d.renameRequested.connect(self._on_rename_requested)
-        d.lockToggled.connect(self._on_lock_toggled)
-        d.soloRequested.connect(self._solo_row)
-        d.hideSelectionRequested.connect(self.hide_or_show_selection)
-        d.statusMessage.connect(self._tree_status)
-        d.selectable = self._tree_selectable
-        d.selectable_key = self._units_state_key
-        d.name_problem = self._tree_name_problem
-        d.rename_blocked = self._tree_rename_blocked
-        d.set_actions(self._tree_menu_actions())
-
-    def _window_action(self, text: str):
-        """The window's command labelled ``text`` (a command another part of the window
-        adds: Hide or Show Selection, Select Parent), or None."""
-        want = text.replace("&", "").replace("…", "").strip().lower()
-        for a in self.findChildren(QtGui.QAction):
-            if (
-                a.text().replace("&", "").replace("…", "").strip().lower() == want
-                and a.objectName() != "tree.local"
-            ):
-                return a
-        return None
-
-    def _tree_menu_actions(self) -> dict:
-        """The commands of the Objects panel's right-click menu (ObjectsDock.MENU)."""
-        acts = {
-            "props": self.act_obj_props,
-            "genie": self.act_genie_params,
-            "definition": self._tree_definition,
-            "rename": self.act_rename,
-            "cut": self.act_cut,
-            "copy": self.act_copy,
-            "dup": self.act_dup,
-            "del": self.act_del,
-            "front": self.act_front,
-            "fwd": self.act_fwd,
-            "bwd": self.act_bwd,
-            "back": self.act_back,
-            "group": self.act_group,
-            "ungroup": self.act_ungroup,
-            "lock": self.act_lock,
-            "unlock": self.act_unlock,
-            "isolate": self.act_isolate,
-            "show_all": self.act_show_all_roots,
-            "zoom_sel": self.act_zoom_sel,
-        }
-        # (the commands other parts of the window add, when they are there)
-        for name, texts in (
-            ("lock_toggle", ("Lock or Unlock Selection",)),
-            ("hide_toggle", ("Hide or Show Selection",)),
-            ("select_parent", ("Select Parent",)),
-            ("select_same", ("Select Same Element", "Select Same Library Element")),
-        ):
-            for text in texts:
-                a = self._window_action(text)
-                if a is not None:
-                    acts[name] = a
-                    break
-        return acts
-
-    def _tree_definition(self, index: int, menu):
-        """'Edit Definition (lib.element)' for the row's genie or symbol, as the canvas
-        menu has it; None when it has none."""
-        if self.doc is None:
-            return None
-        try:
-            defn = self._definition_of(index)
-        except Exception:  # noqa: BLE001 -- swallow-ok: no definition, no entry
-            defn = None
-        if defn is None:
-            return None
-        a = QtGui.QAction(
-            "Edit Definition (%s.%s)" % (os.path.splitext(os.path.basename(defn[0]))[0], defn[1]), menu
-        )
-        a.setObjectName("tree.local")
-        a.triggered.connect(lambda _=False, d=defn: self._open_element(*d))
-        return a
-
-    def _tree_status(self, text: str) -> None:
-        self.statusBar().showMessage(text, 8000)
-
-    def _tree_selectable(self, root: int) -> bool:
-        if self.doc is None or not 0 <= root < len(self.doc.page.objects):
-            return False
-        return not self._unit_locked(self.doc.root_of(root))
-
-    def _tree_name_problem(self, index: int, name: str) -> str:
-        if self.doc is None:
-            return "No page is open."
-        from ..dialog.rename_dialog import codepage_problem
-
-        return codepage_problem(name) or self.doc.object_name_problem(index, name)
-
-    def _tree_rename_blocked(self, index: int) -> str:
-        if self.doc is None or not 0 <= index < len(self.doc.page.objects):
-            return "Nothing to rename."
-        if getattr(self.doc, "read_only", False):
-            return "This page is read-only."
-        if self._unit_locked(self.doc.root_of(index)):
-            return "Locked: click its padlock in the Objects panel to unlock it first."
-        return ""
-
-    def _rename_refusal_of(self, index: int) -> str:
-        """Why object ``index`` cannot be renamed ('' = it can): a template object, a part
-        of a placed genie or symbol (its name is the definition's), a locked unit."""
-        from ..panels.objects_dock import ObjectsDock, PART_RENAME_TIP, TEMPLATE_TIP
-
-        if self.doc is None or not 0 <= index < len(self.doc.page.objects):
-            return "Nothing to rename."
-        page = self.doc.page
-        if page.objects[index].raw.get("_from_template"):
-            return TEMPLATE_TIP
-        if page.objects[index].parent is not None and ObjectsDock.in_part(page, index):
-            return PART_RENAME_TIP
-        return self._tree_rename_blocked(index)
-
-    def _on_rename_requested(self, index: int, name: str) -> None:
-        """A name typed in the Objects panel (F2, a slow click, Rename…): one undo step."""
-        if self.doc is None or not 0 <= index < len(self.doc.page.objects):
-            return
-        why = self._tree_rename_blocked(index)
-        if why:
-            self.statusBar().showMessage(why, 6000)
-            return
-        try:
-            ok = self.doc.set_object_name(index, name)
-        except ValueError as e:
-            self.statusBar().showMessage(str(e), 8000)
-            return
-        if not ok:
-            self.statusBar().showMessage("The name could not be stored on this object.", 6000)
-            return
-        self._refresh()
-        self.statusBar().showMessage(("Renamed to '%s'." % name) if name else "The name was removed.", 4000)
-
-    def _on_lock_toggled(self, root: int, locked: bool) -> None:
-        """A padlock of the Objects panel: Edit > Lock / Unlock of that unit (one undo
-        step, saved in the page as Edit > Lock is)."""
-        if self.doc is None or not 0 <= root < len(self.doc.page.objects):
-            return
-        if getattr(self.doc, "read_only", False):
-            self.statusBar().showMessage("This page is read-only.", 5000)
-            return
-        if not locked:
-            self._locked.discard(root)
-        n = self.doc.set_locked([root], locked)
-        if locked and not self._break_lock:
-            # (a locked unit cannot stay selected)
-            sub = set(self.doc.page.subtree(root))
-            self._sel = [i for i in self._sel if i not in sub]
-        self._refresh()
-        if n:
-            self.statusBar().showMessage(
-                "Locked: it cannot be selected or moved. Click the padlock to unlock it."
-                if locked
-                else "Unlocked.",
-                5000,
-            )
-
-    def rename_selection(self) -> None:
-        """Edit > Rename…: one object is renamed in the Objects panel, several in Rename
-        Objects."""
-        if self.doc is None or not self._sel:
-            return
-        if len(self._sel) > 1:
-            self.rename_objects_dialog()
-            return
-        idx = self._sel[0]
-        self.dock_objects.show()
-        self.dock_objects.raise_()
-        self.objects_dock.start_rename(idx)  # (the editor has the focus)
-
-    def rename_objects_dialog(self) -> None:
-        """Edit > Rename Objects…: the selected objects by a pattern, or a find and replace
-        in their names (one undo step)."""
-        if self.doc is None or not self._sel:
-            return
-        from ..dialog.rename_dialog import RenameObjectsDialog
-
-        dlg = RenameObjectsDialog(self, self.doc, list(self._sel))
-        if dlg.exec() == QtWidgets.QDialog.Accepted and dlg.renamed:
-            self._refresh()
-            self.statusBar().showMessage(
-                "%d object%s renamed." % (dlg.renamed, "" if dlg.renamed == 1 else "s"), 5000
-            )
-
-    def _objects_panel_settings(self) -> None:
-        """Settings > Appearance > Objects panel changed (the Settings window calls it)."""
-        self.objects_dock.apply_settings()
-
-    def _reveal_index(self, index: int) -> None:
-        """Objects panel double-click with Settings > Appearance > Objects panel >
-        Double-click a row > Scrolls to it: the object into view, the zoom kept."""
-        if self.doc is None or index is None:
-            return
-        box = self.doc.selection_extent([index], bounds=True)
-        if box is None:
-            return
-        l, t, r, b = box
-        self.view.reveal_rect(QtCore.QRectF(l, t, max(1, r - l), max(1, b - t)))
-
-    def _frame_index(self, index: int) -> None:
-        """Browser double-click: centre + zoom the unit."""
-        if self.doc is None or index is None:
-            return
-        box = self.doc.selection_extent([index], bounds=True)
-        if box is None:
-            return
-        l, t, r, b = box
-        self.view.frame_rect(QtCore.QRectF(l, t, max(1, r - l), max(1, b - t)))
-
-    def _on_tag_dropped(self, index: int, tag: str) -> None:
-        """Drag a tag onto a genie: when exactly one binding
-        is tag-typed the tag binds directly (one undo step); otherwise the
-        parameter dialog opens to choose."""
-        if self.doc is None:
-            return
-        # the OUTERMOST genie: CtDraw re-composes every placed genie from its
-        # element on load, so a nested genie's own bindings are derived from
-        # the outer one's -- binding there would be lost
-        pg = self.doc.page
-        chain = ([index] if pg.objects[index].is_genie else []) + [
-            a for a in pg.ancestors(index) if pg.objects[a].is_genie
-        ]
-        groot = chain[-1] if chain else None
-        if groot is None:
-            self.statusBar().showMessage("Drop a tag on a genie to bind it", 4000)
-            return
-        if self.doc.is_composite_genie(groot):
-            from ...editing import COMPOSITE_LOCKED
-
-            self.statusBar().showMessage(COMPOSITE_LOCKED, 8000)
-            return
-        bindings = self.doc.genie_all_params(groot)
-        # a parameter holding a tag of the page's tag scope (or empty, or an
-        # Equip.Item style reference) takes the tag
-        tag_keys = [
-            k
-            for k, v in bindings.items()
-            if (v.strip() and self.doc.tag_entry(v) is not None)
-            or (("." in v or not v.strip()) and not v.startswith("%"))
-        ]
-        if "Equipment" in bindings and "Equipment" not in tag_keys:
-            tag_keys.append("Equipment")
-        if len(tag_keys) == 1:
-            value = tag
-            if tag_keys[0].lower() in ("equipment", "equipmentref", "equip"):
-                # an Equipment input takes the equip.dbf NAME (the tag's
-                # EQUIP field), not a tag name -- a tag there fails the
-                # compile with E2123 "Undefined equipment name"
-                entry = self.doc.tag_entry(tag)
-                equip = entry.equip if entry is not None else ""
-                if not equip:
-                    self.statusBar().showMessage(
-                        "Tag %s has no equipment to bind to %s" % (tag, tag_keys[0]), 6000
-                    )
-                    return
-                value = equip
-            if self.doc.set_genie_binding(groot, tag_keys[0], value):
-                self._refresh()
-                self.statusBar().showMessage("Bound %s = %s" % (tag_keys[0], value), 5000)
-                return
-        # ambiguous: open the parameter editor to place the tag
-        QtWidgets.QApplication.clipboard().setText(tag)
-        self._on_dock_selection([groot])
-        self.statusBar().showMessage("Tag %s copied. Paste it into a parameter in the dialog." % tag, 5000)
-        self._edit_genie(groot, self.doc.page.objects[groot])
 
     # ----------------------------------------------------- selection modes
     _SEL_FILTERS = [
@@ -1553,264 +1069,3 @@ class ViewState:
 
         self.view.set_kind_filter(ok)
         self.statusBar().showMessage("Only %s can be selected." % self.sel_filter.currentText().lower(), 4000)
-
-    # ---------------------------------------- contextual ribbon tabs + HUD
-    def _queue_context_update(self, origin: str) -> None:
-        """Coalesce rapid selection changes through one 0 ms timer."""
-        self._ctx_origin = origin
-        if getattr(self, "_ctx_pending", False):
-            return
-        self._ctx_pending = True
-        QtCore.QTimer.singleShot(0, self, self._apply_selection_context)
-
-    _SHAPE_KIND_NAMES = ("line", "pipe", "polygon", "rectangle", "ellipse")
-
-    def _classify_selection(self) -> set:
-        from ...model.document import ObjectKind
-
-        traits = set()
-        if self.doc is None:
-            return traits
-        for i in self._sel:
-            if i >= len(self.doc.page.objects):
-                continue
-            kind = self.doc.page.objects[i].kind
-            if kind in (ObjectKind.TEXT, ObjectKind.NUMBER, ObjectKind.BUTTON):
-                traits.add("TEXT")
-            if kind.value in self._SHAPE_KIND_NAMES:
-                traits.add("SHAPE")
-            if self.doc.page.nearest_genie(i) is not None:
-                traits.add("GENIE")
-        return traits
-
-    def _sel_shapes(self, quiet: bool = False) -> list:
-        return [
-            i
-            for i in self._filter_template(self._sel, "edit", quiet)
-            if i < len(self.doc.page.objects)
-            and self.doc.page.objects[i].kind.value in self._SHAPE_KIND_NAMES
-        ]
-
-    def _sel_texts(self, quiet: bool = False) -> list:
-        # a button's caption font is its dwFlags-0x40 font block (set_font writes it)
-        return [
-            i
-            for i in self._filter_template(self._sel, "edit", quiet)
-            if i < len(self.doc.page.objects)
-            and self.doc.page.objects[i].kind.value in ("text", "number", "button")
-        ]
-
-    def _apply_shape_width(self, v: int) -> None:
-        if self._syncing or self.doc is None:
-            return
-        with self.doc.batch("line width"):
-            ok = [self.doc.set_line_width(i, v) for i in self._sel_shapes()]
-        if any(ok):
-            self._refresh()
-
-    def _apply_shape_style(self, idx: int) -> None:
-        if self._syncing or self.doc is None:
-            return
-        with self.doc.batch("line style"):
-            ok = [self.doc.set_line_style(i, idx) for i in self._sel_shapes()]
-        if any(ok):
-            self._refresh()
-
-    def _apply_shape_filled(self, on: bool) -> None:
-        if self._syncing or self.doc is None:
-            return
-        with self.doc.batch("fill"):
-            ok = [self.doc.set_filled(i, on) for i in self._sel_shapes()]
-        if any(ok):
-            self._refresh()
-
-    def _apply_font_face(self, font) -> None:
-        if self._syncing or self.doc is None:
-            return
-        with self.doc.batch("font"):
-            ok = [self.doc.set_font(i, face=font.family()) for i in self._sel_texts()]
-        if any(ok):
-            self._refresh()
-
-    def _apply_font_size(self, pts: int) -> None:
-        if self._syncing or self.doc is None:
-            return
-        with self.doc.batch("font size"):
-            ok = [self.doc.set_font(i, size=pts) for i in self._sel_texts()]
-        if any(ok):
-            self._refresh()
-
-    def _sync_context_widgets(self, traits: set) -> None:
-        """Push the first selected shape/text object's values into the
-        contextual widgets (signal-guarded)."""
-        if self.doc is None:
-            return
-        self._syncing = True
-        try:
-            if "SHAPE" in traits:
-                shapes = self._sel_shapes(quiet=True)  # a query, not an edit
-                if shapes:
-                    st = self.doc.page.objects[shapes[0]].style
-                    self.shape_width.setValue(max(1, st.line_width or 1))
-                    self.shape_style.setCurrentIndex(st.line_style if 0 <= st.line_style <= 4 else 0)
-                    self.shape_filled.setChecked(bool(st.filled))
-            if "TEXT" in traits:
-                texts = self._sel_texts(quiet=True)
-                if texts:
-                    st = self.doc.page.objects[texts[0]].style
-                    self.font_combo.setCurrentFont(QtGui.QFont(st.font or "Arial"))
-                    # unset size shows the Citect default (10pt), not the
-                    # spinbox minimum (4)
-                    self.font_size.setValue(st.font_size or 10)
-        finally:
-            self._syncing = False
-
-    def _apply_selection_context(self) -> None:
-        self._ctx_pending = False
-        ribbon = getattr(self, "ribbon", None)
-        if ribbon is None:
-            return
-        traits = self._classify_selection()
-        # auto-activate only for canvas-origin selections while DESIGN is the
-        # active static tab; tree selections only tint
-        on_design = ribbon._tabs.currentIndex() == 0
-        # (Settings > Ribbon > Contextual tabs: off, a canvas selection only tints its tab)
-        from ..prefs import window_options
-
-        activate = (
-            bool(traits) and self._ctx_origin == "canvas" and on_design and window_options.CONTEXT_TABS_OPEN
-        )
-        # (the tabs are titled 'Text' / 'Shape' / 'Genie':, no capitals)
-        order = [t.title() for t in ("TEXT", "SHAPE", "GENIE") if t in traits]
-        ribbon.set_context_tabs(order, activate=activate)
-        self._sync_context_widgets(traits)
-        self._schedule_hud()
-
-    def _schedule_hud(self, *_args) -> None:
-        """(Re)show the selection HUD once the view settles -- after a
-        selection change, an edit commit (drag / nudge / resize hid it), a
-        zoom or a scroll (it would otherwise float at a stale spot)."""
-        hud = getattr(self, "hud", None)
-        if hud is None:
-            return
-        if not (self._sel and self.doc is not None) or not self.act_selection_hud.isChecked():
-            hud.hide()
-            return
-        t = getattr(self, "_hud_timer", None)
-        if t is None:
-            t = self._hud_timer = QtCore.QTimer(self)
-            t.setSingleShot(True)
-            t.timeout.connect(self._show_hud)
-        if hud.isVisible() and _args:
-            hud.hide()  # moving view: hide until it settles
-        # (Settings > Ribbon > Selection toolbar > Show it again after the view settles for)
-        from ..prefs import timing_options
-
-        t.start(timing_options.HUD_DELAY_MS)
-
-    def _show_hud(self) -> None:
-        if (
-            not self._sel
-            or self.doc is None
-            or getattr(self.view, "_resizing", None)
-            or QtWidgets.QApplication.mouseButtons() != QtCore.Qt.NoButton
-        ):
-            return
-        if not self.act_selection_hud.isChecked():
-            return
-        box = self.doc.selection_extent(self._sel)
-        if box is None:
-            return
-        l, t, r, b = box
-        roots = {self.doc.root_of(i) for i in self._sel}
-        genie = len(roots) == 1 and self.doc.page.objects[next(iter(roots))].is_genie
-        self.hud.set_primary(self.act_genie_params if genie else self.act_obj_props)
-        skip = set()
-        for root in roots:
-            skip.update(self.doc.page.subtree(root))
-        self.hud.show_for_rect(QtCore.QRectF(l, t, r - l, b - t), skip)
-
-    def _toggle_selection_hud(self, on: bool) -> None:
-        """View > Selection Toolbar."""
-        if on:
-            self._schedule_hud()
-        elif getattr(self, "hud", None) is not None:
-            self.hud.hide()
-
-    def _on_object_activated(self, index: int) -> None:
-        """Double-click acts on the top-level unit."""
-        if self.doc is None or index >= len(self.doc.page.objects):
-            return
-        top = self.doc.root_of(index)
-        obj = self.doc.page.objects[top]
-        self._on_dock_selection([top])
-        if obj.is_genie:
-            self._edit_genie(top, obj)
-        else:
-            # a symbol set opens its Symbol Set sheet (object_properties picks
-            # it unless read-only); an object's own Touch / Keyboard records
-            # are its commands, not members
-            self.object_properties(top)
-
-    def _edit_genie_at(self, index: int) -> None:
-        """The Properties panel's 'Edit genie parameters…': THAT genie's
-        parameters -- not its top-level unit's, as a canvas double-click
-        acts on (a genie inside a plain group would open the group's
-        sheet)."""
-        if self.doc is None or not 0 <= index < len(self.doc.page.objects):
-            return
-        obj = self.doc.page.objects[index]
-        if obj.is_genie:
-            self._edit_genie(index, obj)
-        else:
-            self._on_object_activated(index)
-
-    def _member_reachable(self, index: int) -> bool:
-        """May a Ctrl+double-click open this object's own sheet?"""
-        if self.doc is None or not 0 <= index < len(self.doc.page.objects):
-            return False
-        root = self.doc.root_of(index)
-        if self._is_template_obj(root):
-            return index != root
-        return not self._unit_locked(root)
-
-    def _on_member_activated(self, index: int) -> None:
-        """Ctrl+double-click (CtDraw): the properties of the EXACT object --
-        a member of a group, symbol or genie, or a template record -- instead
-        of its top-level unit's. A genie member's (and a locked template
-        record's) sheet is read-only with 'Edit Definition'."""
-        if self.doc is None or not 0 <= index < len(self.doc.page.objects):
-            return
-        self._on_dock_selection([index])
-        self.objects_dock.set_selection(self._sel)  # the tree shows the member
-        self._open_sheet_of(index)
-
-    def _open_sheet_of(self, index: int) -> None:
-        """The sheet that shows object ``index`` (Ctrl+double-click, Goto
-        Object's OK): a touch / keyboard record is its owner's command, shown
-        on the owner's Input tab; a page-wide keyboard command is a Page
-        Properties setting; anything else opens its own sheet."""
-        from ...format import inputs
-
-        obj = self.doc.page.objects[index]
-        if obj.raw.get("_type_code") in inputs.INPUT_TCS:
-            if obj.parent is not None:
-                self.edit_input(obj.parent)
-            else:
-                self.page_properties()
-            return
-        self.object_properties(index)
-
-    def _on_canvas_activated(self, index: int) -> None:
-        """A double-click on the canvas: the in-place editor for a plain text or button
-        caption (Settings > 'Double-click a text to edit it in place', on by default), else
-        the object's properties (CtDraw)."""
-        from ..prefs.settings import option
-
-        if self.doc is not None and 0 <= index < len(self.doc.page.objects) and option("dblclick_edits_text"):
-            top = self.doc.root_of(index)
-            if self._inplace_refusal(top) is None:
-                self._on_dock_selection([top])
-                self.edit_text_in_place(top)
-                return
-        self._on_object_activated(index)

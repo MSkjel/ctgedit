@@ -32,8 +32,8 @@ def _drop_win(w):
         if hasattr(d, "dirty"):
             d.dirty = False
     w.doc = None
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.close()
 
 
@@ -368,7 +368,7 @@ def test_simulate_does_not_reload_a_waiting_page_while_a_run_writes_libraries(tm
     try:
         with open(lib, "w") as fh:  # (the save)
             fh.write("bbb")
-        editing._LIBRARY_GENERATION[0] += 1
+        editing.LIBRARY_GENERATION[0] += 1
         win.tick()
         assert sp.lib_wait and sim.reloads == []
         UpdatePagesRun.users_busy = "fxnest.n0"  # (the chain starts)
@@ -377,7 +377,7 @@ def test_simulate_does_not_reload_a_waiting_page_while_a_run_writes_libraries(tm
         wait_for(lambda: (win.tick(), False)[1], timeout=1.6)
         assert sim.reloads == [], "no reload while the run writes libraries"
         UpdatePagesRun.users_busy = ""
-        editing._LIBRARY_GENERATION[0] += 1  # (the run's saves)
+        editing.LIBRARY_GENERATION[0] += 1  # (the run's saves)
         assert wait_for(lambda: (win.tick(), sim.reloads)[1], timeout=15)
         wait_for(lambda: (win.tick(), False)[1], timeout=1.3)
         assert len(sim.reloads) == 1 and not sp.auto_behind
@@ -404,7 +404,7 @@ def test_simulate_holds_a_library_reload_due_when_a_run_starts(tmp_path, monkeyp
     try:
         with open(lib, "w") as fh:  # (the save)
             fh.write("bbb")
-        editing._LIBRARY_GENERATION[0] += 1
+        editing.LIBRARY_GENERATION[0] += 1
         win.tick()
         assert sp.reload_due is not None and sp.reload_lib
         UpdatePagesRun.chain_busy = True

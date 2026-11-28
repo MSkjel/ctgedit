@@ -21,7 +21,7 @@ class JobProgress:
         head: str,
         phase: str = "",
         stats: Optional[RunStats] = None,
-        cancel: Optional[str] = "Cancel",
+        cancel: Optional[str] = "Stop",
         total: int = 0,
         show_after_ms: int = 0,
         lets_tabs_update: bool = False,
@@ -137,11 +137,11 @@ class JobProgress:
 
     def tick(self, i: int, n: int, head: Optional[str] = None) -> bool:
         """``i`` of ``n`` items are done (``head`` = the new line); the window paints and
-        Cancel is read, at most every :attr:`PAINT_EVERY_S` (the last item always).
-        False once Cancel was clicked."""
+        Cancel is read, at most every :attr:`PAINT_EVERY_S` (a step's first and last item
+        always). False once Cancel was clicked."""
         n = max(1, int(n))
         now = time.monotonic()
-        if now - self._painted < self.PAINT_EVERY_S and int(i) < n - 1:
+        if now - self._painted < self.PAINT_EVERY_S and 0 < int(i) < n - 1:
             return not self.cancelled
         self._painted = now
         try:
@@ -155,6 +155,17 @@ class JobProgress:
         self.set(head if head is not None else self.head)
         self._events()
         return not self.cancelled
+
+    def show_lines(self, i: int, n: int, lines: List[str]) -> None:
+        """For a run that reports through signals (its own event loop runs meanwhile): the bar
+        at ``i`` of ``n`` and the label's ``lines`` as they are; no events are processed."""
+        n = max(1, int(n))
+        try:
+            self.prog.setMaximum(n)
+            self.prog.setValue(min(max(0, int(i)), n))
+            self.steady.set(list(lines))
+        except RuntimeError:  # swallow-ok: the window is gone
+            pass
 
     def pulse(self, head: Optional[str] = None) -> bool:
         """The same for a job without counts: the time so far is refreshed."""

@@ -85,9 +85,9 @@ def _free_process_caches():
         getattr(sw, "_WINDOWS", []).clear()
     mw = mods.get("ctgedit.ui.main_window")
     if mw is not None:
-        for w in list(getattr(mw.MainWindow, "_instances", [])):
+        for w in list(getattr(mw.MainWindow, "instances", [])):
             try:
-                mw.MainWindow._instances.remove(w)
+                mw.MainWindow.instances.remove(w)
                 w.hide()
                 w.deleteLater()
             except RuntimeError, ValueError:
@@ -184,6 +184,21 @@ def _restore_theme():
 
 
 @pytest.fixture(autouse=True)
+def _no_run_left():
+    """Each test starts with no Update Pages run, chain or pack going on or waiting (the
+    process's run state: ui/jobs/update_run.UpdatePagesRun)."""
+    yield
+    # (a test may have put a stand-in in their place: it is undone after this)
+    for name, attr in (
+        ("ctgedit.ui.jobs.update_run", "UpdatePagesRun"),
+        ("ctgedit.ui.window.open_tabs", "SharedState"),
+    ):
+        reset = getattr(getattr(sys.modules.get(name), attr, None), "reset", None)
+        if reset is not None:
+            reset()
+
+
+@pytest.fixture(autouse=True)
 def _reap_leaked_windows():
     """After each test, an editor window it took out of the window list but did not delete
     is deleted now, while nothing else runs: left to the garbage collector, it is destroyed
@@ -197,7 +212,7 @@ def _reap_leaked_windows():
     app = QtWidgets.QApplication.instance()
     if app is None:
         return
-    keep = set(map(id, getattr(mw.MainWindow, "_instances", [])))
+    keep = set(map(id, getattr(mw.MainWindow, "instances", [])))
     for w in app.topLevelWidgets():
         if isinstance(w, mw.MainWindow) and id(w) not in keep:
             try:
@@ -445,6 +460,7 @@ __all__ = [
     "pytest_sessionfinish",
     "_free_process_caches",
     "_reap_leaked_windows",
+    "_no_run_left",
     "_restore_theme",
     "collect_between_tests",
     "_no_live_runtime",

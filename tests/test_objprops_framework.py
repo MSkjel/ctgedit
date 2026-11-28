@@ -514,15 +514,23 @@ def test_insert_function_at_the_cursor(builtins, tmp_path, monkeypatch):
     f = dlg._editors["DISABLED"]
     f.setText("NOT () AND X")
     f.setCursorPosition(5)
+    opened_on = []  # (the picker opens on the kind chosen last)
     monkeypatch.setattr(
         FunctionPickerDialog,
         "exec",
-        lambda self: (self.select_text("AlarmAck"), self._accept(), QtWidgets.QDialog.Accepted)[-1],
+        lambda self: (
+            opened_on.append(self.kind.currentIndex()),
+            self.kind.setCurrentIndex(0),
+            self.select_text("AlarmAck"),
+            self._accept(),
+            QtWidgets.QDialog.Accepted,
+        )[-1],
     )
     menu = f._menu
     menu.aboutToShow.emit()
     act = next(a for a in menu.actions() if a.text() == "Insert Function…")
     act.trigger()
+    assert opened_on == [2]
     assert f.text() == "NOT (%s) AND X" % ack
     assert f.cursorPosition() == len("NOT (" + ack)
 
@@ -765,8 +773,8 @@ def test_window_opens_member_sheets_read_only(tmp_path):
         assert not win._dialogs[("objprops", free)].is_read_only()
         win._dialogs[("objprops", free)].reject()
     finally:
-        if win in MainWindow._instances:
-            MainWindow._instances.remove(win)
+        if win in MainWindow.instances:
+            MainWindow.instances.remove(win)
         win.close()
 
 

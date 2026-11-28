@@ -1,5 +1,6 @@
 """The library watch and the Simulate window follow what is open."""
 
+from ctgedit.infra.paths import path_key
 import os
 import sys
 
@@ -139,7 +140,7 @@ def test_with_the_wait_setting_the_helpers_writes_wait_for_the_runs_end(
     _other_program_saves(lib, "n1", tmp_path)
     win._on_library_files_changed([lib])
     assert win._check_library_changes() == []
-    assert not any(a[0] is host for a in submitted) and libwatch._key(lib) in libwatch._HELD
+    assert not any(a[0] is host for a in submitted) and path_key(lib) in libwatch._HELD
     UpdatePagesRun.users_busy = ""
     assert libwatch.chain_saves_settled([lib], first=win) == []
     st = os.stat(lib)
@@ -164,7 +165,7 @@ def test_update_users_in_this_process_holds_the_watch_whatever_the_setting(
     _other_program_saves(lib, "n1", tmp_path)
     win._on_library_files_changed([lib])
     assert win._check_library_changes() == [] and submitted == []
-    assert libwatch._key(lib) in libwatch._HELD
+    assert path_key(lib) in libwatch._HELD
 
 
 def test_a_library_saved_meanwhile_by_another_program_is_taken_at_once(
@@ -282,7 +283,7 @@ def test_simulate_follows_the_editor_during_the_background_update(tmp_path, monk
         UpdatePagesRun.users_busy = "fxnest.n0"  # (the run, started by the save)
         with open(lib, "w") as fh:  # (the save)
             fh.write("bbb")
-        editing._LIBRARY_GENERATION[0] += 1
+        editing.LIBRARY_GENERATION[0] += 1
         win.tick()
         assert sp.lib_wait and sim.reloads == []
         pending["on"] = False
@@ -292,7 +293,7 @@ def test_simulate_follows_the_editor_during_the_background_update(tmp_path, monk
         wait_for(lambda: (win.tick(), False)[1], timeout=1.3)
         assert len(sim.reloads) == 1 and fsim.reloads == []
         UpdatePagesRun.users_busy = ""  # (the run's end)
-        editing._LIBRARY_GENERATION[0] += 1
+        editing.LIBRARY_GENERATION[0] += 1
         assert wait_for(lambda: (win.tick(), fsim.reloads)[1], timeout=15)
         wait_for(lambda: (win.tick(), False)[1], timeout=1.3)
         assert len(sim.reloads) == 1 and len(fsim.reloads) == 1 and not sp.auto_behind
@@ -318,12 +319,12 @@ def test_simulate_waits_for_the_background_update_with_the_wait_setting(tmp_path
         UpdatePagesRun.users_busy = "fxnest.n0"
         with open(lib, "w") as fh:
             fh.write("bbb")
-        editing._LIBRARY_GENERATION[0] += 1
+        editing.LIBRARY_GENERATION[0] += 1
         _lands(doc)
         wait_for(lambda: (win.tick(), False)[1], timeout=1.6)
         assert sim.reloads == []
         UpdatePagesRun.users_busy = ""
-        editing._LIBRARY_GENERATION[0] += 1
+        editing.LIBRARY_GENERATION[0] += 1
         assert wait_for(lambda: (win.tick(), sim.reloads)[1], timeout=15)
         wait_for(lambda: (win.tick(), False)[1], timeout=1.3)
         assert len(sim.reloads) == 1

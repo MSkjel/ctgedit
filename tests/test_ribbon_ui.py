@@ -34,8 +34,8 @@ def win(fx_install, tmp_path):
     w._test_fx = fx_install
     w._test_tmp = tmp_path
     yield w
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.hide()
     w.deleteLater()
 
@@ -707,8 +707,8 @@ def test_a_fold_menu_command_of_a_tab_first_shown_in_the_flyout_closes_it(fx_ins
         w.ribbon.close_flyout()
         w.act_collapse_ribbon.setChecked(False)
         _pump()
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.hide()
         w.deleteLater()
         _pump()

@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from ..infra import backups
+
+from ..infra.paths import path_key
+
 import contextlib
 import os
 import re
@@ -12,6 +16,7 @@ from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
 from . import composer as CP
 from . import element as E
 from .fileio import write_atomic
+from ..infra.logsetup import note_exception as _note_exc
 
 LOCK_FILE = "_000.cache.lock"
 #: CacheLock's message (ErrorMessage_CacheLockOccupied)
@@ -140,6 +145,7 @@ def _element_exists(lib_path: str, name: str) -> bool:
     try:
         return E.LibraryFile.open(lib_path).find(name) is not None
     except Exception:  # noqa: BLE001
+        _note_exc("composer_store._element_exists", lib=lib_path, element=name)
         return False
 
 
@@ -195,12 +201,12 @@ def state_of(
 
     with open(template_path, "rb") as fh:
         data = fh.read()
-    model = CP.parse_model(data, template_path)
+    model = CP.parsed_model(data, template_path)
     ctx = ctx or ComposeContext(page_path, resolver)
     layout = ctx.compose(model, stored_values, final=False)
     if layout.hash != inst_hash:
         return "stale"
-    return instance_state(ctx, model, CP.template_digest(data), layout, cache_dir)
+    return instance_state(ctx, model, CP.digest_of(data), layout, cache_dir)
 
 
 def compose(
@@ -222,7 +228,7 @@ def compose(
     try:
         with open(template_path, "rb") as fh:
             data = fh.read()
-        model = CP.parse_model(data, template_path)
+        model = CP.parsed_model(data, template_path)
     except OSError as e:
         raise ComposeError(
             "The composite genie template %s could not be read (%s)." % (template_path, e.strerror or e)
@@ -237,7 +243,7 @@ def compose(
     project_dir = project_dir or os.path.dirname(os.path.abspath(page_path))
     guid = model.guid
     cache_dir = CP.store_dir(project_dir, guid)
-    digest = CP.template_digest(data)
+    digest = CP.digest_of(data)
     all_versions = [(it, ctx.version(it)) for it in model.library_items()]
     res = ComposeResult(guid, layout.hash, cache_dir, layout)
     if not force:
@@ -331,7 +337,7 @@ def referencing_projects(project_dir: str) -> List[str]:
     includes it (its pages may link the caches it holds)."""
     from .projects import include_search_dirs
 
-    me = os.path.normcase(os.path.abspath(project_dir))
+    me = path_key(project_dir)
     out = [project_dir]
     user = os.path.dirname(os.path.abspath(project_dir))
     try:
@@ -340,7 +346,7 @@ def referencing_projects(project_dir: str) -> List[str]:
         return out
     for n in names:
         d = os.path.join(user, n)
-        if os.path.normcase(os.path.abspath(d)) == me or not os.path.isdir(d):
+        if path_key(d) == me or not os.path.isdir(d):
             continue
         if not os.path.isfile(os.path.join(d, "include.dbf")) and not os.path.isfile(
             os.path.join(d, "include.DBF")
@@ -349,8 +355,9 @@ def referencing_projects(project_dir: str) -> List[str]:
         try:
             chain = include_search_dirs(d)
         except Exception:  # noqa: BLE001
+            _note_exc("composer_store.referencing_projects", project=d)
             continue
-        if any(os.path.normcase(os.path.abspath(c)) == me for c in chain):
+        if any(path_key(c) == me for c in chain):
             out.append(d)
     return out
 
@@ -409,6 +416,7 @@ def unused_instances(project_dir: str, referenced: Set[Tuple[str, str]]) -> List
                     opt, _ = names.get(n.lower(), (None, False))
                     names[n.lower()] = (opt, True)
             except Exception:  # noqa: BLE001 -- an unreadable cache: leave it
+                _note_exc("composer_store.unused_instances", lib=lib)
                 continue
         for h, (opt, el) in sorted(names.items()):
             if (guid, h) not in referenced:
@@ -447,29 +455,14 @@ def delete_instances(items: Sequence[UnusedInstance], backup: Optional[str] = No
                     data = lf.to_bytes()
                     packed = packed_library(data)
                     if backup:
-                        _backup_file(lib, orig, backup, project_dir)
+                        backups.backup_file(backup, "pack", lib, orig, under=project_dir)
                     write_atomic(lib, packed if packed is not None else data)
                     changed.append(lib)
             for it in its:
                 if it.options_file and os.path.isfile(it.options_file):
                     if backup:
                         with open(it.options_file, "rb") as fh:
-                            _backup_file(it.options_file, fh.read(), backup, project_dir)
+                            backups.backup_file(backup, "pack", it.options_file, fh.read(), under=project_dir)
                     os.remove(it.options_file)
                     changed.append(it.options_file)
     return changed
-
-
-def _backup_file(path: str, data: bytes, backup: str, project_dir: str) -> None:
-    from ..infra import backups
-
-    proj = os.path.basename(os.path.normpath(project_dir))
-    rel = os.path.relpath(os.path.abspath(path), os.path.abspath(project_dir))
-    dest = os.path.join(backup, proj, rel)
-    os.makedirs(os.path.dirname(dest), exist_ok=True)
-    write_atomic(dest, data)
-    backups.add_entry(
-        backup,
-        "pack",
-        {"original": os.path.abspath(path), "backup": os.path.relpath(dest, backup), "size": len(data)},
-    )

@@ -115,8 +115,9 @@ class CommandListField(QtWidgets.QWidget):
 
     def _ask(self, labels: list) -> Optional[str]:
         """The command chosen in a list of ``labels`` (None: cancelled)."""
-        label, ok = QtWidgets.QInputDialog.getItem(self, "Add a Command", "Command:", labels, 0, False)
-        return label if ok and label else None
+        from ..messages import ask_item
+
+        return ask_item(self, "Add a Command", "Command:", labels) or None
 
     def add_command(self, cid: str = "") -> bool:
         """Add… (``cid`` given: that command, without asking). The new row is selected."""

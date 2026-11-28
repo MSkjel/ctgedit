@@ -306,7 +306,7 @@ def test_find_rows_follow_their_genies_through_an_update(fx_install, win, win2):
     assert _marked(page) == 3 and page.parsed.page.objects[before["FxRow3"]] is not stale.po
     now = _rows_by_name(page)
     assert now["FxRow3"] == before["FxRow3"] + 2, "FxRow1's and FxRow2's copies grew"
-    assert FR._resolve(page, stale) == now["FxRow3"]
+    assert FR.resolve_hit(page, stale) == now["FxRow3"]
     dlg._list.setCurrentItem(dlg._list.topLevelItem(k))
     dlg.go_to()
     assert "no longer" not in dlg._status.text()

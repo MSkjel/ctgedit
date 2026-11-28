@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..infra.paths import path_key
+
 import html
 import json
 import os
@@ -12,6 +14,7 @@ from functools import lru_cache
 from typing import Dict, List, Optional, Tuple
 
 from ..format.textcodec import CODEC
+from ..infra.logsetup import note_exception as _note_exc
 
 
 @dataclass(frozen=True)
@@ -39,7 +42,7 @@ def _help_dir() -> Optional[str]:
     return aveva_docs()
 
 
-def _bin_dirs() -> List[str]:
+def bin_dirs() -> List[str]:
     """infra.paths.scada_bin_dirs (kept under this name for its callers)."""
     from ..infra.paths import scada_bin_dirs
 
@@ -50,7 +53,7 @@ _CTX = re.compile(rb"([A-Za-z_][A-Za-z0-9_]{0,63})_Cicode_function\x00")
 
 
 def _names_from_ctedit() -> List[str]:
-    for d in _bin_dirs():
+    for d in bin_dirs():
         p = os.path.join(d, "ctedit32.dll")
         try:
             data = open(p, "rb").read()
@@ -74,7 +77,7 @@ def _argnames_from_func0() -> Dict[str, str]:
     Function shows and inserts, '(Mode, Value [,ClusterName])'."""
     from ..format.dbf import Dbf
 
-    for d in _bin_dirs():
+    for d in bin_dirs():
         p = os.path.join(d, "FUNC0.DBF")
         if not os.path.isfile(p):
             continue
@@ -225,7 +228,7 @@ def preload(project_dir: Optional[str] = None) -> Optional[threading.Thread]:
     """Read the built-in list -- and the functions of ``project_dir``'s
     include chain -- in a background thread (a cold help read can take
     seconds); the lookups then return at once. Once per process / project."""
-    key = os.path.normcase(os.path.abspath(project_dir)) if project_dir else ""
+    key = path_key(project_dir) if project_dir else ""
     if key in _PRELOADED:
         return None
     _PRELOADED.add(key)
@@ -236,7 +239,7 @@ def preload(project_dir: Optional[str] = None) -> Optional[threading.Thread]:
             if project_dir:
                 project_functions(project_dir)
         except Exception:  # noqa: BLE001 -- a warm-up only
-            pass
+            _note_exc("cicode_catalog.preload.work", project=project_dir)
 
     from ..infra import gcguard
 
@@ -277,13 +280,17 @@ def parse_ci(text: str, source: str = "", file: str = "") -> List[CicodeFunction
     """The callable functions a .ci file declares (PRIVATE ones skipped)."""
     out = []
     body = _strip_comments(text)  # (its lines are the file's)
+    # (the line of each name counted on from the one before)
+    at, line = 0, 1
     for m in _DECL.finditer(body):
         if (m.group("scope") or "").upper() == "PRIVATE":
             continue
         args = " ".join(m.group("args").split())
         rtype = (m.group("type") or "").upper()
         sig = "%s%s(%s)" % (rtype + " " if rtype else "", m.group("name"), args)
-        line = body.count("\n", 0, m.start("name")) + 1
+        pos = m.start("name")
+        line += body.count("\n", at, pos)
+        at = pos
         out.append(
             CicodeFunction(m.group("name"), sig, "", file, source, _declared_argnames(args), line=line)
         )
@@ -342,16 +349,22 @@ def ci_stamps(project_dir: str) -> tuple:
     return tuple(out)
 
 
+#: one reader of the .ci files at a time: a lookup while :func:`preload` reads them waits for
+#: its parses instead of making them a second time beside it
+_FUNCTIONS_LOCK = threading.Lock()
+
+
 def project_functions(project_dir: str) -> Tuple[CicodeFunction, ...]:
     """The public functions of the .ci files of the page folder's tag scope
     (its project, the projects it includes and the projects compiled with it:
     io.tagscope), first definition wins."""
     out, seen = [], set()
-    for path, proj in _scope_ci_files(project_dir):
-        for fn in _ci_functions(path, proj):
-            if fn.name.lower() not in seen:
-                seen.add(fn.name.lower())
-                out.append(fn)
+    with _FUNCTIONS_LOCK:
+        for path, proj in _scope_ci_files(project_dir):
+            for fn in _ci_functions(path, proj):
+                if fn.name.lower() not in seen:
+                    seen.add(fn.name.lower())
+                    out.append(fn)
     return tuple(out)
 
 

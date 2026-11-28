@@ -304,7 +304,7 @@ def test_a_dspsym_genie_draws_its_members_states(fx_page):
 
     sc, m = _members_scene(fx_page)
     label = _items(m, 2)[0]
-    main, _g, _mode = SimLayer._text_parts(
+    main, _g, _mode = SimLayer.text_parts(
         m.records[next(k for k, r in enumerate(m.records) if r.raw.get("_handle") == 2)], label
     )
     static = main.text()

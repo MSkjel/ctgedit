@@ -19,6 +19,7 @@ Graphics Builder are in tools/live/. Regenerate the list after adding or removin
 - `corpus_index.py`: A queryable index of every record of every page (and library element) in the live corpus.
 - `cross_vectors.py`: Write the vectors ctgedit and the Cicode engine both check against.
 - `ctdraw_inspect.py`: Inspect and drive the real Graphics Builder.
+- `dialog_gallery.py`: Screenshots of every dialog (tests/dialog_gallery.py) at 100 % and 150 % text, with what the layout check finds in each, to look at them side by side.
 - `e2e_demo.py`: Open, edit, save, then check the Graphics Builder opens the result.
 - `engine_roundtrip.py`: Push our records through the Graphics Builder's PageOpen + PageSave and capture what it writes back.
 - `gen_parity_md.py`: Generate PARITY.md from the inventory and a status map.

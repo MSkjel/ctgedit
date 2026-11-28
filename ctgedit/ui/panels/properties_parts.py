@@ -172,7 +172,7 @@ FAMILY_VISIBILITY = [("VISIBLE", "Hidden when", "expr")]
 FAMILY_FILL_LEVEL = [
     ("FIL", "Level expression", "expr"),
     # FILMODE = CtDraw's direction radio: a combo row
-    # (_add_fill_direction); FILCOL = the unfilled part (a colour row)
+    # FILCOL = the unfilled part (a colour row)
     ("FILMINPC", "Fill at minimum", "number"),
     ("FILMAXPC", "Fill at maximum", "number"),
 ]

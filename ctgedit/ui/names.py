@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..infra.paths import path_key
+
 import re
 from typing import NamedTuple
 
@@ -65,6 +67,14 @@ def plural(n: int, word: str, many: str = "") -> str:
     ``many`` names an unusual plural ('1 genie member' / '3 genie members' need none)."""
     n = int(n)
     return "%d %s" % (n, word if n == 1 else (many or plural_word(n, word)))
+
+
+def name_list(names, most: int = 10) -> str:
+    """'a, b, c' for the first ``most`` names, then 'and 4 more' (a message names a few; the
+    log or a list shows them all)."""
+    names = [str(n) for n in names]
+    head = ", ".join(names[:most])
+    return head if len(names) <= most else "%s and %d more" % (head, len(names) - most)
 
 
 def template_name(link: str) -> str:
@@ -229,7 +239,7 @@ def composite_template_name(ref, project_dir: str) -> str:
     if not m or not project_dir:
         return ""
     guid = m.group(1).lower()
-    key = (os.path.normcase(os.path.abspath(project_dir)), guid)
+    key = (path_key(project_dir), guid)
     hit = _COMPOSITE_NAMES.get(key)
     if hit is not None:
         return hit
@@ -358,14 +368,21 @@ def input_badges(page, obj) -> tuple:
     if touch:
         parts.append("touch")
     if keys:
-        parts.append("%d key%s" % (keys, "" if keys == 1 else "s"))
+        parts.append(plural(keys, "key"))
     return len(obj.members) - touch - keys, ("[%s]" % ", ".join(parts)) if parts else ""
 
 
 def library_ref_of(obj) -> str:
-    """The library reference the object links to ('example.pump_b.<ctm'), '' for none."""
+    """The library reference the object links to ('example.pump_b.<ctm'), or that a genie
+    copy nested in a placed genie places (model/extras ``_def_ref``); '' for none."""
     raw = getattr(obj, "raw", None) or {}
-    return str(getattr(obj, "genie_template", "") or raw.get("_ref") or raw.get("_resolved_ref") or "")
+    return str(
+        getattr(obj, "genie_template", "")
+        or raw.get("_ref")
+        or raw.get("_resolved_ref")
+        or raw.get("_def_ref")
+        or ""
+    )
 
 
 def element_label(obj, page=None, short: bool = True) -> str:
@@ -398,10 +415,12 @@ def _plain_binding(value) -> bool:
     return not _NUMBER.match(v)
 
 
-def main_binding(obj) -> tuple:
+def main_binding(obj, subs=None) -> tuple:
     """(key, value) of the genie binding that tells this genie apart: Tag, TagPrefix,
-    Equipment, Item, else the first one that names something; ('', '') for none."""
-    subs = getattr(obj, "substitutions", None) or {}
+    Equipment, Item, else the first one that names something; ('', '') for none. ``subs``:
+    the bindings to read ({name: value}; None: the object's stored ones)."""
+    if subs is None:
+        subs = getattr(obj, "substitutions", None) or {}
     if not subs:
         return "", ""
     low = {}
@@ -444,6 +463,57 @@ def composite_binding(page, index: int) -> tuple:
                 return k, v
         stack.extend(reversed(o.members))
     return "", ""
+
+
+def parameters_of(page, index: int) -> list:
+    """[(parameter, value)] the genie ``index`` passes its element: its bindings (a genie
+    nested in another one: the values that came down to it), a composite genie's main
+    binding (its content genies hold the rest); [] for an object that is no genie."""
+    if page is None or not 0 <= index < len(page.objects):
+        return []
+    obj = page.objects[index]
+    if obj.kind.value == "composite_genie":
+        k, v = composite_binding(page, index)
+        return [(k, v)] if v else []
+    subs = getattr(obj, "substitutions", None) or {}
+    return [(str(k).strip("%"), " ".join(str(v).split())) for k, v in subs.items()]
+
+
+def genie_chain(page, index: int) -> list:
+    """The placed genies, composite genies and symbols ``index`` is part of, the outermost
+    first, ``index`` last when it is one: what places each level of a nested tree."""
+    if page is None or not 0 <= index < len(page.objects):
+        return []
+    objs = page.objects
+    out = [a for a in reversed(page.ancestors(index)) if 0 <= a < len(objs) and library_ref_of(objs[a])]
+    if library_ref_of(objs[index]):
+        out.append(index)
+    return out
+
+
+def values_text(page, index: int, values=None) -> str:
+    """'Equipment = Plant.P1; Label = P1': the values genie ``index`` gets, ``values(index)``
+    (the document's genie_values: as the Graphics Builder composes them) when it gives any,
+    else :func:`parameters_of`."""
+    got = values(index) if values is not None else None
+    return "; ".join("%s = %s" % kv for kv in (got or parameters_of(page, index)))
+
+
+def chain_lines(page, index: int, memo: dict | None = None, values=None) -> list:
+    """The tool tip lines of the genie tree ``index`` is in: one a level, the element and the
+    values it gets ('sa_valve.base_info: Equipment = Plant.OV08', :func:`values_text`), the
+    outermost first. ``memo``: each level's line, kept by a caller that asks for many rows."""
+    lines = []
+    for depth, a in enumerate(genie_chain(page, index)):
+        line = memo.get(a) if memo is not None else None
+        if line is None:
+            el = element_label(page.objects[a], page, short=False) or kind_name(page.objects[a])
+            params = values_text(page, a, values)
+            line = el + (": " + params if params else "")
+            if memo is not None:
+                memo[a] = line
+        lines.append("  " * depth + line)
+    return lines
 
 
 def expressions_of(obj, commands: bool = True) -> list:
@@ -512,7 +582,7 @@ def first_tag(obj) -> str:
     return ""
 
 
-def what_label(page, index: int, obj) -> str:
+def what_label(page, index: int, obj, values=None) -> str:
     """What the object shows or is made from: a genie's element and main binding
     ('pump_b  D100'), a text's or button's caption in quotes, a number's or symbol set's
     expression, a symbol's 'lib.element', another object's own text or class; '' for a
@@ -530,7 +600,11 @@ def what_label(page, index: int, obj) -> str:
             el = composite_template_name(ref, os.path.dirname(src) if src else "")
         else:
             el = element_label(obj, page)
-        key, val = composite_binding(page, index) if k == "composite_genie" else main_binding(obj)
+        key, val = (
+            composite_binding(page, index)
+            if k == "composite_genie"
+            else main_binding(obj, copy_bindings(values, index, obj))
+        )
         val = binding_text(key, val) if val else ""
         return "  ".join(x for x in (el, val) if x)
     if k in ("text", "button"):
@@ -566,7 +640,17 @@ class RowInfo(NamedTuple):
     commands: bool  # touch or keyboard commands
 
 
-def row_info(page, index: int, obj) -> RowInfo:
+def copy_bindings(values, index: int, obj):
+    """{name: value} of ``values(index)`` (the document's genie_values) for a genie copy nested
+    in a placed genie (model/extras ``_def_ref``: what it stores is its element composed
+    alone), None for another object or when it gives none (its stored bindings stand)."""
+    if values is None or not (getattr(obj, "raw", None) or {}).get("_def_ref"):
+        return None
+    got = values(index)
+    return dict(got) if got else None
+
+
+def row_info(page, index: int, obj, values=None) -> RowInfo:
     """Everything a row shows and a search matches (:func:`row_label`,
     :func:`row_search_text`), the expressions read once."""
     kind = kind_name(obj)
@@ -578,7 +662,7 @@ def row_info(page, index: int, obj) -> RowInfo:
     # (a stored name that is not a name a user gives, '0', is a definition's own mark: the
     # row is not known by it; the search still finds it)
     shown = name if name[:1].isalpha() else ""
-    what = what_label(page, index, obj)
+    what = what_label(page, index, obj, values)
     exprs = expressions_of(obj, commands=False)
     a = obj.animations
     cmds = (
@@ -609,7 +693,7 @@ def row_info(page, index: int, obj) -> RowInfo:
     # the search's keywords
     parts = [name] if name else []
     vals = []
-    for kk, v in (obj.substitutions or {}).items():
+    for kk, v in (copy_bindings(values, index, obj) or obj.substitutions or {}).items():
         v = " ".join(str(v).split())
         parts.append("%s=%s" % (str(kk).strip("%"), v))
         vals.append(v)

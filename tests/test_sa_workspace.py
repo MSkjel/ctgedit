@@ -615,7 +615,7 @@ def test_genie_dialogs_get_the_pickers(fx_install, monkeypatch):
     from ctgedit.ui.dialog.genie_dialogs import (
         GenieParamsForm,
         GenieSubstitutionDialog,
-        _BrowseField,
+        BrowseField,
         _MultiListField,
     )
 
@@ -642,7 +642,7 @@ def test_genie_dialogs_get_the_pickers(fx_install, monkeypatch):
     assert "FacePlateHeader" in names and "FacePlate" not in names  # not itself
     assert tab.currentText() == "FacePlateHeader"
     assert isinstance(pf.editor("ExcludedAutofillPanes"), _MultiListField)
-    assert isinstance(pf.editor("TabControlName"), _BrowseField)
+    assert isinstance(pf.editor("TabControlName"), BrowseField)
     cats = pf.editor("EquipRefAssocs")  # eqref.dbf categories
     assert isinstance(cats, _MultiListField) and "MEO" in cats._items
     page, objs = pk.tab_control_names("FacePlateHeader")
@@ -661,7 +661,7 @@ def test_genie_dialogs_get_the_pickers(fx_install, monkeypatch):
     form = d.genie_form_for("fxws", "navlink")
     lf = GenieParamsForm(params, form=form, list_values=d.form_list_values, pickers=pk)
     menu = lf.editor("MenuItemPath")
-    assert isinstance(menu, _BrowseField) and isinstance(lf.editor("EquipmentFrom"), _BrowseField)
+    assert isinstance(menu, BrowseField) and isinstance(lf.editor("EquipmentFrom"), BrowseField)
     monkeypatch.setattr(
         sa_pickers.ParamPickers,
         "_browse_menu_item",
@@ -678,7 +678,7 @@ def test_genie_dialogs_get_the_pickers(fx_install, monkeypatch):
     assert spec.items[0] == "__EquipmentModel" and "Navigation" in spec.items
     # without pickers the dialogs are unchanged (plain text boxes)
     plain = GenieParamsForm(params, form=form, list_values=d.form_list_values)
-    assert not isinstance(plain.editor("MenuItemPath"), _BrowseField)
+    assert not isinstance(plain.editor("MenuItemPath"), BrowseField)
 
 
 def test_pane_dialog_content_types_are_the_contype_list(fx_install):

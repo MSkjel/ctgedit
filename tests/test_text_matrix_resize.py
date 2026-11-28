@@ -266,7 +266,7 @@ def test_a_resized_mirrored_text_draws_its_font_scaled(fx_install):
     item = QtWidgets.QGraphicsSimpleTextItem("Mirror me")
     item.setFont(QtGui.QFont("Arial", 11))
     g = obj.geometry
-    assert PageScene._layout_text(item, obj, g.x, g.y, g.extent_x, g.extent_y)
+    assert PageScene.layout_text(item, obj, g.x, g.y, g.extent_x, g.extent_y)
     drawn = item.mapRectToScene(item.boundingRect())
     assert abs(drawn.width() - 2 * item.boundingRect().width()) < 1e-6
     assert abs(drawn.center().x() - (g.x + g.extent_x / 2.0)) < 1e-6

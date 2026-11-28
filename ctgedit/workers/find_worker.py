@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from ..infra.paths import path_key
+
+#: the registered pages of the projects (folders), in project then name order
+from .batchjob import project_pages as pages_of
+
 import os
 from typing import List
 
@@ -50,14 +55,6 @@ def options_from_json(d: dict):
     )
 
 
-def pages_of(projects) -> List[str]:
-    """The registered pages of ``projects`` (folders), in project then name order
-    (batchjob.project_pages)."""
-    from .batchjob import project_pages
-
-    return project_pages(projects)
-
-
 def open_page(path: str, prefilter=None):
     """The page as a document, or None when ``prefilter`` (find_replace.PagePrefilter) says
     it cannot hold a hit (it is then not parsed)."""
@@ -70,10 +67,32 @@ def open_page(path: str, prefilter=None):
     return EditableDocument.from_bytes(data, path, identity=identity)
 
 
+def search_page(path: str, opts, prefilter=None) -> list:
+    """The answer rows of the page at ``path``. A page read (one ``prefilter`` does not leave
+    out) goes to Find's index of the closed pages (features/find_index) with what its read
+    read, and its rows are matched as a search of the index matches them."""
+    from ..editing import EditableDocument, read_with_identity
+    from ..features import find_index as FI
+    from ..format.symbols import held_libraries
+
+    before = os.stat(path)
+    data, identity = read_with_identity(path)
+    if prefilter is not None and not prefilter.may_match(path, data):
+        return []
+    with held_libraries() as hold:
+        doc = EditableDocument.from_bytes(data, path, identity=identity)
+        form = FI.kept_form(doc, path, (before.st_mtime_ns, before.st_size), hold)
+    after = os.stat(path)
+    if (after.st_mtime_ns, after.st_size) == (before.st_mtime_ns, before.st_size) and not hold.changed():
+        FI.write(form)  # (a file written while it was read is read again next time)
+    return FI.page_rows(path, form, opts)
+
+
 def find(req: dict, progress=None, skip_now=None) -> dict:
-    """The rows of every closed page's hits. A request with ``part`` = [k, n] searches the
-    pages k, k + n, k + 2n, ... (one of n helper processes searching at once: the Find
-    dialog, Settings > Pages and libraries) and answers with each page's record;
+    """The rows of every closed page's hits (``req['pages']``: of these pages only, the
+    ones Find's index does not hold as they are now). A request with ``part`` = [k, n]
+    searches the pages k, k + n, k + 2n, ... (one of n helper processes searching at once:
+    the Find dialog, Settings > Pages and libraries) and answers with each page's record;
     :func:`merge` makes of the n answers the one of a search of every page."""
     part = req.get("part")
     k, n = (int(part[0]), int(part[1])) if part else (0, 1)
@@ -87,12 +106,12 @@ def _find_part(req: dict, k: int, n: int, progress=None, skip_now=None) -> dict:
     [index, 'failed', why] or [index, 'hits', rows]. Stops after a page that brings its
     rows past MAX_ROWS: the merged list is full by that page, its later pages are never
     read."""
+    from ..features import find_index as FI
     from ..features import find_replace as FR
-    from ..features.object_labels import object_label
 
     opts = options_from_json(req["options"])
-    skip = {os.path.normcase(os.path.abspath(p)) for p in req.get("skip") or ()}
-    pages = pages_of(req["projects"])
+    skip = {path_key(p) for p in req.get("skip") or ()}
+    pages = list(req["pages"]) if req.get("pages") is not None else pages_of(req["projects"])
     mine = range(k, len(pages), n)
     prefilter = FR.PagePrefilter(opts)
     records: list = []
@@ -103,44 +122,22 @@ def _find_part(req: dict, k: int, n: int, progress=None, skip_now=None) -> dict:
         if progress is not None and progress(j, len(mine), name) is False:
             break
         if (
-            os.path.normcase(os.path.abspath(path)) in skip
+            path_key(path) in skip
             or (skip_now is not None and skip_now(path))
             or not FR.page_allowed(opts, path)  # (left out by the Pages filter: not read)
         ):
             records.append([i, "skip"])
             continue
         try:
-            doc = open_page(path, prefilter)
-            hits = FR.find_hits(doc, opts) if doc is not None else []
+            rows = search_page(path, opts, prefilter)
         except Exception as e:  # noqa: BLE001 -- swallow-ok: the page is reported, the search goes on
             records.append([i, "failed", "%s: %s" % (name, e)])
             continue
-        rows = []
-        labels: dict = {}
-        for h in hits:
-            if h.index >= 0 and h.index not in labels:
-                labels[h.index] = object_label(doc, h.index)
-            rows.append(
-                {
-                    "page": path,
-                    "name": name,
-                    "project": os.path.basename(os.path.dirname(path)),
-                    "index": h.index,
-                    "object": labels.get(h.index, "Page"),
-                    "scope": h.scope,
-                    "kind": h.kind,
-                    "key": h.key,
-                    "value": h.value,
-                    "label": h.label,
-                    "reason": h.reason,
-                    "params": list(h.params),
-                    "sub": h.sub,
-                }
-            )
         records.append([i, "hits", rows])
         found += len(rows)
         if found > MAX_ROWS:
             break
+    FI.trim()
     return {"format": FORMAT, "part": [k, n], "pages": len(pages), "records": records}
 
 

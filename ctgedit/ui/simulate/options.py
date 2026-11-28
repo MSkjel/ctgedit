@@ -212,7 +212,7 @@ def get(name: str) -> Any:
         from ..prefs.settings import app_settings
 
         v = app_settings().value(key, None)
-    except Exception:  # noqa: BLE001 -- a setting is a convenience: the default
+    except Exception:  # noqa: BLE001  # swallow-ok: a setting is a convenience: the default
         return default
     if v == "" and name in EMPTY_IS_A_VALUE:
         return ""
@@ -233,7 +233,7 @@ def put(name: str, value: Any) -> None:
         from ..prefs.settings import app_settings
 
         app_settings().setValue(key, value)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # swallow-ok: a setting is a convenience
         pass
 
 

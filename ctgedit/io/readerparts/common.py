@@ -7,7 +7,7 @@ import re  # noqa: F401 (re-exported)
 import struct
 from functools import lru_cache
 from ...format.cnum import c_atoi
-from ...format.page import _XFORM_DOUBLES, _geom_name_len
+from ...format.page import XFORM_DOUBLES, geom_name_len
 from ...model.document import (
     Animations,
     DisplayValue,
@@ -39,7 +39,7 @@ from . import common as _pc, style as _ps, symbols as _py, graft as _pg  # noqa:
 _ICON_FOR_TYPE = None
 
 
-def _class_icons() -> dict:
+def class_icons() -> dict:
     """format.class_icons.ICON_FOR_TYPE (plain data: the reader stays Qt-free)."""
     global _ICON_FOR_TYPE
     if _ICON_FOR_TYPE is None:
@@ -54,7 +54,7 @@ _NO_COLOUR = 0xFF000000
 
 
 # Closed shapes: a static colour fills them. Open shapes (line/pipe) take it as the stroke.
-_CLOSED_KINDS = frozenset(
+CLOSED_KINDS = frozenset(
     {
         ObjectKind.RECTANGLE,
         ObjectKind.ELLIPSE,
@@ -66,7 +66,7 @@ _CLOSED_KINDS = frozenset(
 )
 
 
-_OPEN_KINDS = frozenset({ObjectKind.LINE, ObjectKind.PIPE})
+OPEN_KINDS = frozenset({ObjectKind.LINE, ObjectKind.PIPE})
 
 
 # Drawable LEAF kinds. A record of one of these that OWNS children is NOT a container: a
@@ -74,7 +74,7 @@ _OPEN_KINDS = frozenset({ObjectKind.LINE, ObjectKind.PIPE})
 # never drawable members (a clickable button face, an LCD caption), so it keeps its kind and paints
 # its own art. A real group/genie is a tc=0x08 container (kind group/symbol_set/...), excluded here.
 # A TREND owns Keyboard children the same way (its sheet has Keyboard Commands).
-_LEAF_KINDS = frozenset(
+LEAF_KINDS = frozenset(
     {
         ObjectKind.LINE,
         ObjectKind.RECTANGLE,
@@ -91,7 +91,7 @@ _LEAF_KINDS = frozenset(
 
 # type_codes that carry a drawable static-colour block/bag worth style-decoding. Bitmap (7)
 # and Group (8) containers are excluded: no fill of their own.
-_STYLED_TYPE_CODES = frozenset({1, 2, 3, 4, 5, 11, 12, 15, 16, 17, 4097, 4100, 4109})
+STYLED_TYPE_CODES = frozenset({1, 2, 3, 4, 5, 11, 12, 15, 16, 17, 4097, 4100, 4109})
 
 
 # type_codes that are NOT independently drawn (animation anchors, input behaviours, editor-tool
@@ -100,7 +100,7 @@ _STYLED_TYPE_CODES = frozenset({1, 2, 3, 4, 5, 11, 12, 15, 16, 17, 4097, 4100, 4
 # ColourAn 0x1008, SizeMove 0x100e, Slider 0x100f, Sparkle 6, MetaFile 9, Draw 2, Rail 0x12,
 # DummyMarker 0xffff, Select/Edit 0. No placeholder box for these. ActiveX/WebContent
 # (0xd/0x13) ARE visible controls -> kept.
-_NON_DRAWABLE_TYPE_CODES = frozenset(
+NON_DRAWABLE_TYPE_CODES = frozenset(
     {
         0x1000,
         0x1009,
@@ -125,22 +125,22 @@ CATALOG_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "format", "ca
 
 
 @lru_cache(maxsize=1)
-def _catalog() -> dict:
+def catalog() -> dict:
     import json
 
     try:
         with open(os.path.normpath(CATALOG_PATH), encoding="utf-8") as f:
             return json.load(f)
     except Exception:  # noqa: BLE001
-        _note_exc("reader._catalog")
+        _note_exc("reader.catalog")
         return {}
 
 
 @lru_cache(maxsize=1)
-def _key_family() -> dict:
+def key_family() -> dict:
     """Map serialized property key -> animation family (from the catalog)."""
     out = {}
-    for p in _catalog().get("properties", []):
+    for p in catalog().get("properties", []):
         k = p.get("key")
         if k:
             out[k] = p.get("family", "")
@@ -148,9 +148,9 @@ def _key_family() -> dict:
 
 
 @lru_cache(maxsize=1)
-def _visibility_keys() -> frozenset:
-    """The keys of the catalog's Visibility family (_apply_animations)."""
-    return frozenset(k for k, f in _key_family().items() if f == "Visibility")
+def visibility_keys() -> frozenset:
+    """The keys of the catalog's Visibility family (apply_animations)."""
+    return frozenset(k for k, f in key_family().items() if f == "Visibility")
 
 
 # Catalog `kind` strings -> ObjectKind enum values (spellings differ, e.g. symbol_set vs
@@ -183,10 +183,10 @@ _CATALOG_KIND_TO_ENUM = {
 
 
 @lru_cache(maxsize=1)
-def _typecode_kind() -> dict:
+def typecode_kind() -> dict:
     """type_code -> ObjectKind."""
     out = {}
-    for ot in _catalog().get("object_types", []):
+    for ot in catalog().get("object_types", []):
         kind = _CATALOG_KIND_TO_ENUM.get((ot.get("kind") or "").strip(), ObjectKind.UNKNOWN)
         for tc in ot.get("type_codes") or []:
             out.setdefault(int(tc), kind)
@@ -194,7 +194,7 @@ def _typecode_kind() -> dict:
 
 
 # --------------------------------------------------------------------------- geometry
-def _read_geometry(payload: bytes, body_offset: int):
+def read_geometry(payload: bytes, body_offset: int):
     """Decode the geometry header. None on overrun."""
     n = len(payload)
     o = body_offset
@@ -202,7 +202,7 @@ def _read_geometry(payload: bytes, body_offset: int):
         return None
     reserved = struct.unpack_from("<H", payload, o)[0]
     handle = struct.unpack_from("<H", payload, o + 2)[0]
-    name_end = _geom_name_len(payload, o)
+    name_end = geom_name_len(payload, o)
     if name_end == o:
         return None
     name = payload[o + 6 : name_end].decode(CODEC, "replace") if name_end > o + 6 else ""
@@ -213,7 +213,7 @@ def _read_geometry(payload: bytes, body_offset: int):
             return None
         mode = payload[o]
         o += 1
-        ndoubles = _XFORM_DOUBLES.get(mode, 6 if mode > 3 else 0)
+        ndoubles = XFORM_DOUBLES.get(mode, 6 if mode > 3 else 0)
         if o + ndoubles * 8 > n:
             return None
         vals = struct.unpack_from("<%dd" % ndoubles, payload, o) if ndoubles else ()
@@ -239,7 +239,7 @@ def _read_geometry(payload: bytes, body_offset: int):
     }
 
 
-def _transform_from_header(transforms) -> Transform:
+def transform_from_header(transforms) -> Transform:
     """Slot 1 (Local) as a 2x3 affine."""
     if not transforms:
         return Transform()
@@ -274,7 +274,7 @@ _LABEL_MODE = "native"
 #: (the language tables a translated label mode reads) and .tag_formats (the tag formats a
 #: literal display measures with) -- per THREAD, so a page derived on another thread (a test, a
 #: script) never swaps the context of a derive in progress
-_PAGE_CTX = threading.local()
+PAGE_CTX = threading.local()
 
 
 #: scoped overrides of the label mode / composite drawing (derive_options); None = the
@@ -398,10 +398,10 @@ def get_composite_members() -> bool:
 
 
 # --------------------------------------------------------------------------- kind
-def _kind_for(type_code: int, raw_props: dict) -> ObjectKind:
+def kind_for(type_code: int, raw_props: dict) -> ObjectKind:
     # type_code -> kind comes from CtDraw's object classes (the on-disk
     # type_code names the class).
-    tcmap = _typecode_kind()
+    tcmap = typecode_kind()
     mapped = tcmap.get(type_code)
     if mapped is not None and mapped is not ObjectKind.UNKNOWN:
         return mapped
@@ -488,10 +488,10 @@ def _fill_colour_anim(raw_props: dict) -> FillColour:
     return FillColour(range_on=mode in _fc.RANGED, thresholds=rows or [FillColourThreshold(expression=expr)])
 
 
-def _apply_animations(obj: GraphicObject, raw_props: dict, type_code=None) -> None:
+def apply_animations(obj: GraphicObject, raw_props: dict, type_code=None) -> None:
     a: Animations = obj.animations
     # (a key of the Visibility family: a set test in C, not the family of every key)
-    if "VISIBLE" in raw_props or not _visibility_keys().isdisjoint(raw_props):
+    if "VISIBLE" in raw_props or not visibility_keys().isdisjoint(raw_props):
         obj_expr = raw_props.get("VISIBLE") or raw_props.get("VISIBLE_") or ""
         a.visibility = Visibility(expression=str(obj_expr))
         # rest-state verdict: True (shown), False (hidden), None (not statically evaluable).
@@ -540,7 +540,7 @@ def _apply_animations(obj: GraphicObject, raw_props: dict, type_code=None) -> No
         )
 
 
-def _apply_symbol_set(obj: GraphicObject, raw_props: dict) -> None:
+def apply_symbol_set(obj: GraphicObject, raw_props: dict) -> None:
     """A symbol set's (tc 0x0C) TXTMODE is its TYPE (0 On / Off, 1 Multi-state,
     2 Array, 3 Animated) and TXT_A..TXT_E / SET_ARR its expressions -- not a
     text display (format/symbolset.py)."""

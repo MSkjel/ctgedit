@@ -24,6 +24,9 @@ class SelectByTagDialog(QtWidgets.QDialog):
         form = QtWidgets.QFormLayout()
         self.field = self._tag_field(names)
         self.field.setText(tag)
+        from ..remember import keep
+
+        keep(self.field, "select_by_tag")
         self.field.selectAll()
         self.field.setMinimumWidth(260)
         self.field.setAccessibleName("Tag")

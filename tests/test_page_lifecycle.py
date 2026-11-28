@@ -1,5 +1,6 @@
 """Page lifecycle: Save As, New, delete and rename."""
 
+from ctgedit.format.fileio import find_ci
 import os
 import shutil
 import struct
@@ -39,16 +40,16 @@ def _mini_project(
     copied whole."""
     os.makedirs(dst, exist_ok=True)
     for f in ("pages.DBF", "changes.DBF", "PROJECT.CIT"):
-        src = PR._find_file(project, f)
+        src = find_ci(project, f)
         if src:
             shutil.copy(src, os.path.join(dst, f))
     for t in tables:
-        src = PR._find_file(project, t + ".DBF")
+        src = find_ci(project, t + ".DBF")
         if src is None:
             continue
         d = Dbf(src, writable=False)
-        n = PR._open_ndx(project, t)
-        recs = [r for p in pages for _i, r in sorted(PR._page_records(d, n, "PAGE", p))]
+        n = PR.open_ndx(project, t)
+        recs = [r for p in pages for _i, r in sorted(PR.page_records(d, n, "PAGE", p))]
         if n is not None:
             n.close()
         with open(src, "rb") as fh:
@@ -92,7 +93,7 @@ def _live_rows(project_dir, table, page):
     """Live rows of ``page`` read with dbfread (an independent DBF reader)."""
     from dbfread import DBF
 
-    path = PR._find_file(project_dir, table + ".DBF")
+    path = find_ci(project_dir, table + ".DBF")
     if path is None:
         return []
     return [
@@ -628,7 +629,8 @@ def _answer_later(text=None, typed=None):
     QtCore.QTimer.singleShot(0, go)
 
 
-def test_the_confirmations_offer_ctdraws_choices(tmp_path):
+def test_the_confirmations_offer_ctdraws_choices(tmp_path, monkeypatch):
+    monkeypatch.delenv("CTG_NO_MODAL_QUESTIONS", raising=False)  # (it answers the real boxes)
     _app()
     from ctgedit.ui import lifecycle
 
@@ -661,27 +663,23 @@ def win():
     yield w
     for e in list(w._docs):
         e["doc"].dirty = False
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
 
 
 def test_deleting_an_open_page_closes_its_tab(win, EX, tmp_path, monkeypatch):
-    from PySide6 import QtWidgets
-
     page = str(tmp_path / "Mixer.ctg")
     shutil.copy(os.path.join(EX, "FxShapes.ctg"), page)
     win.open_document(page)
     assert win._tabs_of("page", page) == [0]
     # unsaved edits: the user is asked; Cancel keeps the tab (and the page)
     win.doc.dirty = True
-    monkeypatch.setattr(
-        QtWidgets.QMessageBox, "warning", staticmethod(lambda *a, **k: QtWidgets.QMessageBox.Cancel)
-    )
+    from ctgedit.ui import messages
+
+    monkeypatch.setattr(messages, "confirm", lambda *a, **k: False)
     assert not win._before_delete_or_rename("page", page)
     assert win._tabs_of("page", page) == [0]
-    monkeypatch.setattr(
-        QtWidgets.QMessageBox, "warning", staticmethod(lambda *a, **k: QtWidgets.QMessageBox.Discard)
-    )
+    monkeypatch.setattr(messages, "confirm", lambda *a, **k: a[3] == "Discard")
     close = win._before_delete_or_rename("page", page)
     assert callable(close)
     # (the tab closes only once the delete has succeeded: the step it hands back)

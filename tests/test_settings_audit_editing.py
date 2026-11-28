@@ -1,5 +1,6 @@
 """Editing settings."""
 
+from ctgedit.ui.main_window import MainWindow
 import json
 import os
 import shutil
@@ -55,8 +56,8 @@ def win(fx_install, monkeypatch):
     w.view.finish_text_edit(False)
     for e in getattr(w, "_docs", []):
         e["doc"].dirty = False
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.hide()
 
 
@@ -146,11 +147,9 @@ def test_every_row_has_its_declared_default_and_a_tip():
         assert declared_default(key) == default, key
         assert key in rows and rows[key].tip, key
     from ctgedit.infra import backups
-    from ctgedit.ui.window.canvas_edits import CanvasEdits
-    from ctgedit.ui.window.shell import WindowShell
 
     assert (backups.KEEP, backups.MAX_AGE_DAYS, backups.MIN_KEEP) == (10, 30.0, 3)
-    assert CanvasEdits.COPY_SHEETS_MAX == 7 and WindowShell.MRU_MAX == 16
+    assert MainWindow.COPY_SHEETS_MAX == 7 and MainWindow.MRU_MAX == 16
     assert S.whole("opt/big_nudge", S.BIG_NUDGE_RANGE) == 10
 
 

@@ -182,9 +182,11 @@ ctgedit lists the pages that place it first.
 ## Pack libraries
 
 Deleting or replacing elements leaves unused space in a library. Tools > Pack Libraries… rewrites
-a project's libraries without it (tick "Include the included projects" for those too) and offers
-to delete unused composite genie compositions. Everything is backed up first. Close the Graphics
-Builder first; Pack Libraries won't run while it's open.
+a project's libraries without it (tick "And the projects it includes" for those too) and offers
+to delete unused composite genie compositions. Everything is backed up first. It packs in a
+separate process while you go on working, and the results window lists what each library gave
+back; Update Pages waits until it has finished. Close the Graphics Builder first; Pack Libraries
+won't run while it's open.
 
 See [Symbols](aveva:1172200), [Copy an Object to the Library](aveva:1172198) and
 [Pack Libraries](aveva:1172118) in the AVEVA help.

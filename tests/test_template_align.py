@@ -119,8 +119,8 @@ def test_locked_template_stacks_in_record_order_and_doubleclick_skips_it(fx_inst
         for dlg in list(getattr(w, "_dialogs", {}).values()):
             dlg._ctg_dropped = True
             dlg.reject()
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.hide()
         w.deleteLater()
         QtWidgets.QApplication.processEvents()

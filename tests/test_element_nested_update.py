@@ -81,8 +81,8 @@ def window(fx_install, monkeypatch):
     finally:
         for e in list(w._docs):
             e["doc"].dirty = False
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         UpdatePagesRun.users_busy = ""
         UpdatePagesRun.users_queue.clear()
         UpdatePagesRun.chain_busy = False
@@ -749,16 +749,16 @@ def test_a_moved_element_tab_is_composed_in_its_new_window(window, fx_install):
     finally:
         for e in list(other._docs):
             e["doc"].dirty = False
-        if other in MainWindow._instances:
-            MainWindow._instances.remove(other)
+        if other in MainWindow.instances:
+            MainWindow.instances.remove(other)
 
 
 def test_the_lists_for_the_worker_are_replaced_whole(tmp_path):
-    from ctgedit.ui.window.library import _write_text
+    from ctgedit.ui.window.run_text import write_text
 
     p = tmp_path / "x.editors"
     p.write_text("old", encoding="utf-8")
-    _write_text(str(p), "clean\ta\tb")
+    write_text(str(p), "clean\ta\tb")
     assert p.read_text(encoding="utf-8") == "clean\ta\tb"
     assert not (tmp_path / "x.editors.tmp").exists()
 

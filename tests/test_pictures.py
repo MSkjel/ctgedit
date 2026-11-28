@@ -35,8 +35,8 @@ def win(tmp_path, seed):
 
     w = MainWindow()
     yield w
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
 
 
 def _open(win, tmp_path, name="FxPictures.ctg"):
@@ -132,7 +132,7 @@ def _emf(path):
 # ------------------------------------------------------------------ format and import
 def test_digest_matches_one_picture_whoever_compressed_it(tmp_path, seed):
     from ctgedit.editing import EditableDocument
-    from ctgedit.format.ctf import _compress
+    from ctgedit.format.ctf import compress
 
     dst = tmp_path / "p.ctg"
     shutil.copyfile(seed, dst)
@@ -150,7 +150,7 @@ def test_digest_matches_one_picture_whoever_compressed_it(tmp_path, seed):
     objs[j].body_raw = body[: sec.start + 8] + struct.pack("<I", len(other)) + other
     assert bitmaps.picture_digest(objs[i]) == bitmaps.picture_digest(objs[j])
     assert bitmaps.stored_size(objs[i]) == len(bitmaps.dib_section(objs[i]).primary)
-    assert _compress  # (the writer's compressor exists)
+    assert compress  # (the writer's compressor exists)
     k = doc.add_bitmap_object((20, 0, 26, 4), bytes((1, 2, 3, 255)) * 24, 6, 4)
     assert bitmaps.picture_digest(objs[k]) != bitmaps.picture_digest(objs[i])
     assert doc.picture_copies(i) == [j]
@@ -662,9 +662,9 @@ def test_the_dialog_links_closed_and_open_pages(win, tmp_path, monkeypatch):
     _wait(lambda: not dlg.busy() and dlg._groups)
     assert dlg.groups.topLevelItemCount() == 1 and dlg.uses.topLevelItemCount() == 4
     monkeypatch.setattr(DP._SymbolNameDialog, "exec", lambda self: QtWidgets.QDialog.Accepted)
-    monkeypatch.setattr(
-        QtWidgets.QMessageBox, "question", staticmethod(lambda *a, **k: QtWidgets.QMessageBox.Ok)
-    )
+    from ctgedit.ui import messages
+
+    monkeypatch.setattr(messages, "confirm", lambda *a, **k: True)
     dlg._make_symbol()
     _wait(lambda: not dlg.busy() and "Linked" in dlg.status.text())
     assert "b open in the editor" in dlg.status.text()

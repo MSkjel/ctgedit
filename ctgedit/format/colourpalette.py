@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from ..infra.paths import folder_key, path_key
+
+
 import functools
 import glob
 import os
@@ -338,7 +341,7 @@ def _bin_palettes() -> List[str]:
         from ..infra.paths import scada_bin_dirs
 
         dirs = scada_bin_dirs()
-    except Exception:  # noqa: BLE001 -- no install: the classic colours
+    except Exception:  # noqa: BLE001 -- swallow-ok: no install: the classic colours
         dirs = []
     return [os.path.join(d, "citect.pal") for d in dirs]
 
@@ -524,16 +527,6 @@ def format_entries(entries: Sequence[PaletteColour]) -> bytes:
     return ("\r\n".join(lines) + "\r\n").encode(CODEC, errors="replace")
 
 
-def is_project_dir(folder: Optional[str]) -> bool:
-    """A Citect project folder: it has a pages.DBF (any case)."""
-    if not folder or not os.path.isdir(folder):
-        return False
-    try:
-        return any(n.lower() == "pages.dbf" for n in os.listdir(folder))
-    except OSError:
-        return False
-
-
 def _builtin_entries() -> List[PaletteColour]:
     """No palette file anywhere: the sixteen classic colours + Transparent,
     the rest free."""
@@ -576,9 +569,7 @@ class Palette:
                 entries = None
         if not entries:
             return cls(_builtin_entries(), None, project_dir, "builtin")
-        own = bool(project_dir) and os.path.normcase(
-            os.path.dirname(os.path.abspath(path))
-        ) == os.path.normcase(os.path.abspath(project_dir))
+        own = bool(project_dir) and folder_key(path) == path_key(project_dir)
         return cls(entries, path, project_dir, "project" if own else "install")
 
     def copy(self) -> "Palette":
@@ -696,6 +687,8 @@ class Palette:
         opens the project -- mode 2); None outside a project."""
         if self.source == "project" and self.path:
             return self.path
+        from .projects import is_project_dir
+
         if is_project_dir(self.project_dir):
             return os.path.join(self.project_dir, "citect.pal")
         return None

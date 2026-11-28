@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .prefs.settings import option
+
 import array
 import bisect
 
@@ -31,57 +33,118 @@ from .main_window_base import (
     TOOL_HELP,
 )
 from .main_window_base import (  # noqa: F401  (the private names, re-exported)
-    _ALIGN,
-    _AppEventFilter,
-    _AutoChangesBar,
-    _INPUT_EVENTS,
-    _INSERT_KINDS,
-    _LABEL_MODE_NAMES,
-    _PaintWatch,
-    _PendingPage,
-    _SPECIAL_TOOLS,
-    _TOOLS,
-    _V34_KINDS,
-    _WheelGuard,
-    _app_filter,
+    ALIGN,
+    AppEventFilter,
+    AutoChangesBar,
+    INPUT_EVENTS,
+    INSERT_KINDS,
+    LABEL_MODE_NAMES,
+    PaintWatch,
+    PendingPage,
+    SPECIAL_TOOLS,
+    TOOLS,
+    V34_KINDS,
+    WheelGuard,
+    app_filter,
     default_open_dir,
-    _install_menu_close_watch,
-    _install_popup_key_guard,
-    _install_wheel_guard,
-    _run_all_post_open,
+    install_menu_close_watch,
+    install_popup_key_guard,
+    install_wheel_guard,
+    run_all_post_open,
 )
 from .style.glyphs_cmd import V34_ICONS
 from .window.tabs import DocumentTabs
+from .window.disk_changes import DiskChanges
+from .window.page_open_checks import PageOpenChecks
+from .window.tab_moves import TabMoves
+from .window.tab_views import TabViews
+from .window.tab_menu import TabMenu
+from .window.crash_recovery import CrashRecovery
 from .window.files import PageFiles
+from .window.open_commands import OpenCommands
+from .window.project_tools import ProjectTools
+from .window.page_drops import PageDrops
+from .window.open_genie_updates import OpenGenieUpdates
+from .window.auto_changes import AutoChanges
 from .window.workspace import WorkspaceTools
 from .window.view import ViewState
+from .window.ribbon_context import RibbonContext
+from .window.objects_panel_sync import ObjectsPanelSync
+from .window.hidden_objects import HiddenObjects
 from .window.canvas_edits import CanvasEdits
+from .window.node_editing import NodeEditing
+from .window.canvas_selection import CanvasSelection
 from .window.text_edit import TextEditMixin
 from .window.navigation import NavigationCommands
 from .window.commands import Commands
+from .window.arrange_commands import ArrangeCommands
+from .window.import_commands import ImportCommands
+from .window.format_painter import FormatPainter
 from .panels.styles_gallery import StyleCommands
 from .window.library import LibraryCommands
+from .window.element_users import ElementUsers
+from .window.users_chain import UsersChain
+from .window.special_objects import SpecialObjects
+from .window.picture_tools import PictureTools
+from .window.pack_commands import PackCommands
+from .window.page_templates import PageTemplateCommands
+from .window.update_runs import UpdateRuns
 from .window.shell import WindowShell
+from .window.window_prefs import WindowPrefs
+from .window.ribbon_settings import RibbonSettings
+from .window.new_object_colours import NewObjectColours
+from .window.help_commands import HelpCommands
 from .panels.history_dock import HistoryCommands
 from .panels.changes_dock import ChangesCommands
 from .dialog.history_versions import VersionCommands
 from .editor.underlay import UnderlayCommands
 from .window.libwatch import LibraryWatch
+from .window.page_debug import PageDebugViews
 
 
 # the commands by topic are mixins in ctgedit/ui/window; construction is here
 class MainWindow(
     DocumentTabs,
+    DiskChanges,
+    PageOpenChecks,
+    TabMoves,
+    TabViews,
+    TabMenu,
+    CrashRecovery,
     PageFiles,
+    OpenCommands,
+    ProjectTools,
+    PageDrops,
+    OpenGenieUpdates,
+    AutoChanges,
     WorkspaceTools,
     ViewState,
+    RibbonContext,
+    ObjectsPanelSync,
+    HiddenObjects,
     CanvasEdits,
+    NodeEditing,
+    CanvasSelection,
     TextEditMixin,
     StyleCommands,
     Commands,
+    ArrangeCommands,
+    ImportCommands,
+    FormatPainter,
     LibraryCommands,
+    ElementUsers,
+    UsersChain,
+    SpecialObjects,
+    PictureTools,
+    PackCommands,
+    PageTemplateCommands,
+    UpdateRuns,
     NavigationCommands,
     WindowShell,
+    WindowPrefs,
+    RibbonSettings,
+    NewObjectColours,
+    HelpCommands,
     ModelessMixin,
     DiagnosticsMixin,
     HistoryCommands,
@@ -89,10 +152,11 @@ class MainWindow(
     VersionCommands,
     UnderlayCommands,
     LibraryWatch,
+    PageDebugViews,
     WindowState,
     QtWidgets.QMainWindow,
 ):
-    _instances: list["MainWindow"] = []  # Window menu registry
+    instances: list["MainWindow"] = []  # Window menu registry
     # every page this process had open (normcase paths): the session list
     # another ctgedit process wrote keeps its own pages (merged_session_files)
     _session_seen: set = set()
@@ -100,10 +164,52 @@ class MainWindow(
     @classmethod
     def editor_windows(cls) -> list:
         """The open editor windows (what Settings and the keyboard map apply to)."""
-        return list(cls._instances)
+        return list(cls.instances)
 
     def __init__(self):
         super().__init__()
+        self._install_gc_and_dialog_release()
+        MainWindow.instances.append(self)
+        self.setWindowTitle(TITLE_APP)
+        self.resize(1500, 950)
+        self._init_fields()
+        from .dialog.about import register_diagnostics
+
+        register_diagnostics()  # (Help > Copy Diagnostics: the build, the user folder)
+        central_layout = self._build_canvas_area()
+        self._build_window_parts(central_layout)
+        self._install_event_guards()
+        self._install_disk_watch()
+        # recovery copies of unsaved documents (one controller per application)
+        from .recovery import controller
+
+        controller()
+        self._install_start_page()
+        # a page or a library dragged from Explorer onto the window opens (window/files.py)
+        self.setAcceptDrops(True)
+        self._install_page_drop()
+        self._install_tab_keys()  # (Ctrl+Tab and Ctrl+PgDown: window/tabs.py)
+        # the undo history, the changes since the save and the earlier versions
+        self._install_history_ui()
+        self._install_changes_ui()
+        self._install_versions_ui()
+        # the underlay: a page or a picture drawn faded on the canvas (ui/editor/underlay.py)
+        self._install_underlay_ui()
+        # the tools, the arrow keys, paste, Align, placing, the
+        # backups and the recent pages: window/canvas_edits
+        self.apply_editing_options()
+        # Settings > Canvas and Editing's choices the window keeps (the smart guides, the
+        # arrow-key step, the paste offset, the opening zoom): every window reads them, not
+        # only the one restore_session restores (window/shell.apply_canvas_options)
+        self.apply_canvas_options()
+        # the View menu's grid, snap, guideline and smart guide toggles as stored (a window
+        # made without restore_session too: Window > New Window, a tab moved to a new window)
+        self.apply_view_toggles()
+        self._update_actions()
+        self._show_first_run_hint()
+
+    @staticmethod
+    def _install_gc_and_dialog_release() -> None:
         # garbage collection on the GUI thread only: a worker thread's collection would run
         # Qt destructors off it (infra.gcguard)
         from ..infra import gcguard
@@ -113,10 +219,10 @@ class MainWindow(
         # a modal dialog with a parent goes once answered (ui/dialog_release)
         from . import dialog_release
 
-        dialog_release.install(dispatcher=_app_filter())
-        MainWindow._instances.append(self)
-        self.setWindowTitle(TITLE_APP)
-        self.resize(1500, 950)
+        dialog_release.install(dispatcher=app_filter())
+
+    def _init_fields(self) -> None:
+        """The window's own state before its parts are made."""
         self._page: Page | None = None
         self.doc: EditableDocument | None = None
         self._sel: list[int] = []
@@ -151,9 +257,9 @@ class MainWindow(
             if _st.value(key, False, type=bool):
                 os.environ[env] = "1"
 
-        from .dialog.about import register_diagnostics
-
-        register_diagnostics()  # (Help > Copy Diagnostics: the build, the user folder)
+    def _build_canvas_area(self):
+        """The scene and the canvas, the document tabs' bar and the bar of automatic changes
+        over the canvas: the central widget. Its layout."""
         self.scene = PageScene(self)
         self.view = CanvasView(self)
         self.view.setScene(self.scene)
@@ -184,13 +290,17 @@ class MainWindow(
         cl.setContentsMargins(0, 0, 0, 0)
         cl.setSpacing(0)
         # what was updated automatically on this page (open checks, background genie
-        # updates): one bar over the canvas, per page (_show_auto_bar)
-        self._auto_bar = _AutoChangesBar(self)
+        # updates): one bar over the canvas, per page
+        self._auto_bar = AutoChangesBar(self)
         self._auto_bar.undoRequested.connect(self._undo_auto_changes)
         cl.addWidget(self._auto_bar)
         cl.addWidget(self.view, 1)
         self.setCentralWidget(central)
+        return cl
 
+    def _build_window_parts(self, central_layout) -> None:
+        """The panels, the commands, the tab strip (over the canvas, in ``central_layout``),
+        the menus, the ribbon, the status bar and the canvas's keys."""
         # their Settings choices, before the panels are made
         from .panels import panel_options
         from .prefs import timing_options
@@ -201,7 +311,7 @@ class MainWindow(
         self._build_actions()
         from .panels.doc_tabs import build_tab_strip
 
-        cl.insertWidget(0, build_tab_strip(self, self.doc_tabs))
+        central_layout.insertWidget(0, build_tab_strip(self, self.doc_tabs))
         self._build_menus()
         self._build_ribbon()
         self._wire_objects_dock()
@@ -214,18 +324,22 @@ class MainWindow(
         from .prefs import keymap as _keymap
 
         _keymap.apply_keymap(self)
+
+    def _install_event_guards(self) -> None:
         # the application's event filters: ONE installed filter hands the few
-        # watched event types to these handlers (_AppEventFilter)
-        _install_wheel_guard()
+        # watched event types to these handlers (AppEventFilter)
+        install_wheel_guard()
         self._install_help()
         from .style import accessibility
 
         # names for icon-only buttons, fields, dialogs
-        accessibility.install(dispatcher=_app_filter())
+        accessibility.install(dispatcher=app_filter())
         # F4 / Alt+Down in a drop-down open its list (no window command on F4 runs then)
-        _install_popup_key_guard()
+        install_popup_key_guard()
         # a command picked in a menu knows the pointer is on the menu (paste_point)
-        _install_menu_close_watch()
+        install_menu_close_watch()
+
+    def _install_disk_watch(self) -> None:
         # a page / library changed by another program while it is open here
         # (the Graphics Builder, another ctgedit, a copy): asked about when
         # it happens instead of only when saving
@@ -239,10 +353,8 @@ class MainWindow(
         # a library saved by another program: the pages that use it are drawn again
         # (window/libwatch.py; Settings > Pages and libraries > Files and folders)
         self._install_library_watch()
-        # recovery copies of unsaved documents (one controller per application)
-        from .recovery import controller
 
-        controller()
+    def _install_start_page(self) -> None:
         from .panels.start_page import StartPage
 
         self.start_page = StartPage(self.view.viewport())
@@ -251,37 +363,21 @@ class MainWindow(
         self.start_page.newRequested.connect(self.new_blank_dialog)
         # hidden until _update_start_page shows it (so isHidden() tells which it is)
         self.start_page.hide()
-        # a page or a library dragged from Explorer onto the window opens (window/files.py)
-        self.setAcceptDrops(True)
-        self._install_page_drop()
-        self._install_tab_keys()  # (Ctrl+Tab and Ctrl+PgDown: window/tabs.py)
-        # the undo history, the changes since the save and the earlier versions
-        self._install_history_ui()
-        self._install_changes_ui()
-        self._install_versions_ui()
-        # the underlay: a page or a picture drawn faded on the canvas (ui/editor/underlay.py)
-        self._install_underlay_ui()
-        # the tools, the arrow keys, paste, Align, placing, the
-        # backups and the recent pages: window/canvas_edits
-        self.apply_editing_options()
-        # Settings > Canvas and Editing's choices the window keeps (the smart guides, the
-        # arrow-key step, the paste offset, the opening zoom): every window reads them, not
-        # only the one restore_session restores (window/shell.apply_canvas_options)
-        self.apply_canvas_options()
-        # the View menu's grid, snap, guideline and smart guide toggles as stored (a window
-        # made without restore_session too: Window > New Window, a tab moved to a new window)
-        self.apply_view_toggles()
-        self._update_actions()
-        if not app_settings().value("ui/keys_hint_shown", False, type=bool):
-            # (the first run names the two keys that find everything else; the start page
-            # says how to begin, so no prompt to open a page here)
-            app_settings().setValue("ui/keys_hint_shown", True)
-            hint = "%s finds any command, %s lists the keys." % (
-                _keymap.native((_keymap.keys_of(self.act_palette) or ["Ctrl+K"])[0]),
-                _keymap.native((_keymap.keys_of(self.act_shortcuts_window) or ["Ctrl+/"])[0]),
-            )
-            # (a hint: not kept in the bell's list of messages, ui/panels/status_items.py)
-            self.statusBar().show_hint(hint, 15000)
+
+    def _show_first_run_hint(self) -> None:
+        if app_settings().value("ui/keys_hint_shown", False, type=bool):
+            return
+        # (the first run names the two keys that find everything else; the start page
+        # says how to begin, so no prompt to open a page here)
+        from .prefs import keymap as _keymap
+
+        app_settings().setValue("ui/keys_hint_shown", True)
+        hint = "%s finds any command, %s lists the keys." % (
+            _keymap.native((_keymap.keys_of(self.act_palette) or ["Ctrl+K"])[0]),
+            _keymap.native((_keymap.keys_of(self.act_shortcuts_window) or ["Ctrl+/"])[0]),
+        )
+        # (a hint: not kept in the bell's list of messages, ui/panels/status_items.py)
+        self.statusBar().show_hint(hint, 15000)
 
     # ------------------------------------------------------------------ docks
     def _build_docks(self) -> None:
@@ -375,6 +471,9 @@ class MainWindow(
         self.tabifyDockWidget(self.dock_page_checks, d8)
         d8.hide()
         self.dock_changes = d8
+        # View > Preview States: the page's conditions set by hand (hidden by default, tabbed
+        # with the check panels)
+        self._build_preview_dock()
         # the navigator as a panel (View > Panels > Navigator; hidden by default)
         self._build_navigator_dock()
         # every panel: one title bar, dock / float by dragging, double-clicking or its button
@@ -413,6 +512,7 @@ class MainWindow(
         self.props.definition_label = self._owner_definition_label
         self.props.editDefinition.connect(self._edit_owner_definition)
         self.props.showSheet.connect(self.object_properties)
+        self.props.selectObjects.connect(self._select_from_panel)
 
     # ---------------------------------------------------------------- actions
     def _act(self, text, slot, shortcut=None, icon_name=None, checkable=False):
@@ -595,6 +695,17 @@ class MainWindow(
         self.act_mark_changes.setStatusTip(
             "Mark the objects that are new, changed or removed since the save (kept up to date as you edit)"
         )
+        # what the page does, without running it (ui/window/page_debug)
+        self.act_preview_states = self._act(
+            "Preview States", self.toggle_preview_states, "Ctrl+Shift+J", checkable=True
+        )
+        self.act_preview_states.setToolTip(
+            "Set the page's conditions and expressions by hand and see the page in that state. Nothing is run"
+        )
+        self.act_click_map = self._act("Click Map", self.toggle_click_map, checkable=True)
+        self.act_click_map.setToolTip(
+            "Shade what takes a click or a key on the page, and mark the objects a click never reaches"
+        )
         # step through the changes (ui/panels/changes_dock), also with the Changes panel closed
         self.act_next_change = self._act("Next Change", self.next_change, "Alt+F5", "next_change")
         self.act_prev_change = self._act("Previous Change", self.prev_change, "Alt+Shift+F5", "prev_change")
@@ -636,9 +747,9 @@ class MainWindow(
         }
         self.align_actions = [
             self._act(label, lambda _=False, m=mode: self._align(m), _align_keys.get(mode), ic)
-            for mode, label, ic in _ALIGN
+            for mode, label, ic in ALIGN
         ]
-        _keymap.name_actions(self.align_actions, "align.", [m for m, _l, _i in _ALIGN])
+        _keymap.name_actions(self.align_actions, "align.", [m for m, _l, _i in ALIGN])
         self.act_dist_h = self._act(
             "Distribute Horizontally", lambda: self._distribute("h"), "Alt+Shift+H", "distribute_h"
         )
@@ -944,13 +1055,13 @@ class MainWindow(
         # the others need 'Show version 3.xx/4.xx tools' (Settings)
         self.special_tool_actions: dict[str, QtGui.QAction] = {}
         self.v34_actions = []
-        for kind, label in _V34_KINDS:
-            if kind in _SPECIAL_TOOLS:
+        for kind, label in V34_KINDS:
+            if kind in SPECIAL_TOOLS:
                 a = self._act(
                     label,
                     lambda _=False, t=kind: self._set_tool(t),
                     None,
-                    _SPECIAL_TOOLS[kind],
+                    SPECIAL_TOOLS[kind],
                     checkable=True,
                 )
                 self.special_tool_actions[kind] = a
@@ -965,7 +1076,7 @@ class MainWindow(
         from .prefs import keymap as _keymap
 
         self.modern_v34_actions = [
-            a for (k, _l), a in zip(_V34_KINDS, self.v34_actions) if k in ("trend", "cicode_object")
+            a for (k, _l), a in zip(V34_KINDS, self.v34_actions) if k in ("trend", "cicode_object")
         ]
         self.legacy_actions = [a for a in self.v34_actions if a not in self.modern_v34_actions]
         # an Insert entry only for a kind the factory can make (a control: one the install's
@@ -978,7 +1089,7 @@ class MainWindow(
         self.insert_actions = []
         #: (kind, action) of each Insert entry (the command names of _command_actions)
         self.insert_kinds = []
-        for kind, label in _INSERT_KINDS:
+        for kind, label in INSERT_KINDS:
             if kind not in _have:
                 continue
             if kind == "activex":
@@ -989,7 +1100,7 @@ class MainWindow(
                     label,
                     lambda _=False, t=kind: self._set_tool(t),
                     None,
-                    _SPECIAL_TOOLS.get(kind, "activex"),
+                    SPECIAL_TOOLS.get(kind, "activex"),
                     checkable=True,
                 )
                 self.special_tool_actions[kind] = a
@@ -1056,7 +1167,7 @@ class MainWindow(
         # drawing tools (checkable group)
         self.tool_group = QtGui.QActionGroup(self)
         self.tool_actions: dict[str, QtGui.QAction] = {}
-        for tool, label, ic, key in _TOOLS:
+        for tool, label, ic, key in TOOLS:
             a = self._act(label, lambda _=False, t=tool: self._set_tool(t), key, ic, checkable=True)
             self.tool_group.addAction(a)
             self.tool_actions[tool] = a
@@ -1194,7 +1305,7 @@ class MainWindow(
                 yield key, value
         for tool, a in self.tool_actions.items():
             yield "tool." + tool, a
-        for (mode, _l, _i), a in zip(_ALIGN, self.align_actions):
+        for (mode, _l, _i), a in zip(ALIGN, self.align_actions):
             yield "align." + mode, a
         for kind, a in zip(("bold", "italic", "underline", "strikeout"), self.text_flag_actions):
             yield "textflag." + kind, a
@@ -1213,7 +1324,7 @@ class MainWindow(
         for kind, a in self.insert_kinds:
             if id(a) not in tools:
                 yield "insert." + kind, a
-        for (kind, _label), a in zip(_V34_KINDS, self.v34_actions):
+        for (kind, _label), a in zip(V34_KINDS, self.v34_actions):
             if id(a) not in tools:
                 yield "v34." + kind, a
 
@@ -1288,6 +1399,20 @@ class MainWindow(
         grouped by task; rarely-needed CtDraw-parity commands under Tools >
         Advanced; V3/V4 creation tools only with 'Show version 3.xx/4.xx
         tools'; diagnostics only with 'Developer / diagnostic tools'."""
+        self._build_file_menu()
+        self._build_edit_menu()
+        self._build_view_menu()
+        self._build_text_menu()
+        self._build_arrange_menu()
+        self._build_tools_menu()
+        self._build_window_menu()
+        self._build_help_menu()
+        self._hide_check_icons_in_menus()
+        self._apply_command_icons()
+        self._apply_surface_options()
+        self.apply_canvas_look()
+
+    def _build_file_menu(self) -> None:
         m = self.menuBar().addMenu("&File")
         for a in (self.act_new, self.act_new_from_last, self.act_open, self.act_quick_open):
             m.addAction(a)
@@ -1330,6 +1455,7 @@ class MainWindow(
         m.addSeparator()
         m.addAction(self.act_exit)
 
+    def _build_edit_menu(self) -> None:
         e = self.menuBar().addMenu("&Edit")
         for a in (self.act_undo, self.act_redo, self.act_repeat):
             e.addAction(a)
@@ -1382,9 +1508,6 @@ class MainWindow(
         e.addSeparator()
         e.addAction(self.act_genie_params)
         e.addAction(self.act_obj_props)
-        self._build_insert_to_help_menus(e)
-
-    def _build_insert_to_help_menus(self, e) -> None:
         ins = e.addMenu("Insert")
         for a in self.modern_v34_actions:  # Trend, Cicode Object
             ins.addAction(a)
@@ -1412,6 +1535,7 @@ class MainWindow(
         ):
             lib.addAction(a)
 
+    def _build_view_menu(self) -> None:
         v = self.menuBar().addMenu("&View")
         v.addAction(self.act_palette)
         v.addAction(self.act_palette_here)
@@ -1439,22 +1563,7 @@ class MainWindow(
         for a in self.surround_actions.values():
             outside.addAction(a)
         v.addSeparator()
-        gm = v.addMenu("Grid")
-        gm.addAction(self.act_grid)
-        gm.addAction(self.act_pixel_grid)
-        gm.addAction(self.act_snap)
-        gm.addSeparator()
-        gg = QtGui.QActionGroup(self)
-        self._grid_actions = {}
-        for s in (1, 2, 4, 8, 10, 16, 20):
-            a = gm.addAction("%d px" % s, lambda _=False, s=s: self._set_grid_size(s))
-            a.setStatusTip("Set the grid pitch to %d px." % s)
-            a.setCheckable(True)
-            a.setChecked(s == self._grid_size)
-            gg.addAction(a)
-            self._grid_actions[s] = a
-        gm.addSeparator()
-        gm.addAction(self.act_grid_setup)
+        self._build_grid_menu(v)
         guides = v.addMenu("Guidelines")
         guides.addAction(self.act_guidelines)
         guides.addAction(self.act_show_guides)
@@ -1472,28 +1581,7 @@ class MainWindow(
         v.addSeparator()
         self.labels_menu = v.addMenu("Labels")
         self._rebuild_labels_menu()
-        panels = v.addMenu("Panels")
-
-        for dock in (
-            self.dock_objects,
-            self.dock_library,
-            self.dock_tags,
-            self.dock_props,
-            self.dock_history,
-            self.dock_changes,
-            self.dock_sa_checks,
-            self.dock_page_checks,
-            self.dock_navigator,
-        ):
-            _ta = dock.toggleViewAction()
-            _ta.setStatusTip("Show or hide the %s panel." % dock.windowTitle())
-            panels.addAction(_ta)
-        panels.addSeparator()
-        for a in self.panel_go_actions:
-            panels.addAction(a)
-        panels.addSeparator()
-        panels.addAction(self.act_next_panel)
-        panels.addAction(self.act_prev_panel)
+        self._build_panels_menu(v)
         v.addAction(self.act_show_tools)
         v.addAction(self.act_status_bar)
         v.addAction(self.act_messages)
@@ -1505,6 +1593,9 @@ class MainWindow(
         v.addAction(self.act_prev_change)
         v.addAction(self.act_select_changed)
         v.addSeparator()
+        v.addAction(self.act_preview_states)
+        v.addAction(self.act_click_map)
+        v.addSeparator()
         v.addAction(self.act_focus_mode)
         v.addAction(self.act_collapse_ribbon)
         v.addAction(self.act_reset_ui)
@@ -1512,6 +1603,52 @@ class MainWindow(
         self._dev_sep = v.addSeparator()
         v.addAction(self.act_thumb)  # developer tool (gated)
 
+    def _build_grid_menu(self, v) -> None:
+        """View > Grid: the grid, snap and the grid pitches."""
+        gm = v.addMenu("Grid")
+        gm.addAction(self.act_grid)
+        gm.addAction(self.act_pixel_grid)
+        gm.addAction(self.act_snap)
+        gm.addSeparator()
+        gg = QtGui.QActionGroup(self)
+        self._grid_actions = {}
+        for s in (1, 2, 4, 8, 10, 16, 20):
+            a = gm.addAction("%d px" % s, lambda _=False, s=s: self._set_grid_size(s))
+            a.setStatusTip("Set the grid pitch to %d px." % s)
+            a.setCheckable(True)
+            a.setChecked(s == self._grid_size)
+            gg.addAction(a)
+            self._grid_actions[s] = a
+        gm.addSeparator()
+        gm.addAction(self.act_grid_setup)
+
+    def _build_panels_menu(self, v) -> None:
+        """View > Panels: each panel shown or hidden, and the keys that go to them."""
+        panels = v.addMenu("Panels")
+
+        for dock in (
+            self.dock_objects,
+            self.dock_library,
+            self.dock_tags,
+            self.dock_props,
+            self.dock_history,
+            self.dock_changes,
+            self.dock_sa_checks,
+            self.dock_page_checks,
+            self.dock_preview_states,
+            self.dock_navigator,
+        ):
+            _ta = dock.toggleViewAction()
+            _ta.setStatusTip("Show or hide the %s panel." % dock.windowTitle())
+            panels.addAction(_ta)
+        panels.addSeparator()
+        for a in self.panel_go_actions:
+            panels.addAction(a)
+        panels.addSeparator()
+        panels.addAction(self.act_next_panel)
+        panels.addAction(self.act_prev_panel)
+
+    def _build_text_menu(self) -> None:
         tm = self.menuBar().addMenu("&Text")
         tm.addAction(self.act_edit_text)
         tm.addAction(self.act_font_dialog)
@@ -1525,6 +1662,7 @@ class MainWindow(
         for a in self.effect_actions:
             tm.addAction(a)
 
+    def _build_arrange_menu(self) -> None:
         ar = self.menuBar().addMenu("&Arrange")
         ar.addAction(self.act_adjust)
         ar.addAction(self.act_align_dialog)
@@ -1547,9 +1685,10 @@ class MainWindow(
         ar.addAction(self.act_arrange_grid)
         ar.addAction(self.act_same_size)
 
+    def _build_tools_menu(self) -> None:
         t = self.menuBar().addMenu("&Tools")
         draw = t.addMenu("Draw")
-        for tool, _label, _ic, _key in _TOOLS:
+        for tool, _label, _ic, _key in TOOLS:
             if tool not in ("measure", "zoom", "pan"):  # (the view tools: View menu)
                 draw.addAction(self.tool_actions[tool])
         t.addAction(self.tool_actions["measure"])
@@ -1617,6 +1756,7 @@ class MainWindow(
         t.addSeparator()
         t.addAction(self.act_options)
 
+    def _build_window_menu(self) -> None:
         w = self.menuBar().addMenu("&Window")
         w.addAction(self.act_next_page)
         w.addAction(self.act_prev_page)
@@ -1640,6 +1780,7 @@ class MainWindow(
         w.aboutToShow.connect(self._fill_window_list)
         self._window_list_actions: list[QtGui.QAction] = []
 
+    def _build_help_menu(self) -> None:
         h = self.menuBar().addMenu("&Help")
         for a in (
             self.act_help,
@@ -1658,8 +1799,9 @@ class MainWindow(
         h.addAction(self.act_check_updates)
         h.addAction(self.act_about)
 
-        # a checkable action WITH an icon shows its icon instead of the check
-        # mark in a menu, which hides its state in the dark theme
+    def _hide_check_icons_in_menus(self) -> None:
+        """A checkable action WITH an icon shows its icon instead of the check mark in a
+        menu, which hides its state in the dark theme: its icon is not shown in menus."""
         stack = [self.menuBar()]
         seen = set()
         while stack:
@@ -1671,9 +1813,6 @@ class MainWindow(
                 if id(sub) not in seen:
                     seen.add(id(sub))
                     stack.append(sub)
-        self._apply_command_icons()
-        self._apply_surface_options()
-        self.apply_canvas_look()
 
     def apply_canvas_look(self, scene=None) -> None:
         """The editor look of Settings > Canvas and View > Grid (settings.canvas_look) and
@@ -1705,9 +1844,8 @@ class MainWindow(
     def _apply_surface_options(self) -> None:
         """Show / hide the optional surfaces from Settings: V3/V4 creation
         tools and the developer / diagnostic tools."""
-        st = app_settings()
-        legacy = st.value("opt/show_legacy_tools", False, type=bool)
-        dev = st.value("opt/developer_tools", False, type=bool)
+        legacy = option("show_legacy_tools")
+        dev = option("developer_tools")
         for a in self.legacy_actions:
             a.setVisible(legacy)
         if getattr(self, "_legacy_menu", None) is not None:
@@ -1723,7 +1861,7 @@ class MainWindow(
         """The ribbon: DESIGN tab, Quick Access, utility
         slot, collapse + priority overflow. Every button hosts an existing
         QAction (reachable from the menus too)."""
-        from .ribbon import RibbonBar, VariantButton
+        from .ribbon import RibbonBar
 
         self.ribbon = RibbonBar(self)
         host = self.addToolBar("Ribbon")
@@ -1733,7 +1871,20 @@ class MainWindow(
         host.toggleViewAction().setVisible(False)
         host.addWidget(self.ribbon)
         self._ribbon_host = host
+        self._build_ribbon_utility()
+        design = self.ribbon.add_tab("Design")
+        self._build_select_group(design)
+        self._build_place_group(design)
+        create = self._build_create_group(design)
+        self._build_styles_group(design)
+        self._build_edit_groups(design)
+        self._build_new_colours_swatch(create)
+        self._build_utilities_tab()
+        self._build_context_tabs()
+        self._finish_ribbon(design)
 
+    def _build_ribbon_utility(self) -> None:
+        """Quick Access and the utility slot."""
         # Quick Access: Settings > Ribbon > Quick Access (New, Open, Save, Undo, Redo; Save
         # has an arrow of its own: Save As / Save All / MRU); the window's other settings
         # too (ui/prefs/window_options). (The commands the menus made are named first,
@@ -1765,7 +1916,9 @@ class MainWindow(
         # (the buttons drop their names before the field narrows)
         self.header_search.set_companions(utility)
 
-        design = self.ribbon.add_tab("Design")
+    def _build_select_group(self, design) -> None:
+        """Design > Select: the Select tool, Go To, Find, Lock, the selection filter and the
+        box's mode."""
         # (priority 2: its Filter / Box boxes collapse before Modify / Arrange at 1024 px)
         g = self.ribbon.add_group(design, "Select", priority=2)
         # (collapsed, it sits beside the pinned Select tool: not a second 'Select')
@@ -1807,6 +1960,7 @@ class MainWindow(
         )
         g.add_field("Box", self.sel_marquee)
 
+    def _build_place_group(self, design) -> None:
         g = self.ribbon.add_group(
             design,
             "Place",
@@ -1820,16 +1974,16 @@ class MainWindow(
         g.add_small(self.act_paste_special)
         g.add_small(self.act_paste_composite)
 
+    def _build_create_group(self, design):
+        """Design > Create: the drawing tools (the colours of new objects come later). The
+        group."""
+        from .ribbon import VariantButton
+
         create = self.ribbon.add_group(design, "Create", priority=1)
         create.add_big(self.tool_actions["text"])
         create.add_big_widget(
             VariantButton([self.tool_actions[k] for k in ("line", "freehand", "pipe")], "line")
         )
-        self._build_ribbon_groups(create, design)
-
-    def _build_ribbon_groups(self, create, design) -> None:
-        from .ribbon import VariantButton
-
         create.add_big_widget(
             VariantButton([self.tool_actions[k] for k in ("rectangle", "rectangle_outline")], "rect")
         )
@@ -1844,9 +1998,11 @@ class MainWindow(
         create.add_small_menu(
             "More", self.modern_v34_actions + self.insert_actions + self.legacy_actions, icon_name="activex"
         )
+        return create
 
-        # the named styles: a tile each (a click applies it, pointing previews it on the
-        # canvas), Save and Manage (ui/panels/styles_gallery)
+    def _build_styles_group(self, design) -> None:
+        """Design > Styles: the named styles, a tile each (a click applies it, pointing
+        previews it on the canvas), Save and Manage (ui/panels/styles_gallery)."""
         from .panels.styles_gallery import StylesGallery
 
         # (priority 3: it compacts and folds before Create, Modify and Arrange)
@@ -1867,6 +2023,10 @@ class MainWindow(
         self._styles_group.add_small(self.act_save_style)
         self._styles_group.add_small(self.act_manage_styles)
         self._styles_group.extras.append(self.act_style_default)
+
+    def _build_edit_groups(self, design) -> None:
+        """Design > Modify, Arrange and Data."""
+        from .ribbon import VariantButton
 
         g = self.ribbon.add_group(
             design, "Modify", priority=1, extras=[self.act_rot_ccw, self.act_flip_v, self.act_ungroup]
@@ -1905,8 +2065,9 @@ class MainWindow(
             "Appearance", [self.act_copy_appearance, self.act_paste_appearance], icon_name="paste_appearance"
         )
 
-        # the colours of new objects live in Create: the fill swatch over the line swatch,
-        # the swap arrow, No fill and the text colour (ui/swatch_pair, ui/editor/draw_styles)
+    def _build_new_colours_swatch(self, create) -> None:
+        """The colours of new objects live in Create: the fill swatch over the line swatch,
+        the swap arrow, No fill and the text colour (ui/swatch_pair, ui/editor/draw_styles)."""
         from .swatch_pair import SwatchPair
 
         self.ribbon_colours = SwatchPair(self.new_object_colours, self)
@@ -1927,6 +2088,7 @@ class MainWindow(
         _style_help.set_help(self.ribbon_styles, "colours#named-styles")
         self._update_colour_button()
 
+    def _build_utilities_tab(self) -> None:
         util = self.ribbon.add_tab("Utilities")
         g = self.ribbon.add_group(util, "Colours", priority=2)
         g.add_big(self.act_swap_colors)
@@ -1959,7 +2121,8 @@ class MainWindow(
         for a in self.external_actions:
             g.add_small(a)
 
-        # contextual tabs: in the tab bar only on demand
+    def _build_context_tabs(self) -> None:
+        """The contextual tabs (Text, Shape, Genie): in the tab bar only on demand."""
         self._syncing = False
         textp = self.ribbon.add_context_tab("Text")
         g = self.ribbon.add_group(textp, "Font", priority=1)
@@ -2005,6 +2168,9 @@ class MainWindow(
         g.add_small(self.act_cut_link)
         g.add_small(self.act_copy_to_lib)
 
+    def _finish_ribbon(self, design) -> None:
+        """The ribbon's empty state, collapse, help and layout; then the canvas's navigation
+        bar, the selection HUD, the navigation and the command palette with the keymap."""
         # no page open: the Design tab shows New and Open instead of dead commands (the
         # start page already says how to begin: no third prompt here)
         self.ribbon.set_empty_state(design, "", [self.act_new, self.act_open])
@@ -2173,7 +2339,7 @@ class MainWindow(
     def _template_locked(self) -> bool:
         """CtDraw locks the page's template-derived records (edit the .ctt,
         not its copies). Default on; Options can disable it."""
-        return not app_settings().value("opt/unlock_template", False, type=bool)
+        return not option("unlock_template")
 
     def _is_template_obj(self, index: int) -> bool:
         return (

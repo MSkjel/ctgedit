@@ -153,6 +153,7 @@ class CanvasPainting:
         from ..style.theme import color
 
         line = guide_colour(170)  # (Settings > Appearance > Guideline colour)
+        rect = self._line_span(rect)
         pen = QtGui.QPen(line)
         pen.setWidthF(guide_width() / z)
         pen.setStyle(QtCore.Qt.DashLine)
@@ -386,17 +387,17 @@ class CanvasPainting:
                 above=True,
             )
         if self._marquee is not None and self._marquee_mods:
-            text = "+/-" if self._marquee_mods & QtCore.Qt.ControlModifier else "+"
-            at = QtCore.QPoint(self._last_vp)
-            self._paint_badge(
-                painter, QtCore.QPoint(at.x() + 8, at.y() - 8), text, accent, color("on_accent"), above=True
-            )
+            at, text = self._marquee_badge()
+            self._paint_badge(painter, at, text, accent, color("on_accent"), above=True)
 
-    def _paint_badge(self, painter, at: QtCore.QPoint, text: str, bg, fg, above: bool = False) -> None:
-        """A small rounded chip with ``text`` whose bottom-left (``above``) or top-left is
-        at ``at``, kept on the canvas."""
-        f = self._pill_font()
-        fm = QtGui.QFontMetricsF(f)
+    def _marquee_badge(self) -> tuple:
+        """(where, text) of the '+' or '+/-' chip of a selection box that adds or toggles."""
+        text = "+/-" if self._marquee_mods & QtCore.Qt.ControlModifier else "+"
+        return QtCore.QPoint(self._last_vp.x() + 8, self._last_vp.y() - 8), text
+
+    def _badge_box(self, at: QtCore.QPoint, text: str, above: bool = False) -> QtCore.QRectF:
+        """Where :meth:`_paint_badge` draws its chip."""
+        fm = QtGui.QFontMetricsF(self._pill_font())
         w, h = fm.horizontalAdvance(text) + 10, fm.height() + 2
         box = QtCore.QRectF(at.x(), at.y() - h if above else at.y(), w, h)
         vp = QtCore.QRectF(self.viewport().rect()).adjusted(2, 2, -2, -2)
@@ -406,6 +407,14 @@ class CanvasPainting:
             box.moveTop(vp.top())
         if box.right() > vp.right():
             box.moveRight(vp.right())
+        return box
+
+    def _paint_badge(self, painter, at: QtCore.QPoint, text: str, bg, fg, above: bool = False) -> None:
+        """A small rounded chip with ``text`` whose bottom-left (``above``) or top-left is
+        at ``at``, kept on the canvas."""
+        f = self._pill_font()
+        box = self._badge_box(at, text, above)
+        h = box.height()
         painter.setFont(f)
         painter.setRenderHint(QtGui.QPainter.Antialiasing, True)
         painter.setPen(QtCore.Qt.NoPen)

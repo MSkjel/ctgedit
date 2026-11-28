@@ -11,11 +11,12 @@ from ...infra import caches as _caches
 from . import modules as M
 from . import registry as R
 from .expression import ExpressionContext, ExpressionField
-from .fields import _GREY_STYLES, _SL_CONTINUOUS, _SL_ON, _Field, _OptionalSpin, _RadioChoice, _Sub
+from .fields import GREY_STYLES, SL_CONTINUOUS, SL_ON, Field, OptionalSpin, RadioChoice, Sub
 from .range_field import RangeField
 from .scroll import FitTabWidget, ensure_visible, scroll_page, unwrap_page
 from ..panels import panel_options as _panels
 from ..style.theme import color, set_note_role
+from ...infra.logsetup import note_exception as _note_exc
 
 #: the page shown last in a sheet of each kind of object (kind -> registry page id): where
 #: the next sheet of that kind opens with Settings 'Object Properties opens on: The tab used
@@ -25,7 +26,7 @@ _LAST_PAGE: dict = {}
 _caches.register("objprops.sheet._LAST_PAGE", _LAST_PAGE, on=("tests",))
 
 #: the choice widgets (QComboBox calls)
-_CHOICES = (QtWidgets.QComboBox, _RadioChoice)
+_CHOICES = (QtWidgets.QComboBox, RadioChoice)
 
 #: the Appearance > General / 3D Effects widgets (appearance.GeneralEditor /
 #: EffectsEditor set the ones the object's class has; the rest stay None)
@@ -432,7 +433,7 @@ class ObjectPropertiesDialog(QtWidgets.QDialog):
                 if drops(self._index, key):
                     return self._ROOT_DROP_WHY
             except Exception:  # noqa: BLE001 -- a hint only
-                pass
+                _note_exc("objprops.sheet.key_blocked")
         if self.read_only_reason and key.upper() not in self._editable_keys:
             return self.read_only_reason
         return ""
@@ -457,6 +458,7 @@ class ObjectPropertiesDialog(QtWidgets.QDialog):
             try:
                 dropped = bool(drops(self._index, key))
             except Exception:  # noqa: BLE001 -- a hint only
+                _note_exc("objprops.sheet._disable_genie_root_drops")
                 dropped = False
             if dropped:
                 for _f, w in entries:
@@ -789,7 +791,7 @@ class ObjectPropertiesDialog(QtWidgets.QDialog):
         return self._eds
 
     # -- builders ------------------------------------------------------------------
-    def _int_ok(self, f: _Field) -> bool:
+    def _int_ok(self, f: Field) -> bool:
         """A stored value a spin box can show as it is (else a text field keeps
         it verbatim: a genie '%param%', a padded number)."""
         import re
@@ -797,20 +799,20 @@ class ObjectPropertiesDialog(QtWidgets.QDialog):
         v = self._props.get(f.key)
         return v is None or (re.fullmatch(r"-?\d+", v) is not None and f.lo <= int(v) <= f.hi)
 
-    def make_field(self, f: _Field) -> QtWidgets.QWidget:
+    def make_field(self, f: Field) -> QtWidgets.QWidget:
         """The widget of field ``f``, bound to its key."""
         kind = f.kind
         if kind == "int" and not self._int_ok(f):
             kind = "text"
         if kind == "int":
-            w = _OptionalSpin(f.lo, f.hi, f.default, f.suffix)
+            w = OptionalSpin(f.lo, f.hi, f.default, f.suffix)
             w.valueChanged.connect(lambda _v, k=f.key, s=w: self._on_edit(k, s))
         elif kind in ("check", "slmode"):
             w = QtWidgets.QCheckBox(f.label)
             w.toggled.connect(lambda _v, k=f.key, s=w: self._on_edit(k, s))
         elif kind in ("choice", "radio"):
-            w = QtWidgets.QComboBox() if kind == "choice" else _RadioChoice()
-            w.addItem(_OptionalSpin.NOT_SET, None)
+            w = QtWidgets.QComboBox() if kind == "choice" else RadioChoice()
+            w.addItem(OptionalSpin.NOT_SET, None)
             for label, value in f.choices:
                 w.addItem(label, value)
             w.currentIndexChanged.connect(lambda _v, k=f.key, s=w: self._on_edit(k, s))
@@ -838,7 +840,7 @@ class ObjectPropertiesDialog(QtWidgets.QDialog):
 
     _make_field = make_field
 
-    def build_sub(self, sub: _Sub, extra=None) -> QtWidgets.QWidget:
+    def build_sub(self, sub: Sub, extra=None) -> QtWidgets.QWidget:
         """A declarative property's page: its fields and Clear Property.
         ``extra(form)`` adds a page module's own rows before the button."""
         w = QtWidgets.QWidget()
@@ -868,7 +870,7 @@ class ObjectPropertiesDialog(QtWidgets.QDialog):
     _build_sub = build_sub
 
     # -- values ---------------------------------------------------------------
-    def _stored_display(self, f: _Field):
+    def _stored_display(self, f: Field):
         """What field ``f`` shows for the object as it is stored."""
         v = self._props.get(f.key)
         if f.kind == "name":
@@ -893,15 +895,15 @@ class ObjectPropertiesDialog(QtWidgets.QDialog):
             # is off); an ABSENT key reads unticked: CtDraw's sheet shows a new
             # object's 'Continuous update of tag' unticked and a tag typed there
             # is saved with *SLMODE '1'
-            return False if v is None else bool(c_atoi(v) & _SL_CONTINUOUS)
+            return False if v is None else bool(c_atoi(v) & SL_CONTINUOUS)
         if f.kind == "check":
             if v is not None and getattr(f, "loose", False):
                 return v.strip() != ""
             return v is not None and v.strip().upper() == f.on.upper()
         return v
 
-    def _set_widget(self, f: _Field, w, value) -> None:
-        if isinstance(w, _OptionalSpin):
+    def _set_widget(self, f: Field, w, value) -> None:
+        if isinstance(w, OptionalSpin):
             w.set_key_value(value)
         elif isinstance(w, QtWidgets.QCheckBox):
             w.setChecked(bool(value))
@@ -914,8 +916,8 @@ class ObjectPropertiesDialog(QtWidgets.QDialog):
                 # CtDraw's Disable page: GRAY_ALL shows as Greyed, any other
                 # value it does not name as the first style, Embossed
                 want = "GRAY_PART" if want == "GRAY_ALL" else want
-                if want not in {v.upper() for _l, v in _GREY_STYLES}:
-                    want = _GREY_STYLES[0][1]
+                if want not in {v.upper() for _l, v in GREY_STYLES}:
+                    want = GREY_STYLES[0][1]
             for n in range(1, w.count()):
                 if str(w.itemData(n) or "").upper() == want:
                     w.setCurrentIndex(n)
@@ -939,9 +941,9 @@ class ObjectPropertiesDialog(QtWidgets.QDialog):
             return w.currentIndex()
         return w.text()
 
-    def _value(self, f: _Field, w):
+    def _value(self, f: Field, w):
         """The value field ``f`` stores (None = the key removed)."""
-        if isinstance(w, _OptionalSpin):
+        if isinstance(w, OptionalSpin):
             return w.key_value()
         if isinstance(w, QtWidgets.QCheckBox):
             return f.on if w.isChecked() else f.off
@@ -1098,7 +1100,7 @@ class ObjectPropertiesDialog(QtWidgets.QDialog):
                 out.append(key)
         return out
 
-    def _shared_in_use(self, key: str, sub: _Sub) -> bool:
+    def _shared_in_use(self, key: str, sub: Sub) -> bool:
         """``key`` also belongs to another property that is switched on (its
         primary field is filled in): Clear of ``sub`` must keep it."""
         for other in M.all_subs():
@@ -1111,7 +1113,7 @@ class ObjectPropertiesDialog(QtWidgets.QDialog):
                 return True
         return False
 
-    def _clear(self, sub: _Sub) -> None:
+    def _clear(self, sub: Sub) -> None:
         """Clear Property: blank the sub-tab's fields and, on Apply, remove
         every key of the property -- the fields' and the ones without a field
         (ROTMODE / ROTXORG, SZXORG, the COL_STA_n states...)."""
@@ -1247,8 +1249,8 @@ class ObjectPropertiesDialog(QtWidgets.QDialog):
             tag = self._first[f.tag].text().strip()
             stored = self._props.get(key)
             if tag:
-                edits[key] = str(_SL_ON | (_SL_CONTINUOUS if w.isChecked() else 0))
-            elif stored is not None and (cleared or c_atoi(stored) & _SL_ON):
+                edits[key] = str(SL_ON | (SL_CONTINUOUS if w.isChecked() else 0))
+            elif stored is not None and (cleared or c_atoi(stored) & SL_ON):
                 edits[key] = None  # no slider without a tag
         for ed in self._eds:
             fn = getattr(ed, "key_edits", None)
@@ -1270,14 +1272,14 @@ class ObjectPropertiesDialog(QtWidgets.QDialog):
             disabled = edits["DISABLED"] if "DISABLED" in edits else self._props.get("DISABLED")
             grey = edits["GREY_STYLE"] if "GREY_STYLE" in edits else self._props.get("GREY_STYLE")
             if disabled and not grey:
-                edits["GREY_STYLE"] = _GREY_STYLES[0][1]
+                edits["GREY_STYLE"] = GREY_STYLES[0][1]
             elif disabled and "GREY_STYLE" not in edits:
                 # the page stores the radio it shows: GRAY_ALL as GRAY_PART, an unknown
                 # value as GRAY_SUNK
                 g = grey.strip().upper()
                 g = "GRAY_PART" if g == "GRAY_ALL" else g
-                if g not in {v.upper() for _l, v in _GREY_STYLES}:
-                    g = _GREY_STYLES[0][1]
+                if g not in {v.upper() for _l, v in GREY_STYLES}:
+                    g = GREY_STYLES[0][1]
                 if g != grey:
                     edits["GREY_STYLE"] = g
         return list(edits.items())
@@ -1359,6 +1361,7 @@ class ObjectPropertiesDialog(QtWidgets.QDialog):
                     else:
                         ok = doc.ensure_property(i, key, value)
                 except Exception as exc:  # noqa: BLE001 -- report it with the others
+                    _note_exc("objprops.sheet.apply")
                     ok = False
                     errors.append("%s: %s" % (key, exc))
                 if ok:
@@ -1475,6 +1478,7 @@ class ObjectPropertiesDialog(QtWidgets.QDialog):
                 try:
                     return bool(fn())
                 except Exception:  # noqa: BLE001 -- when unsure, keep what is shown
+                    _note_exc("objprops.sheet._editor_touched")
                     return True
         fn = getattr(ed, "key_edits", None)
         if callable(fn):
@@ -1482,6 +1486,7 @@ class ObjectPropertiesDialog(QtWidgets.QDialog):
                 if fn():
                     return True
             except Exception:  # noqa: BLE001
+                _note_exc("objprops.sheet._editor_touched")
                 return True
         if hasattr(ed, "_initial"):
             # an editor that keeps what it loaded: its values tell (no false
@@ -1492,6 +1497,7 @@ class ObjectPropertiesDialog(QtWidgets.QDialog):
                     try:
                         return fn() != ed._initial
                     except Exception:  # noqa: BLE001
+                        _note_exc("objprops.sheet._editor_touched")
                         return True
         page = self._editor_pages.get(id(ed))
         if page is None or id(page) not in self._snapshots:
@@ -1578,7 +1584,7 @@ class ObjectPropertiesDialog(QtWidgets.QDialog):
             try:
                 fn()
             except Exception:  # noqa: BLE001 -- a page that cannot re-read keeps its values
-                pass
+                _note_exc("objprops.sheet.reload")
         self._update_slider_boxes()
         self._set_title()
         # a page the user changed keeps the state it was loaded with: what was

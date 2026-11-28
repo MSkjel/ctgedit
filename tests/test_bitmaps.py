@@ -268,14 +268,14 @@ def test_wmf_from_file_places_a_placeable_metafile():
 
 
 def test_metafile_record_round_trips():
-    from ctgedit.format.page import _parse_object
+    from ctgedit.format.page import parse_object
     from ctgedit.format import writer
 
     wmf, w, h = bitmaps.wmf_from_file(_placeable_wmf())
     po = factory.make_metafile_record(7, (10, 20, 10 + w, 20 + h), wmf)
     assert po.type_code == 0x09 and po.subtype_size == 0x0A
     blob = writer.object_payload(po)
-    back = _parse_object(0, 0, len(blob), 0, blob)
+    back = parse_object(0, 0, len(blob), 0, blob)
     assert bitmaps.metafile_bits(back) == wmf
     assert tuple(placement.native_rect(back)) == (10, 20, 10 + w, 20 + h)
     gh = G.parse_geom_header(back.body_raw)
@@ -542,8 +542,8 @@ def win(fx_install):
     w = MainWindow()
     w._fx_host = fx_install.page(HOST)
     yield w
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
 
 
 def _open(win, tmp_path):

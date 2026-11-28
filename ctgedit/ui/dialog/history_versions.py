@@ -8,7 +8,8 @@ from typing import Optional
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from ...infra import history as H
-from ..style.theme import set_note_role
+from ..style.theme import note_label, set_note_role
+from ..messages import warn
 
 HELP_TOPIC = "opening-and-saving#earlier-versions-of-a-page"
 VERSIONS_KEY = "opt/history_versions"
@@ -210,8 +211,7 @@ class PageHistoryDialog(QtWidgets.QDialog):
         # the room the versions of every page take; Clear… here removes this page's only
         # (every page's: Settings > Editing > Safety)
         use = QtWidgets.QHBoxLayout()
-        self.use_label = QtWidgets.QLabel("")
-        set_note_role(self.use_label, "text_dim")
+        self.use_label = note_label("", "text_dim")
         use.addWidget(self.use_label, 1)
         self.btn_clear = QtWidgets.QPushButton("Clear This Page's Versions…")
         self.btn_clear.setAutoDefault(False)
@@ -421,16 +421,15 @@ class VersionCommands:
                 self.set_document(e["doc"])
                 return
         try:
-            QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
-            try:
+            from ..busy import wait_cursor
+
+            with wait_cursor():
                 new = version_document(doc, v)
-            finally:
-                QtWidgets.QApplication.restoreOverrideCursor()
         except Exception as e:  # noqa: BLE001 -- say why
             from ...infra import logsetup
 
             logsetup.note_exception("history_versions.open", page=doc.path)
-            QtWidgets.QMessageBox.warning(self, "Page History", "The version could not be opened (%s)." % e)
+            warn(self, "Page History", "The version could not be opened (%s)." % e)
             return
         new.read_only = True
         new._disk_stamp = None  # (the file on disk is the page's, not this one's)
@@ -463,18 +462,15 @@ class VersionCommands:
             ):
                 return False
         try:
-            QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
-            try:
+            from ..busy import wait_cursor
+
+            with wait_cursor():
                 new = version_document(doc, v)
-            finally:
-                QtWidgets.QApplication.restoreOverrideCursor()
         except Exception as e:  # noqa: BLE001 -- say why
             from ...infra import logsetup
 
             logsetup.note_exception("history_versions.restore", page=doc.path)
-            QtWidgets.QMessageBox.warning(
-                self, "Restore Version", "The version could not be restored (%s)." % e
-            )
+            warn(self, "Restore Version", "The version could not be restored (%s)." % e)
             return False
         new.read_only = doc.read_only
         new._disk_stamp = getattr(doc, "_disk_stamp", None)

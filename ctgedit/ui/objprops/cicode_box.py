@@ -4,12 +4,14 @@ become spaces in the field."""
 
 from __future__ import annotations
 
+from ..dialog_buttons import dialog_buttons
+
 from typing import List
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from ... import cicode_lex as L
-from ..style.theme import px
+from ..style.theme import note_label, px
 
 
 def one_line(text: str) -> str:
@@ -51,15 +53,9 @@ class CicodeBoxDialog(QtWidgets.QDialog):
         self.assist = CicodeAssist(
             self.edit, context, "command" if kind == "command" else "expr", complete=True
         )
-        self.note = QtWidgets.QLabel()
-        self.note.setObjectName("dim")
-        self.note.setWordWrap(True)
+        self.note = note_label("")
         lay.addWidget(self.note)
-        self.buttons = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
-        )
-        self.buttons.accepted.connect(self.accept)
-        self.buttons.rejected.connect(self.reject)
+        self.buttons = dialog_buttons(self)
         lay.addWidget(self.buttons)
         self.edit.textChanged.connect(self._update_note)
         self._update_note()

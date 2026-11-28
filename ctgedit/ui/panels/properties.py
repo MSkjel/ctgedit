@@ -99,6 +99,12 @@ def _note_exc(where: str) -> None:
     note_exception(where)
 
 
+def _common_value(vals):
+    """The value all of ``vals`` share, else None (shown as Mixed)."""
+    vals = set(vals)
+    return next(iter(vals)) if len(vals) == 1 else None
+
+
 # --------------------------------------------------------------------------- the panel
 
 
@@ -112,6 +118,8 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
     editDefinition = QtCore.Signal(int)
     #: 'Properties…' on a read-only object: its (read-only) property sheet
     showSheet = QtCore.Signal(int)
+    #: select these objects on the page (a use in a genie's Inputs list)
+    selectObjects = QtCore.Signal(list)
 
     #: the width the dock opens with on a first run (a saved window layout wins)
     PREFERRED_WIDTH = 300
@@ -541,6 +549,7 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
                 "" if self._indices else self._tool_kind_key(),
             )
         except Exception:  # noqa: BLE001 -- unknown state: rebuild
+            _note_exc("properties._build_key")
             return None
 
     # -- rebuild ------------------------------------------------------------------------
@@ -830,6 +839,7 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
 
             return read_only_reason(self._doc, index)
         except Exception:  # noqa: BLE001 -- a hint only; never block the panel
+            _note_exc("properties._object_read_only")
             return ""
 
     def is_read_only(self) -> bool:
@@ -862,6 +872,7 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
             if self.definition_label is not None:
                 label = str(self.definition_label(index) or "")
         except Exception:  # noqa: BLE001
+            _note_exc("properties._read_only_banner")
             label = ""
         if label:
             b = QtWidgets.QPushButton("Edit Definition")
@@ -924,6 +935,7 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
 
             return dict(GP.declared_params(_El))
         except Exception:  # noqa: BLE001
+            _note_exc("properties._element_params")
             return {}
 
     # -- single object mode ------------------------------------------------------------------
@@ -980,7 +992,7 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
         obj = doc.page.objects[index]
         try:
             props = dict(doc.object_properties(index))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001  # swallow-ok: the message is shown
             self.statusMessage.emit(str(exc))
             props = {}
 
@@ -1054,6 +1066,20 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
 
                     warm_equipment(os.path.dirname(os.path.abspath(doc.path)))
             lay.addWidget(cbox)
+            if obj.is_genie:
+                from .properties_inputs import inputs_section
+
+                ibox = inputs_section(self, index)
+                if ibox is not None:
+                    lay.addWidget(ibox)
+
+        # an object in a placed genie: the fields the genie's inputs set
+        if obj.parent is not None:
+            from .properties_inputs import sources_section
+
+            sbox = sources_section(self, index)
+            if sbox is not None:
+                lay.addWidget(sbox)
 
         # Geometry -> set_object_rect on a commit
         lay.addWidget(self._geometry_section(index, obj))
@@ -1495,7 +1521,7 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
         _name, _label, fx, fy = REF_BY_NAME.get(ref or self._geom_ref or geometry_reference(), REFERENCES[0])
         return (int(X) - (int(W) * fx) // 2, int(Y) - (int(H) * fy) // 2, int(W), int(H))
 
-    def _geometry_rows(self, form, fields: dict, *, lo_w: int = 0, tips=None, preview=None, field_cls=None):
+    def _geometry_rows(self, form, fields: dict, *, lo_w: int = 0, tips=None, field_cls=None):
         """The compact geometry rows."""
         ref = geometry_reference()
         self._geom_ref = ref
@@ -1531,12 +1557,7 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
                 sp.setMinimumWidth(GEOMETRY_MIN_WIDTH)
                 if k in tips:
                     sp.setToolTip(tips[k])
-                lab = ScrubLabel(
-                    k.upper(),
-                    sp,
-                    enabled=scrub,
-                    preview=(lambda v, key=k: preview(key, v)) if preview else None,
-                )
+                lab = ScrubLabel(k.upper(), sp, enabled=scrub)
                 lab.setMinimumWidth(lab.fontMetrics().horizontalAdvance("W") + 2)
                 h.addWidget(lab)
                 h.addWidget(sp, 1)
@@ -1567,9 +1588,7 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
             "w": "The width",
             "h": "The height",
         }
-        self._geometry_rows(
-            gform, self._geom, tips=tips, preview=lambda k, v, i=index: self._preview_geometry(i, k, v)
-        )
+        self._geometry_rows(gform, self._geom, tips=tips)
         for k, v in zip(("x", "y", "w", "h"), self._shown_geometry(g.x, g.y, g.extent_x, g.extent_y)):
             self._geom[k].load(int(v))
             self._geom[k].valueCommitted.connect(lambda _v, i=index, key=k: self._on_geometry(i, key))
@@ -1625,32 +1644,10 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
             if (x, y, w, h) == (g.x, g.y, g.extent_x, g.extent_y):
                 return
             self._doc.set_object_rect(index, (x, y, x + w, y + h))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001  # swallow-ok: the message is shown
             self.statusMessage.emit(str(exc))
             return
         self.changed.emit()
-
-    def _preview_geometry(self, index: int, key: str, value) -> None:
-        """A label drag: the canvas's preview outline of the box the fields mean, if the
-        canvas offers one (``view.set_preview_rect``); None ends it."""
-        view = getattr(self.window(), "view", None)
-        fn = getattr(view, "set_preview_rect", None)
-        if fn is None:
-            return
-        try:
-            if value is None or not self._geom:
-                fn(None)
-                return
-            g = self._doc.page.objects[index].geometry
-            X, Y = self._geom["x"].value(), self._geom["y"].value()
-            W, H = self._geom["w"].value(), self._geom["h"].value()
-            if key in ("w", "h"):
-                W, H = self._aspect(key, W, H, int(g.extent_x), int(g.extent_y))
-                X, Y, _w, _h = self._shown_geometry(g.x, g.y, g.extent_x, g.extent_y)
-            x, y, w, h = self._box_from_fields(X, Y, W, H)
-            fn(QtCore.QRectF(x, y, w, h))
-        except Exception:  # noqa: BLE001  # swallow-ok: a preview only
-            return
 
     def _add_family(
         self,
@@ -1813,7 +1810,7 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
                 ok = "FILMODE" not in doc.object_properties(index) or doc.remove_property(index, "FILMODE")
             else:
                 ok = doc.ensure_property(index, "FILMODE", str(pos))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001  # swallow-ok: the message is shown
             self.statusMessage.emit(str(exc))
             return
         if ok:
@@ -1835,7 +1832,7 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
             return
         try:
             ok = self._doc.set_property(index, "FILCOL", FC.fmt_pair(got))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001  # swallow-ok: the message is shown
             self.statusMessage.emit(str(exc))
             return
         if ok:
@@ -1849,10 +1846,10 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
         as on Object Properties > Access > Disable."""
         if "GREY_STYLE" not in props:
             return
-        from ..objprops.fields import _GREY_STYLES
+        from ..objprops.fields import GREY_STYLES
 
         combo = QtWidgets.QComboBox()
-        for label, value in _GREY_STYLES:
+        for label, value in GREY_STYLES:
             combo.addItem(label, value)
         cur = props.get("GREY_STYLE") or ""
         k = combo.findData(cur)
@@ -1933,7 +1930,7 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
                             ok = doc.remove_property(index, key) and ok
                     else:
                         ok = doc.ensure_property(index, key, value) and ok
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001  # swallow-ok: the message is shown
             self.statusMessage.emit(str(exc))
             return
         if not ok:
@@ -1951,6 +1948,7 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
             ctx = R.SheetContext.for_object(self._doc, index)
             disabled = R.disabled_pages(R.configured_pages(ctx, props), ctx.type_code)
         except Exception:  # noqa: BLE001 -- offer everything rather than nothing
+            _note_exc("properties._addable")
             return [e for e in ADDABLE if e[1] != DISPLAY_VALUE]
         drops = getattr(self._doc, "_genie_root_drops", None)
         from ...format import dspval as DV
@@ -1984,6 +1982,7 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
                     if drops is not None and drops(index, key):
                         continue  # a placed genie root drops it on load
                 except Exception:  # noqa: BLE001
+                    _note_exc("properties._addable/drops")
                     pass
             out.append((label, key, default))
         return out
@@ -2000,7 +1999,7 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
             return
         try:
             info = doc.input_commands(index)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001  # swallow-ok: the message is shown
             self.statusMessage.emit(str(exc))
             return
         touch = info["touch"] or {}
@@ -2460,7 +2459,7 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
                 ok = self._doc.set_colour_slot(index, G.SLOT_LINE, on, off, label="line colour")
             else:
                 ok = self._doc.set_colour(index, packed, line=obj.kind in (ObjectKind.LINE, ObjectKind.PIPE))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001  # swallow-ok: the message is shown
             self.statusMessage.emit(str(exc))
             return
         if ok:
@@ -2539,7 +2538,7 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
             return
         try:
             ok = self._doc.set_colour_slot(index, G.SLOT_LINE, pair[0], pair[1], label="line colour")
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001  # swallow-ok: the message is shown
             self.statusMessage.emit(str(exc))
             return
         if ok:
@@ -2716,7 +2715,7 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
             return
         try:
             ok = fn()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001  # swallow-ok: the message is shown
             self.statusMessage.emit(str(exc))
             return
         if ok:
@@ -2733,7 +2732,7 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
 
         try:
             ok = self._doc.set_text(index, ed.text())
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001  # swallow-ok: the message is shown
             # the field keeps the rejected text, framed, with the reason as its tool tip
             mark_invalid(ed, "%s." % str(exc).rstrip("."))
             self.statusMessage.emit("%s." % str(exc).rstrip("."))
@@ -2772,7 +2771,7 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
             else:
                 # a row shown before its key is stored (an On / Off colour's condition)
                 ok = doc.ensure_property(index, key, ed.text())
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001  # swallow-ok: the message is shown
             self.statusMessage.emit(str(exc))
             return
         if ok:
@@ -2859,7 +2858,7 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
             return
         try:
             value = self._doc.object_properties(index).get("COL_MAXON", "")
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001  # swallow-ok: the message is shown
             self.statusMessage.emit(str(exc))
             return
         pair = parse_colour_pair(value)
@@ -2886,7 +2885,7 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
             pair[part] = got[0]
         try:
             ok = self._doc.set_property(index, "COL_MAXON", "0x%08x,0x%08x" % (pair[0], pair[1]))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001  # swallow-ok: the message is shown
             self.statusMessage.emit(str(exc))
             return
         if ok:
@@ -2924,7 +2923,7 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
                     if ok:
                         for ck, cv in companion_defaults(key, doc.object_properties(index)):
                             doc.ensure_property(index, ck, cv)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001  # swallow-ok: the message is shown
             self.statusMessage.emit(str(exc))
             return
         if not ok:
@@ -3030,132 +3029,135 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
         ]
         texts = [i for i in idx if i < len(objs) and objs[i].kind in (ObjectKind.TEXT, ObjectKind.NUMBER)]
 
-        def one(vals):
-            """The value all of them share, else None (shown as Mixed)."""
-            vals = set(vals)
-            return next(iter(vals)) if len(vals) == 1 else None
-
         if shapes:
-            sts = [objs[i].style for i in shapes]
-            abox = self._section(
-                "Appearance (%d %s)" % (len(shapes), "shape" if len(shapes) == 1 else "shapes")
-            )
-            aform = abox.form()
-            if closed:
-                fills = [self._fill_slot_colour(i) for i in closed]
-                fbtn = self._multi_swatch(fills, "Fill colour")
-                fbtn.clicked.connect(
-                    lambda _=False, b=fbtn, t=list(closed): self._on_multi_slot_colour(t, "fill", b)
-                )
-                aform.addRow("Fill colour", fbtn)
-            lines = [objs[i].style.line_colour for i in shapes]
-            lbtn = self._multi_swatch(lines, "Line colour")
-            lbtn.clicked.connect(
-                lambda _=False, b=lbtn, t=list(shapes): self._on_multi_slot_colour(t, "line", b)
-            )
-            aform.addRow("Line colour", lbtn)
-            if closed:
-                fl = QtWidgets.QCheckBox()
-                fl.setTristate(False)
-                states = {bool(objs[i].style.filled) for i in closed}
-                if len(states) > 1:
-                    fl.setTristate(True)
-                    fl.setCheckState(QtCore.Qt.PartiallyChecked)
-                    fl.setToolTip("Mixed: some are filled. A click fills them all")
-                else:
-                    fl.setChecked(states.pop())
-                fl.setProperty("propKey", "filled")
-                fl.clicked.connect(lambda _c=False, c=fl, t=list(closed): self._on_multi_filled(t, c))
-                aform.addRow("Filled", fl)
-            wsp = MixedField(lo=1, hi=32, suffix=" px", live_steps=panel_option("props_arrow_live"))
-            widths = [max(1, st.line_width or 1) for st in sts]
-            wsp.set_mixed(one(widths) is None, widths[0])
-            wsp.setProperty("propKey", "line_width")
-            wsp.valueCommitted.connect(
-                lambda v, f=wsp: self._multi_apply(
-                    "line width",
-                    shapes,
-                    lambda i: self._doc.set_line_width(
-                        i, self._each_value(f, v, max(1, self._doc.page.objects[i].style.line_width or 1))
-                    ),
-                )
-            )
-            aform.addRow(self._scrub("Line width", wsp), wsp)
-            scb = QtWidgets.QComboBox()
-            scb.addItems(LINE_STYLES)
-            scb.setPlaceholderText("Mixed")
-            style = one(st.line_style if 0 <= st.line_style < 5 else 0 for st in sts)
-            scb.setCurrentIndex(style if style is not None else -1)
-            scb.setProperty("propKey", "line_style")
-            scb.activated.connect(
-                lambda v: self._multi_apply("line style", shapes, lambda i: self._doc.set_line_style(i, v))
-            )
-            aform.addRow("Line style", scb)
-            lay.addWidget(abox)
+            self._multi_appearance_section(lay, objs, shapes, closed)
         if texts:
-            sts = [objs[i].style for i in texts]
-            tbox = self._section("Text (%d %s)" % (len(texts), "text" if len(texts) == 1 else "texts"))
-            tform = tbox.form()
-            fc = QtWidgets.QFontComboBox()
-            fc.setInsertPolicy(QtWidgets.QComboBox.NoInsert)
-            face = one(st.font or "" for st in sts)
-            fc.setPlaceholderText("Mixed")
-            if face:
-                fc.setCurrentFont(QtGui.QFont(face))
-                fc.setEditText(face)
-            elif face is None:
-                fc.setCurrentIndex(-1)
-                fc.setEditText("")
-                fc.lineEdit().setPlaceholderText("Mixed")
-            fc.setProperty("orig", fc.currentText())
-            fc.setProperty("propKey", "font")
-            fc.activated.connect(lambda pos, c=fc: self._on_multi_font(texts, c, c.itemText(pos)))
-            fc.lineEdit().editingFinished.connect(lambda c=fc: self._on_multi_font(texts, c, c.currentText()))
-            self._watch_font_typing(fc)
-            tform.addRow("Font", fc)
-            szc = MixedField(lo=4, hi=96, suffix=" pt", live_steps=panel_option("props_arrow_live"))
-            sizes = [st.font_size or 10 for st in sts]
-            szc.set_mixed(one(sizes) is None, sizes[0])
-            szc.setProperty("propKey", "font_size")
-            szc.valueCommitted.connect(
-                lambda v, f=szc: self._multi_apply(
-                    "font size",
-                    texts,
-                    lambda i: self._doc.set_font(
-                        i, size=self._each_value(f, v, self._doc.page.objects[i].style.font_size or 10)
-                    ),
-                )
-            )
-            tform.addRow(self._scrub("Size", szc), szc)
-            flags, mixed = {}, {}
-            for f in ("bold", "italic", "underline", "strikeout"):
-                vals = {bool(getattr(st, f)) for st in sts}
-                flags[f] = vals == {True}
-                mixed[f] = len(vals) > 1
-            justify = one(getattr(st.justify, "value", "left") for st in sts)
-            tform.addRow(
-                "Style",
-                self._style_row(
-                    flags,
-                    justify,
-                    lambda fl, v, t=list(texts): self._multi_apply(
-                        "text style", t, lambda i: self._doc.set_font(i, **{fl: bool(v)})
-                    ),
-                    lambda j, t=list(texts): self._multi_apply(
-                        "alignment", t, lambda i: self._doc.set_font(i, justify=j)
-                    ),
-                    mixed=mixed,
-                ),
-            )
-            fg = self._multi_swatch([st.text_colour for st in sts], "Foreground")
-            fg.clicked.connect(lambda _=False, b=fg, t=list(texts): self._on_multi_foreground(t, b))
-            tform.addRow("Foreground", fg)
-            lay.addWidget(tbox)
+            self._multi_text_section(lay, objs, texts)
         # the selected objects themselves: a tree selection of members sets
         # THEIR settings, not their groups' (a canvas selection is roots)
         animated = self._add_multi_animation(lay, idx)
         if not shapes and not texts and not animated:
             lay.addWidget(self._dim_label("No common editable properties"))
+
+    def _multi_appearance_section(
+        self, lay: QtWidgets.QVBoxLayout, objs: list, shapes: list[int], closed: list[int]
+    ) -> None:
+        """The Appearance section of several shapes: fill and line colour, filled, line
+        width and style (a value they do not share shows as Mixed)."""
+        sts = [objs[i].style for i in shapes]
+        abox = self._section("Appearance (%d %s)" % (len(shapes), "shape" if len(shapes) == 1 else "shapes"))
+        aform = abox.form()
+        if closed:
+            fills = [self._fill_slot_colour(i) for i in closed]
+            fbtn = self._multi_swatch(fills, "Fill colour")
+            fbtn.clicked.connect(
+                lambda _=False, b=fbtn, t=list(closed): self._on_multi_slot_colour(t, "fill", b)
+            )
+            aform.addRow("Fill colour", fbtn)
+        lines = [objs[i].style.line_colour for i in shapes]
+        lbtn = self._multi_swatch(lines, "Line colour")
+        lbtn.clicked.connect(lambda _=False, b=lbtn, t=list(shapes): self._on_multi_slot_colour(t, "line", b))
+        aform.addRow("Line colour", lbtn)
+        if closed:
+            fl = QtWidgets.QCheckBox()
+            fl.setTristate(False)
+            states = {bool(objs[i].style.filled) for i in closed}
+            if len(states) > 1:
+                fl.setTristate(True)
+                fl.setCheckState(QtCore.Qt.PartiallyChecked)
+                fl.setToolTip("Mixed: some are filled. A click fills them all")
+            else:
+                fl.setChecked(states.pop())
+            fl.setProperty("propKey", "filled")
+            fl.clicked.connect(lambda _c=False, c=fl, t=list(closed): self._on_multi_filled(t, c))
+            aform.addRow("Filled", fl)
+        wsp = MixedField(lo=1, hi=32, suffix=" px", live_steps=panel_option("props_arrow_live"))
+        widths = [max(1, st.line_width or 1) for st in sts]
+        wsp.set_mixed(_common_value(widths) is None, widths[0])
+        wsp.setProperty("propKey", "line_width")
+        wsp.valueCommitted.connect(
+            lambda v, f=wsp: self._multi_apply(
+                "line width",
+                shapes,
+                lambda i: self._doc.set_line_width(
+                    i, self._each_value(f, v, max(1, self._doc.page.objects[i].style.line_width or 1))
+                ),
+            )
+        )
+        aform.addRow(self._scrub("Line width", wsp), wsp)
+        scb = QtWidgets.QComboBox()
+        scb.addItems(LINE_STYLES)
+        scb.setPlaceholderText("Mixed")
+        style = _common_value(st.line_style if 0 <= st.line_style < 5 else 0 for st in sts)
+        scb.setCurrentIndex(style if style is not None else -1)
+        scb.setProperty("propKey", "line_style")
+        scb.activated.connect(
+            lambda v: self._multi_apply("line style", shapes, lambda i: self._doc.set_line_style(i, v))
+        )
+        aform.addRow("Line style", scb)
+        lay.addWidget(abox)
+
+    def _multi_text_section(self, lay: QtWidgets.QVBoxLayout, objs: list, texts: list[int]) -> None:
+        """The Text section of several texts: the font, its size and style, the foreground
+        (a value they do not share shows as Mixed)."""
+        sts = [objs[i].style for i in texts]
+        tbox = self._section("Text (%d %s)" % (len(texts), "text" if len(texts) == 1 else "texts"))
+        tform = tbox.form()
+        fc = QtWidgets.QFontComboBox()
+        fc.setInsertPolicy(QtWidgets.QComboBox.NoInsert)
+        face = _common_value(st.font or "" for st in sts)
+        fc.setPlaceholderText("Mixed")
+        if face:
+            fc.setCurrentFont(QtGui.QFont(face))
+            fc.setEditText(face)
+        elif face is None:
+            fc.setCurrentIndex(-1)
+            fc.setEditText("")
+            fc.lineEdit().setPlaceholderText("Mixed")
+        fc.setProperty("orig", fc.currentText())
+        fc.setProperty("propKey", "font")
+        fc.activated.connect(lambda pos, c=fc: self._on_multi_font(texts, c, c.itemText(pos)))
+        fc.lineEdit().editingFinished.connect(lambda c=fc: self._on_multi_font(texts, c, c.currentText()))
+        self._watch_font_typing(fc)
+        tform.addRow("Font", fc)
+        szc = MixedField(lo=4, hi=96, suffix=" pt", live_steps=panel_option("props_arrow_live"))
+        sizes = [st.font_size or 10 for st in sts]
+        szc.set_mixed(_common_value(sizes) is None, sizes[0])
+        szc.setProperty("propKey", "font_size")
+        szc.valueCommitted.connect(
+            lambda v, f=szc: self._multi_apply(
+                "font size",
+                texts,
+                lambda i: self._doc.set_font(
+                    i, size=self._each_value(f, v, self._doc.page.objects[i].style.font_size or 10)
+                ),
+            )
+        )
+        tform.addRow(self._scrub("Size", szc), szc)
+        flags, mixed = {}, {}
+        for f in ("bold", "italic", "underline", "strikeout"):
+            vals = {bool(getattr(st, f)) for st in sts}
+            flags[f] = vals == {True}
+            mixed[f] = len(vals) > 1
+        justify = _common_value(getattr(st.justify, "value", "left") for st in sts)
+        tform.addRow(
+            "Style",
+            self._style_row(
+                flags,
+                justify,
+                lambda fl, v, t=list(texts): self._multi_apply(
+                    "text style", t, lambda i: self._doc.set_font(i, **{fl: bool(v)})
+                ),
+                lambda j, t=list(texts): self._multi_apply(
+                    "alignment", t, lambda i: self._doc.set_font(i, justify=j)
+                ),
+                mixed=mixed,
+            ),
+        )
+        fg = self._multi_swatch([st.text_colour for st in sts], "Foreground")
+        fg.clicked.connect(lambda _=False, b=fg, t=list(texts): self._on_multi_foreground(t, b))
+        tform.addRow("Foreground", fg)
+        lay.addWidget(tbox)
 
     def _arrange_row(self):
         """The Arrange row: tool buttons hosting the window's own align, distribute, space
@@ -3451,6 +3453,7 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
             try:
                 ctx = R.SheetContext.for_object(doc, r)
             except Exception:  # noqa: BLE001
+                _note_exc("properties._add_multi_animation")
                 continue
             if not ctx.read_only:
                 ctxs[r] = ctx
@@ -3462,6 +3465,7 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
             try:
                 return drops is None or not drops(r, key)
             except Exception:  # noqa: BLE001
+                _note_exc("properties._add_multi_animation/keeps")
                 return True
 
         rows = []
@@ -3559,7 +3563,7 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
             with self._doc.batch(label):
                 for i in indices:
                     changed |= bool(fn(i))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001  # swallow-ok: the message is shown
             self.statusMessage.emit(str(exc))
             return
         if changed:
@@ -3638,6 +3642,7 @@ class PropertyPanel(PageForm, ToolSection, KeptForms, PanelSearch, QtWidgets.QSc
             try:
                 self._context = ExpressionContext.for_document(self._doc)
             except Exception:  # noqa: BLE001 -- completion is an aid
+                _note_exc("properties._expr_context")
                 self._context = ExpressionContext(None)
             self._context_doc = self._doc
         return self._context

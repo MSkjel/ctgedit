@@ -1,5 +1,6 @@
 """Long jobs show progress and can be cancelled."""
 
+from ctgedit.ui.main_window import MainWindow
 import contextlib
 import os
 import shutil
@@ -47,8 +48,8 @@ def win():
     yield w
     for e in getattr(w, "_docs", []):
         e["doc"].dirty = False
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.close()
     w.deleteLater()
 
@@ -538,7 +539,6 @@ def test_the_long_job_timings_are_settings_applied_live(win):
     from ctgedit.ui.prefs.settings import app_settings
     from ctgedit.ui.prefs.settings_dialog import SettingsDialog
     from ctgedit.ui.simulate import modeljob
-    from ctgedit.ui.window import files
 
     st = app_settings()
     try:
@@ -572,7 +572,7 @@ def test_the_long_job_timings_are_settings_applied_live(win):
         assert tasks.LONG_S == 9 and helper_job.POLL_MS == 150 and job_options.poll_ms() == 150
         assert genie_jobs.WarmWorker.IDLE_S == 60 and genie_jobs.WarmWorker.LOW_MEMORY_MB == 2000
         assert preview._PreviewRenderer.TIMEOUT_S == 30 and modeljob.WAIT_S == 45
-        assert files.PageFiles.BUSY_NOTE_MS == 900 and FindReplaceDialog.PAGES_PER_HELPER == 20
+        assert MainWindow.BUSY_NOTE_MS == 900 and FindReplaceDialog.PAGES_PER_HELPER == 20
         assert job_options.users_note_s() == 0
         # out of its span or garbled: the default
         st.setValue("opt/job_poll_ms", 7)
@@ -795,6 +795,9 @@ def test_duplicate_pictures_status_says_the_time(win, fx_install, monkeypatch):
             self.stopping = True
 
         def wait(self, seconds=30):
+            pass
+
+        def finish_now(self, seconds=60):
             pass
 
     monkeypatch.setattr(helper_job, "HelperJob", FakeJob)

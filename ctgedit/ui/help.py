@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+from ..infra.logsetup import note_exception as _note_exc
+
 import re
 import weakref
+
+from .modeless import alive
 from typing import Callable, Dict, List, Optional, Tuple
 
 from PySide6 import QtCore, QtGui, QtWidgets
@@ -161,6 +165,7 @@ def dialog_topic(dlg) -> str:
             try:
                 return spec(dlg) if callable(spec) else spec
             except Exception:  # noqa: BLE001
+                _note_exc("help.dialog_topic")
                 return ""
     return ""
 
@@ -640,17 +645,6 @@ def topic_for(widget: Optional[QtWidgets.QWidget]) -> str:
 _last_main: list = []
 
 
-def _alive(obj) -> bool:
-    if obj is None:
-        return False
-    try:
-        import shiboken6
-
-        return shiboken6.isValid(obj)
-    except Exception:  # noqa: BLE001 -- no shiboken: assume it is
-        return True
-
-
 def owning_main(widget):
     """The editor window ``widget`` belongs to (a dialog's parent chain), or
     None."""
@@ -673,14 +667,14 @@ def action_target():
     try:
         from .main_window import MainWindow
 
-        open_wins = [w for w in MainWindow._instances if _alive(w)]
-    except Exception:  # noqa: BLE001
+        open_wins = [w for w in MainWindow.instances if alive(w)]
+    except Exception:  # noqa: BLE001  # swallow-ok: no editor window to act on
         open_wins = []
-    # a closed editor window leaves MainWindow._instances but can stay alive
+    # a closed editor window leaves MainWindow.instances but can stay alive
     # (hidden): it is never a target, even when no other window is open
     for ref in _last_main:
         w = ref()
-        if _alive(w) and any(w is o for o in open_wins):
+        if alive(w) and any(w is o for o in open_wins):
             return w
     visible = [w for w in open_wins if w.isVisible()]
     return (visible or open_wins or [None])[0]
@@ -691,7 +685,7 @@ def _help_status(message: str) -> None:
     from .dialog.help_window import HelpWindow
 
     win = getattr(HelpWindow, "_inst", None)
-    if _alive(win):
+    if alive(win):
         win.statusBar().showMessage(message, 8000)
 
 
@@ -725,7 +719,7 @@ def show_help(topic: str = "index", parent=None, main=None) -> "QtWidgets.QMainW
     from .dialog.help_window import HelpWindow
 
     win = HelpWindow.instance(None)
-    if main is not None and _alive(main):
+    if main is not None and alive(main):
         try:
             _last_main[:] = [weakref.ref(main)]
         except TypeError:  # not weak-referenceable: keep it plainly
@@ -914,7 +908,7 @@ def _link_text(text: str, index, start_rx, targets: list) -> str:
 
 def show_command(main, action, run: bool = False, front: bool = True) -> str:
     """A 'show:' link: open the command's menu with it highlighted."""
-    if main is None or action is None or not _alive(action):
+    if main is None or action is None or not alive(action):
         return ""
     try:
         if front or not run:
@@ -1145,7 +1139,7 @@ class _F1Filter(QtCore.QObject):
             if ev.isAutoRepeat():
                 return True
             main = owning_main(QtWidgets.QApplication.activeWindow()) or (
-                self._main if _alive(self._main) else None
+                self._main if alive(self._main) else None
             )
             show_help(self.resolve(), main=main)
             return True
@@ -1177,6 +1171,7 @@ class _F1Filter(QtCore.QObject):
         try:
             return self._fallback() or "index"
         except Exception:  # noqa: BLE001 -- help must always open
+            _note_exc("help.resolve")
             return "index"
 
 

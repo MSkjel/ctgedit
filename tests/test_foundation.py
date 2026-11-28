@@ -300,11 +300,11 @@ def test_symbol_library_resolves_and_has_embedded_art(fx_project):
     assert rs is not None
     # at least one element object decodes to a real embedded picture
     from ctgedit.format.symbols import embedded_bitmap_from_body
-    from ctgedit.io.reader import _read_geometry
+    from ctgedit.io.reader import read_geometry
 
     decoded = []
     for o in rs.objects:
-        geo = _read_geometry(o.body_raw, 0)
+        geo = read_geometry(o.body_raw, 0)
         ge = geo["end"] if geo else 0
         eb = embedded_bitmap_from_body(o.body_raw, ge)
         if eb is not None:

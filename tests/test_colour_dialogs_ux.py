@@ -206,8 +206,8 @@ def test_on_a_page_the_colours_in_use_list_the_pages_grey(fx_page):
         assert dlg._frm.pair() == greys[0]
         dlg.reject()
     finally:
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.hide()
 
 

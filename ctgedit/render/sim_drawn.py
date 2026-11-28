@@ -10,7 +10,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 from . import buttons as _btn
 from . import rtf_html as _rtf
-from .scene import PAGE_INDEX_ROLE, SIM_CHILD_ROLE
+from .scene import PAGE_INDEX_ROLE, SIM_CHILD_ROLE, walk_items
 from ..format import codes as _codes
 from ..infra.logsetup import note_exception as _note_exc
 
@@ -189,15 +189,6 @@ def _holder(rect: Optional[QtCore.QRectF] = None) -> QtWidgets.QGraphicsRectItem
     return h
 
 
-def _walk(item) -> list:
-    out, todo = [], [item]
-    while todo:
-        it = todo.pop()
-        out.append(it)
-        todo.extend(it.childItems())
-    return out
-
-
 class _Built:
     """One AN's drawn item: its entry signature, the item, the colour halves to switch with
     the flash phase [(setter, on, off)], the frames of an animated symbol and the members of a
@@ -236,7 +227,7 @@ class _Members:
         self.ans = set(self.handle_an.values())
         ids = {id(c): k for k, c in enumerate(records)}
         self.items: Dict[int, list] = {}
-        for it in _walk(item):
+        for it in walk_items(item):
             k = ids.get(it.data(SIM_CHILD_ROLE))
             if k is not None:
                 self.items.setdefault(k, []).append(it)
@@ -309,7 +300,7 @@ class _Members:
 
     def apply(self, states: dict) -> None:
         """Draw every record with its member's state now (``states`` = {AN: ObjectState})."""
-        from .sim_states import SimLayer, _qcolour
+        from .sim_states import SimLayer, qcolour
 
         recs = self.records
         memo: Dict[int, Tuple[bool, Optional[QtGui.QTransform]]] = {}
@@ -361,14 +352,14 @@ class _Members:
                     it.setVisible(vis and shown)
                     it.setTransform(base if x is None else base * x)
                     self._text(rec, it, st.text if st is not None else None, SimLayer)
-                    self._fill(rec, it, st.fill_colour if st is not None else None, SimLayer, _qcolour)
+                    self._fill(rec, it, st.fill_colour if st is not None else None, SimLayer, qcolour)
                 except RuntimeError:
                     continue
 
     def _text(self, rec, it, text, SimLayer) -> None:
         from .scene import PageScene
 
-        main, _ghosts, _mode = SimLayer._text_parts(rec, it)
+        main, _ghosts, _mode = SimLayer.text_parts(rec, it)
         if main is None:
             return
         key = id(main)
@@ -384,18 +375,18 @@ class _Members:
         main.setText(str(text))
         g = rec.geometry
         try:
-            PageScene._layout_text(main, rec, g.x, g.y, g.extent_x, g.extent_y)
+            PageScene.layout_text(main, rec, g.x, g.y, g.extent_x, g.extent_y)
         except Exception:  # noqa: BLE001 -- keep the static place
             _note_exc("sim_drawn._text")
             main.setPos(pos)
 
     def _fill(self, rec, it, colour, SimLayer, qcolour) -> None:
-        ch = SimLayer._channel(rec, it)
+        ch = SimLayer.channel(rec, it)
         if ch not in ("fill", "pen", "text"):
             return
         target = it
         if ch == "text":
-            target, _g, _m = SimLayer._text_parts(rec, it)
+            target, _g, _m = SimLayer.text_parts(rec, it)
             if target is None:
                 return
         key = id(target)
@@ -618,7 +609,7 @@ class DrawnLayer:
             h = _holder(clip)
             item.setParentItem(h)
             item = h
-        for it in _walk(item):
+        for it in walk_items(item):
             it.setData(PAGE_INDEX_ROLE, None)
             it.setData(0, None)
         if item.scene() is None:
@@ -1026,8 +1017,8 @@ class DrawnLayer:
         return layer._resolver
 
     def _rows(self, table: str) -> list:
-        """The rows of a project table (almprior / almmodes) of the page's project, else the
-        first of its include chain that has one."""
+        """The rows of a project table (almprior / almmodes) of the page's project and the
+        projects it includes, as the compiler joins them."""
         path = self._page_path()
         key = (path, table)
         if key in self._dbf:
@@ -1035,17 +1026,9 @@ class DrawnLayer:
         rows: list = []
         if path:
             try:
-                from ..format.projects import include_search_dirs, read_dbf_rows
+                from ..format.alarmind import chain_rows
 
-                base = os.path.dirname(os.path.abspath(path))
-                for d in [base] + include_search_dirs(base):
-                    for name in (table + ".DBF", table.upper() + ".DBF", table + ".dbf"):
-                        p = os.path.join(d, name)
-                        if os.path.exists(p):
-                            rows = read_dbf_rows(p)
-                            break
-                    if rows:
-                        break
+                rows = chain_rows(path, table)
             except Exception:  # noqa: BLE001
                 _note_exc("sim_drawn._rows")
                 rows = []

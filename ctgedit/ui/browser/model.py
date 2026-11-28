@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from ...infra.paths import path_key
+
 import collections
 import datetime
-import os
 from typing import Dict, List, Optional
 
 from PySide6 import QtCore, QtGui
@@ -36,8 +37,7 @@ COL_NAME, COL_TITLE, COL_PROJECT, COL_TEMPLATE, COL_SIZE, COL_OBJECTS, COL_MODIF
 _HEADERS_PAGE = ["Name", "Title", "Project", "Template", "Size", "Objects", "Modified", "Registered"]
 _HEADERS_ELEM = ["Name", "Library", "Project", "Resolution", "Size", "Objects", "Modified", "Status"]
 
-SORT_KEYS = ("name", "modified", "title", "project", "template", "size", "objects")
-_COL_SORT = {
+COL_SORT = {
     COL_NAME: "name",
     COL_TITLE: "title",
     COL_PROJECT: "project",
@@ -49,11 +49,6 @@ _COL_SORT = {
 }
 
 from ..style.theme import COLORS  # noqa: E402
-
-
-def _subsequence(needle: str, hay: str) -> bool:
-    it = iter(hay)
-    return all(c in it for c in needle)
 
 
 def dominant_prefix(names: List[str], share: float = 0.5, min_len: int = 8) -> str:
@@ -185,7 +180,7 @@ class CatalogModel(QtCore.QAbstractTableModel):
         self.layoutChanged.emit()
 
     def sort(self, column: int, order=QtCore.Qt.AscendingOrder) -> None:  # noqa: D401 (Qt API)
-        key = _COL_SORT.get(column, "name")
+        key = COL_SORT.get(column, "name")
         self.set_sort(key, order == QtCore.Qt.DescendingOrder)
 
     def _refilter(self) -> None:
@@ -293,7 +288,7 @@ class CatalogModel(QtCore.QAbstractTableModel):
                     for i in base
                     if all(
                         t in self._all[i].haystack
-                        or (len(t) >= 3 and _subsequence(t, self._all[i].name.lower()))
+                        or (len(t) >= 3 and _search.subsequence(t, self._all[i].name.lower()))
                         for t in toks
                     )
                 ]
@@ -375,16 +370,16 @@ class CatalogModel(QtCore.QAbstractTableModel):
         k = str(entry_or_key)
         if k in self._pos:
             return self._pos[k]
-        norm = os.path.normcase(os.path.abspath(k)) if k else ""
+        norm = path_key(k) if k else ""
         for r, i in enumerate(self._rows):
             e = self._all[i]
-            if e.kind == "page" and os.path.normcase(os.path.abspath(e.path)) == norm:
+            if e.kind == "page" and path_key(e.path) == norm:
                 return r
         if norm.endswith((".ctt", ".ctl", ".ctm")):
             # a library file: its first element shown
             for r, i in enumerate(self._rows):
                 e = self._all[i]
-                if e.is_element and os.path.normcase(os.path.abspath(e.path)) == norm:
+                if e.is_element and path_key(e.path) == norm:
                     return r
         return -1
 

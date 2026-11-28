@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import os
 from typing import Callable, Dict, List, Optional
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from . import keymap
 from .settings import app_settings
+from ..messages import warn
 
 #: the table's columns
 COLUMNS = ("Command", "Menu", "Keys", "Where", "Source")
@@ -138,7 +138,7 @@ class KeySearchBar(QtWidgets.QWidget):
 
         lay = QtWidgets.QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
-        self.search = SearchField("Search commands or keys", self, regex_key=regex_key)
+        self.search = SearchField("Search commands or keys", self, regex_key=regex_key, enter_filters=True)
         self.search.setToolTip("Part of a command's name, its menu or a key, for example ctrl+d")
         self.search.searchChanged.connect(lambda _t: self._typed())
         lay.addWidget(self.search, 1)
@@ -753,9 +753,15 @@ class KeymapPage(QtWidgets.QWidget):
             self._done({})
 
     def _export(self) -> None:
-        start = os.path.join(os.path.expanduser("~"), "ctgedit-keys.json")
-        path, _f = QtWidgets.QFileDialog.getSaveFileName(
-            self, "Export Keyboard Shortcuts", start, "Keyboard files (*.json);;All files (*.*)"
+        from ..remember import file_path
+
+        path = file_path(
+            self,
+            "Export Keyboard Shortcuts",
+            "keys",
+            "Keyboard files (*.json);;All files (*.*)",
+            save=True,
+            file_name="ctgedit-keys.json",
         )
         if path:
             self.export_to(path)
@@ -764,16 +770,15 @@ class KeymapPage(QtWidgets.QWidget):
         try:
             keymap.export_keys(path, self._preset, self._user)
         except OSError as e:
-            QtWidgets.QMessageBox.warning(self, "Export Keyboard Shortcuts", str(e))
+            warn(self, "Export Keyboard Shortcuts", str(e))
             return False
         return True
 
     def _import(self) -> None:
-        path, _f = QtWidgets.QFileDialog.getOpenFileName(
-            self,
-            "Import Keyboard Shortcuts",
-            os.path.expanduser("~"),
-            "Keyboard files (*.json);;All files (*.*)",
+        from ..remember import file_path
+
+        path = file_path(
+            self, "Import Keyboard Shortcuts", "keys", "Keyboard files (*.json);;All files (*.*)", save=False
         )
         if path:
             self.import_from(path)
@@ -782,7 +787,7 @@ class KeymapPage(QtWidgets.QWidget):
         try:
             preset, user = keymap.read_keys_file(path)
         except keymap.KeysFileError as e:
-            QtWidgets.QMessageBox.warning(self, "Import Keyboard Shortcuts", str(e))
+            warn(self, "Import Keyboard Shortcuts", str(e))
             return False
         changed_preset = preset != self._preset
         self.set_state(preset, user)

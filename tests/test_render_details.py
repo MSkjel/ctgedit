@@ -76,18 +76,18 @@ def test_text_frames_follow_ctdraws_aspect_tolerance(fx_page):
     def framed(path):
         with open(path, "rb") as fh:
             objs = P.parse_ctg_bytes(fh.read()).page.objects
-        return [i for i, po in enumerate(objs) if po.type_code == 5 and G._text_needs_frame(po)]
+        return [i for i, po in enumerate(objs) if po.type_code == 5 and G.text_needs_frame(po)]
 
     assert len(framed(fx_page("FxSaMaster", "FxSa"))) == 7
     assert framed(fx_page("FxGenies")) == []
     path = fx_page("FxTextKinds")
     doc = EditableDocument.open(path)
     po = doc.parsed.page.objects[_idx(doc, "FxDigit22")]
-    assert not G._text_needs_frame(po)
-    assert G._text_needs_frame(_with_slot2(po, (1.14, 0, 0, 1.21), (1.14, 1.21)))
-    assert not G._text_needs_frame(_with_slot2(po, (2.4606, 0, 0, 2.4618), (2.4606, 2.4618)))
-    assert not G._text_needs_frame(_with_slot2(po, (1.5, 0, 0, 1.5), (1.5, 1.5)))
-    assert G._text_needs_frame(_with_slot2(po, (-1, 0, 0, 1), (1, 1)))  # mirrored
+    assert not G.text_needs_frame(po)
+    assert G.text_needs_frame(_with_slot2(po, (1.14, 0, 0, 1.21), (1.14, 1.21)))
+    assert not G.text_needs_frame(_with_slot2(po, (2.4606, 0, 0, 2.4618), (2.4606, 2.4618)))
+    assert not G.text_needs_frame(_with_slot2(po, (1.5, 0, 0, 1.5), (1.5, 1.5)))
+    assert G.text_needs_frame(_with_slot2(po, (-1, 0, 0, 1), (1, 1)))  # mirrored
 
 
 def test_an_ordinary_genies_always_hidden_member_still_draws(qapp, fx_page):

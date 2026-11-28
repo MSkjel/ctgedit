@@ -1,6 +1,11 @@
 """The Simulate window."""
 
 from __future__ import annotations
+
+from ...infra.paths import data_dir, folder_key, path_key
+
+
+from ..names import plural
 from ..style.theme import sp as _sp
 
 import collections
@@ -15,18 +20,17 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 from .. import help as _help
 from ..style import theme
+from ..modeless import alive
 from ...render.scene import PageScene
-from . import modeljob
+from . import modeljob, options, winhost
 from .modeljob import ModelJob
-from . import options
 from . import sources as S
-from . import winhost
 from .canvas import SimCanvas
 from .controls import ControlFields
 from .panels import InputsPanel, OutputsPanel
 from ...editing import ui_state
 from ...infra import logsetup
-from ...infra.paths import data_dir
+from ..messages import warn
 
 #: the window polls its simulations this often (ms)
 TICK_MS = 40
@@ -108,7 +112,7 @@ def engine_setting() -> str:
         from ...sim.client import SETTING
 
         return str(app_settings().value(SETTING, "", type=str) or "")
-    except Exception:  # noqa: BLE001 -- a setting is a convenience only
+    except Exception:  # noqa: BLE001  # swallow-ok: a setting is a convenience
         return ""
 
 
@@ -197,7 +201,7 @@ def page_model_cached(page_path: str) -> Optional[dict]:
         st = os.stat(page_path)
     except OSError:
         return None
-    key = (os.path.normcase(os.path.abspath(page_path)), st.st_mtime_ns, st.st_size)
+    key = (path_key(page_path), st.st_mtime_ns, st.st_size)
     if key in _MODEL_CACHE:
         hit = _MODEL_CACHE[key]
         _MODEL_CACHE.move_to_end(key)
@@ -231,7 +235,7 @@ def page_model_file_job(page_path: str):
         return None
     if st.st_size < FILE_JOB_MIN_BYTES:
         return page_model_cached(page_path)
-    key = (os.path.normcase(os.path.abspath(page_path)), st.st_mtime_ns, st.st_size)
+    key = (path_key(page_path), st.st_mtime_ns, st.st_size)
     hit = _MODEL_CACHE.get(key)
     if hit is not None:
         _MODEL_CACHE.move_to_end(key)
@@ -344,6 +348,7 @@ def runtime_page(page_path: str, parsed=None, doc=None):
         try:
             page._sim_libraries = resolver_libraries(getattr(der, "resolver", None))
         except Exception:  # noqa: BLE001 -- not known: any library change reloads it
+            logsetup.note_exception("sim.window.runtime_page/libraries")
             page._sim_libraries = None
         # (never cached: a Simulate tab changes its page model, so two tabs cannot share one)
         return page
@@ -442,6 +447,28 @@ class SimulatedPage(QtWidgets.QWidget):
         if page is None:
             page = runtime_page(page_path)
         self.page = page
+        self._init_tab_state(page, doc, attach_window)
+        self._build_view(page)
+        new_simulation = sim is None and attach_window is None
+        self.sim = sim if sim is not None else S.default_simulation(engine_path=engine_setting() or None)
+        self._apply_sim_options()
+        self._give_sim_model(model, doc, attach_window, project)
+        self._start_clock(new_simulation, run)
+        self.sim.start(self.page_path, page)
+        self._note_file()
+        self._note_libraries()
+        self.log: List[S.LogEntry] = []
+        self.scans = 0
+        self.last = None
+        self.canvas.inputEvent.connect(self._input)
+        self._pushed.connect(self.apply, QtCore.Qt.QueuedConnection)
+        setter = getattr(self.sim, "set_listener", None)
+        if setter is not None:
+            setter(self._pushed.emit)
+
+    def _init_tab_state(self, page, doc, attach_window: Optional[int]) -> None:
+        """What the tab was opened with and follows: the editor's document, the live
+        reload's stamps and what is due, and where the tab is shown."""
         # the page this tab was opened with (path, drawing): an SA page opened in its
         # workspace leaves this tab for the startup page, and the pane's tab draws it from
         # here (the editor's drawing, unsaved edits included: what the engine runs)
@@ -485,6 +512,10 @@ class SimulatedPage(QtWidgets.QWidget):
         self.child_views: List["SimulatedPage"] = []
         self.engine_info: Optional[dict] = None
         self.frame = None
+
+    def _build_view(self, page) -> None:
+        """The page's scene in the runtime look, the page view over it and the fields of its
+        ActiveX text boxes."""
         self.scene = PageScene(self)
         # Simulate Settings: what a code-valued text shows until its value comes (the genies
         # the page's code places read it from the scene: render/sim_states, sim_drawn)
@@ -504,8 +535,10 @@ class SimulatedPage(QtWidgets.QWidget):
         lay = QtWidgets.QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.addWidget(self.canvas)
-        new_simulation = sim is None and attach_window is None
-        self.sim = sim if sim is not None else S.default_simulation(engine_path=engine_setting() or None)
+
+    def _apply_sim_options(self) -> None:
+        """The Simulate settings the simulation takes before it starts (the user, the
+        startup, the breaks, the outside access, the demo values, the SA workspace)."""
         if hasattr(self.sim, "want_user"):
             self.sim.want_user = user_setting()
         if hasattr(self.sim, "run_startup"):
@@ -530,6 +563,10 @@ class SimulatedPage(QtWidgets.QWidget):
             self.sim.demo_values = True  # (the developer option: made-up values)
         if hasattr(self.sim, "sa_workspace"):
             self.sim.sa_workspace = bool(options.get("sa_workspace"))
+
+    def _give_sim_model(self, model, doc, attach_window: Optional[int], project: str) -> None:
+        """The page model the engine runs (made in a helper process unless given), the
+        window it attaches to and its project."""
         if hasattr(self.sim, "model"):
             # the engine runs the page as it is here: the model carries the drawing summary
             # and, for a page that is not saved and compiled, its rows
@@ -550,6 +587,10 @@ class SimulatedPage(QtWidgets.QWidget):
                 self.sim.attach_window = attach_window
             if project:
                 self.sim._project = project
+
+    def _start_clock(self, new_simulation: bool, run: bool) -> None:
+        """The clock before the simulation connects: the speed at start of a new simulation,
+        and running when asked."""
         if new_simulation:
             # Simulate Settings > Clock speed at start, before it connects (the connection
             # sends it with the clock; a tab that joins a running simulation keeps its speed)
@@ -568,17 +609,6 @@ class SimulatedPage(QtWidgets.QWidget):
                 self.sim.clock("run")
             except Exception:  # noqa: BLE001 -- swallow-ok: the window's own run follows
                 pass
-        self.sim.start(self.page_path, page)
-        self._note_file()
-        self._note_libraries()
-        self.log: List[S.LogEntry] = []
-        self.scans = 0
-        self.last = None
-        self.canvas.inputEvent.connect(self._input)
-        self._pushed.connect(self.apply, QtCore.Qt.QueuedConnection)
-        setter = getattr(self.sim, "set_listener", None)
-        if setter is not None:
-            setter(self._pushed.emit)
 
     def apply_canvas_look(self) -> None:
         """Settings after OK: the canvas's scroll bars (Settings > Canvas), the notes over the
@@ -775,6 +805,7 @@ class SimulatedPage(QtWidgets.QWidget):
 
             self.lib_stamps = page_libraries(self.page, self.doc)
         except Exception:  # noqa: BLE001 -- not known: any library change reloads it
+            logsetup.note_exception("sim.window._note_libraries")
             self.lib_stamps = None
 
     def libraries_changed(self, paths=None) -> bool:
@@ -783,11 +814,11 @@ class SimulatedPage(QtWidgets.QWidget):
         stamps = self.lib_stamps
         if stamps is None:
             return paths is not None
-        from .live_reload import _key, library_stamp
+        from .live_reload import library_stamp
 
         if paths is not None:
-            keys = {_key(p) for p in paths}
-            return any(_key(p) in keys for p in stamps)
+            keys = {path_key(p) for p in paths}
+            return any(path_key(p) in keys for p in stamps)
         return any(library_stamp(p) != st for p, st in stamps.items())
 
     def follow_navigation(self) -> bool:
@@ -848,7 +879,7 @@ class SimulatedPage(QtWidgets.QWidget):
         try:
             self.sim.input(event)
         except Exception:  # noqa: BLE001 -- a source problem must not break the view
-            pass
+            logsetup.note_exception("sim.window._input")
 
     def apply(self, state) -> None:
         """Draw one PageState."""
@@ -876,16 +907,15 @@ class SimulatedPage(QtWidgets.QWidget):
         try:
             self.follow_navigation()
         except Exception:  # noqa: BLE001
-            pass
+            logsetup.note_exception("sim.window.tick/follow_navigation")
         try:
             self._show_debug_pause()
         except Exception:  # noqa: BLE001 -- a hint only
-            from ...infra import logsetup
-
             logsetup.note_exception("sim.window._show_debug_pause")
         try:
             st = self.sim.poll()
         except Exception:  # noqa: BLE001
+            logsetup.note_exception("sim.window.tick/poll")
             st = None
         if st is not None:
             self.apply(st)
@@ -895,6 +925,7 @@ class SimulatedPage(QtWidgets.QWidget):
             try:
                 new = drain()
             except Exception:  # noqa: BLE001
+                logsetup.note_exception("sim.window.tick/drain")
                 new = []
             if new:
                 self.log.extend(new)
@@ -949,7 +980,7 @@ class SimulatedPage(QtWidgets.QWidget):
         try:
             with self.sim._lock:
                 self.sim._window_gone = True  # the page left the window: no closePage
-        except Exception:  # noqa: BLE001 -- another source
+        except AttributeError:  # another source
             pass
         self.stop()
         self.titleChanged.emit()
@@ -961,7 +992,7 @@ class SimulatedPage(QtWidgets.QWidget):
         try:
             self.sim.stop()
         except Exception:  # noqa: BLE001
-            pass
+            logsetup.note_exception("sim.window.stop")
 
 
 def set_docked_setting(on: bool) -> None:
@@ -969,7 +1000,7 @@ def set_docked_setting(on: bool) -> None:
 
     try:
         app_settings().setValue("sim/docked", bool(on))
-    except Exception:  # noqa: BLE001 -- a stored choice is a convenience only
+    except Exception:  # noqa: BLE001  # swallow-ok: a stored choice is a convenience
         pass
 
 
@@ -992,7 +1023,7 @@ class _KeyEater(QtCore.QObject):
 
     def disarm(self) -> None:
         w, self._target, self._key = self._target, None, None
-        if w is not None and _alive(w):
+        if w is not None and alive(w):
             w.removeEventFilter(self)
 
     def eventFilter(self, obj, ev):  # noqa: N802 -- Qt naming
@@ -1069,6 +1100,19 @@ class ClockBar(QtWidgets.QToolBar):
 
     def __init__(self, parent=None):
         super().__init__("Clock", parent)
+        self._build_clock_controls()
+        self._build_page_bar(parent)
+        self._build_scenario_menu()
+        self._build_view_commands()
+        self._build_panels_button()
+        self._users_shown: Optional[tuple] = None
+        self.set_users([], {"mode": "full"})
+        for a in (self.act_run, self.act_pause, self.act_step):
+            _help.set_help(a, "simulate#the-clock")
+
+    def _build_clock_controls(self) -> None:
+        """The clock's own controls: Run, Pause and Step, the speed, the clock's readout,
+        the debugging options and the user."""
         self.setObjectName("SimulateClock")
         self.setMovable(False)
         self.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
@@ -1118,6 +1162,10 @@ class ClockBar(QtWidgets.QToolBar):
         self.user.setSizeAdjustPolicy(QtWidgets.QComboBox.AdjustToContents)
         self.addWidget(self._label("User:", self.user))
         self.addWidget(self.user)
+
+    def _build_page_bar(self, parent) -> None:
+        """The page's commands on a toolbar of their own, and its first commands: another
+        page in the simulation and the project's code again."""
         # the page's commands on a toolbar of their own (one bar is too wide for a laptop or
         # a docked window). The window puts it on a second row when the two do not fit side
         # by side (SimulateWindow._lay_out_toolbars)
@@ -1142,6 +1190,11 @@ class ClockBar(QtWidgets.QToolBar):
             "Compile the project's changed .ci files again; the page keeps running with the new code"
         )
         _help.set_help(self.act_reload_cicode, "simulate#editing-while-simulating")
+
+    def _build_scenario_menu(self) -> None:
+        """The Scenario button and its menu: record and play a scenario, save and load a
+        snapshot."""
+        bar = self.page_bar
         # scenarios: record what you do, play a scenario, snapshots of the simulation's state
         self.scenario_menu = QtWidgets.QMenu("Scenario", self)
         self.act_record = self.scenario_menu.addAction("Record")
@@ -1177,6 +1230,11 @@ class ClockBar(QtWidgets.QToolBar):
         bar.addWidget(self.scenario_button)
         _help.set_help(self.scenario_button, "simulate#scenarios-and-snapshots")
         bar.addSeparator()
+
+    def _build_view_commands(self) -> None:
+        """The page's view commands: Copy Image, the zoom commands, Page Keys and the
+        Inspector."""
+        bar = self.page_bar
         # the page: a picture of it, its keys, what it is made of
         self.act_copy = bar.addAction(theme.icon("copy"), "Copy Image")
         self.act_copy.setShortcut(QtGui.QKeySequence("Ctrl+Shift+C"))
@@ -1225,6 +1283,10 @@ class ClockBar(QtWidgets.QToolBar):
         self.act_inspect.setShortcutContext(QtCore.Qt.WindowShortcut)
         _help.set_help(self.act_inspect, "simulate#the-inspector")
         bar.addSeparator()
+
+    def _build_panels_button(self) -> None:
+        """The Panels button (the Inputs and Outputs panels come back from it) and Settings."""
+        bar = self.page_bar
         # the Inputs / Outputs panels (closed with their X, they come back from here)
         self.panels_menu = QtWidgets.QMenu("Panels", self)
         self.panels_button = QtWidgets.QToolButton(self)
@@ -1240,10 +1302,6 @@ class ClockBar(QtWidgets.QToolBar):
             "The Simulate settings (Settings > Simulate): tabs, the "
             "start, the user, error marks, debugging, the simulator"
         )
-        self._users_shown: Optional[tuple] = None
-        self.set_users([], {"mode": "full"})
-        for a in (self.act_run, self.act_pause, self.act_step):
-            _help.set_help(a, "simulate#the-clock")
 
     @staticmethod
     def _label(text: str, buddy: QtWidgets.QWidget) -> QtWidgets.QLabel:
@@ -1408,6 +1466,28 @@ class SimulateWindow(QtWidgets.QMainWindow):
         v = QtWidgets.QVBoxLayout(central)
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
+        self._build_banners(central, v)
+        self._build_page_tabs(central, v)
+        self.setCentralWidget(central)
+        self._build_clock()
+        self._init_live_reload()
+        # docked in an editor window (_host, in its SimDock _dock) or a window of its own;
+        # _opener = the editor window that last opened a simulation (Dock in Editor docks there)
+        self._host = None
+        self._dock: Optional[SimDock] = None
+        self.installEventFilter(self)  # (the docked shortcut rule: eventFilter)
+        self._opener = None
+        self._scope_clock_keys()
+        self._build_panels()
+        self._init_keys()
+        self._init_views()
+        self._size_docks()
+        self.clock.show_state(None)
+
+    def _build_banners(self, central: QtWidgets.QWidget, v: QtWidgets.QVBoxLayout) -> None:
+        """The status banner (which simulator and project, or why the page is on demo
+        values), the status bar's simulator label and the banner of a page changed in the
+        editor."""
         # the status line: which simulator and project, or why the page is on demo values
         self.status_row, self._status_banner, row = _banner(central, "SimStatusBanner")
         self.note = theme.note_label(DEMO_NOTE, role="warn")
@@ -1447,6 +1527,9 @@ class SimulateWindow(QtWidgets.QMainWindow):
         self.edit_row.setVisible(False)
         _help.set_help(self.edit_row, "simulate#editing-while-simulating")
         v.addWidget(self.edit_row)
+
+    def _build_page_tabs(self, central: QtWidgets.QWidget, v: QtWidgets.QVBoxLayout) -> None:
+        """The tabs of the simulated pages and the note shown when none is simulated."""
         self.tabs = _SimTabs(central)
         self.tabs.setDocumentMode(True)
         self.tabs.setTabsClosable(True)
@@ -1461,7 +1544,9 @@ class SimulateWindow(QtWidgets.QMainWindow):
         self.empty_note.setAlignment(QtCore.Qt.AlignCenter)
         self.empty_note.setAccessibleName("No page is simulated")
         self.tabs.installEventFilter(self)  # (the note stays in the middle: eventFilter)
-        self.setCentralWidget(central)
+
+    def _build_clock(self) -> None:
+        """The clock bar and the page bar, their commands wired to the window."""
         self.clock = ClockBar(self)
         self.addToolBar(QtCore.Qt.TopToolBarArea, self.clock)
         self.addToolBar(QtCore.Qt.TopToolBarArea, self.clock.page_bar)
@@ -1494,6 +1579,10 @@ class SimulateWindow(QtWidgets.QMainWindow):
         self.clock.act_page_keys.setChecked(SimCanvas.keys_to_page)
         self.clock.act_page_keys.toggled.connect(self._page_keys_toggled)
         self._inspector = None
+
+    def _init_live_reload(self) -> None:
+        """Live reload: the .ci files and libraries of the simulated projects and the edits
+        in the editor."""
         # live reload: .ci files and libraries of the simulated projects, edits in the editor
         from .live_reload import LiveReload
 
@@ -1508,12 +1597,10 @@ class SimulateWindow(QtWidgets.QMainWindow):
         # library save or Update Pages' chain, looked at when it has ended: _live_tick)
         self._lib_held: dict = {}
         self._adopt_at = 0.0
-        # docked in an editor window (_host, in its SimDock _dock) or a window of its own;
-        # _opener = the editor window that last opened a simulation (Dock in Editor docks there)
-        self._host = None
-        self._dock: Optional[SimDock] = None
-        self.installEventFilter(self)  # (the docked shortcut rule: eventFilter)
-        self._opener = None
+
+    def _scope_clock_keys(self) -> None:
+        """Copy Image, Open Page and the Inspector are the window's own: docked in the
+        editor window, their keys act only while the focus is in here."""
         self.clock.act_copy.triggered.connect(self.copy_image)
         # (docked in the editor window, Ctrl+Shift+C only while the focus is in here)
         self.addAction(self.clock.act_copy)
@@ -1525,6 +1612,10 @@ class SimulateWindow(QtWidgets.QMainWindow):
         self.addAction(self.clock.act_inspect)
         self.clock.act_inspect.setShortcutContext(QtCore.Qt.WidgetWithChildrenShortcut)
         self.clock.act_numbers.toggled.connect(self._debug_toggled)
+
+    def _build_panels(self) -> None:
+        """The Inputs dock (Tags, Alarms, Equipment, Watch) and the Outputs dock, with their
+        keys in the Panels menu."""
         self.inputs = InputsPanel(self)
         # the Inputs dock: Tags, Alarms, Equipment (the alarm server and the equipment's
         # runtime fields of the simulation)
@@ -1570,6 +1661,10 @@ class SimulateWindow(QtWidgets.QMainWindow):
             a.setShortcutContext(QtCore.Qt.WindowShortcut)
             _set_tip(a, "Show or hide the %s panel" % dock.windowTitle())
             self.clock.panels_menu.addAction(a)
+
+    def _init_keys(self) -> None:
+        """The keys of the window's commands (Settings > Keyboard, again when they change
+        there), the page's view and Space, and the docking rules."""
         # (Run, Pause, Step and the panels are the window's too: docked, their keys are its
         # own, as Copy Image's, Open Page's and the Inspector's: _key_scope; the key press
         # that ran one of them docked goes nowhere else: _KeyEater)
@@ -1587,6 +1682,10 @@ class SimulateWindow(QtWidgets.QMainWindow):
         from ..panels import docking
 
         docking.install_all(self)
+
+    def _init_views(self) -> None:
+        """The simulation's popup menus and dialogs, the windows its Cicode opened and the
+        tick timer."""
         # the simulation's popup menus and Message / Input / Form dialogs (ctsim/dialog)
         from .sim_dialogs import DialogHost
 
@@ -1603,6 +1702,9 @@ class SimulateWindow(QtWidgets.QMainWindow):
         self._timer = QtCore.QTimer(self)
         self._timer.setInterval(TICK_MS)
         self._timer.timeout.connect(self.tick)
+
+    def _size_docks(self) -> None:
+        """The window's size and the docks' starting sizes."""
         self.resize(1280, 820)
         # (at least as wide as its tabs and fields at the text size now)
         self.resizeDocks(
@@ -1624,7 +1726,6 @@ class SimulateWindow(QtWidgets.QMainWindow):
         # own, never before it goes into a dock: Qt aborts showing a docked main window that
         # was given a maximized geometry before it was ever shown)
         self._own_layout_restored = False
-        self.clock.show_state(None)
 
     # -- the window's size and panels, remembered ----------------------------------------
     def _restore_layout(self) -> None:
@@ -1638,7 +1739,7 @@ class SimulateWindow(QtWidgets.QMainWindow):
             st = s.value("simulate/state")
             if st is not None:
                 self.restoreState(st)
-        except Exception:  # noqa: BLE001 -- a stored layout is a convenience only
+        except Exception:  # noqa: BLE001  # swallow-ok: a stored layout is a convenience
             pass
 
     def _save_layout(self) -> None:
@@ -1671,7 +1772,7 @@ class SimulateWindow(QtWidgets.QMainWindow):
             elif self.isWindow() and self.isVisible():
                 s.setValue("simulate/geometry", self.saveGeometry())
                 s.setValue("simulate/state", self.saveState())
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001  # swallow-ok: a stored layout is a convenience
             pass
 
     # -- docked in the editor or a window of its own ------------------------------------
@@ -1686,9 +1787,9 @@ class SimulateWindow(QtWidgets.QMainWindow):
         """Show the window in the dock of ``opener`` (the editor window that opened the
         simulation), docked or floating as it was last (setting 'simulate/dock_floating');
         a window of its own only when no editor window is open."""
-        if opener is not None and _alive(opener):
+        if opener is not None and alive(opener):
             self._opener = opener
-        host = opener if opener is not None and _alive(opener) else self.host_window()
+        host = opener if opener is not None and alive(opener) else self.host_window()
         if host is None:
             host = self._default_host()
         if host is not None:
@@ -1702,15 +1803,15 @@ class SimulateWindow(QtWidgets.QMainWindow):
         self.raise_()
         self.activateWindow()
 
-    def status_message(self, text: str, level: str = "info", at_least_ms: int = 0) -> None:
+    def status_message(self, text: str, at_least_ms: int = 0) -> None:
         """``text`` in the window's status bar for its reading time, as the editor window's
         messages (ui/notify.reading_ms: longer for a longer text, times Settings >
-        Appearance > Messages stay; a warning at least 10 s), and at least ``at_least_ms``
-        times the setting (the time the message stayed before: no shorter at Normal)."""
+        Appearance > Messages stay), and at least ``at_least_ms`` times the setting (the
+        time the message stayed before: no shorter at Normal)."""
         from ..notify import message_ms
 
         # (the status bar scales by the setting: ScaledStatusBar)
-        self.statusBar().showMessage(text, message_ms(text, level, at_least_ms, scaled=False))
+        self.statusBar().showMessage(text, message_ms(text, "info", at_least_ms, scaled=False))
 
     @staticmethod
     def _default_host():
@@ -1719,12 +1820,13 @@ class SimulateWindow(QtWidgets.QMainWindow):
         try:
             from ..main_window import MainWindow
         except Exception:  # noqa: BLE001
+            logsetup.note_exception("simulate.window._default_host")
             return None
         act = QtWidgets.QApplication.activeWindow()
-        if isinstance(act, MainWindow) and _alive(act):
+        if isinstance(act, MainWindow) and alive(act):
             return act
-        for w in MainWindow._instances:
-            if _alive(w) and w.isVisible():
+        for w in MainWindow.instances:
+            if alive(w) and w.isVisible():
                 return w
         return None
 
@@ -1743,14 +1845,14 @@ class SimulateWindow(QtWidgets.QMainWindow):
         # moment, can grow the editor past the screen; it is put back below
         host_geom = QtCore.QRect(host.geometry()) if not host.isMaximized() else None
         dock = getattr(host, "_sim_dock", None)
-        if dock is None or not _alive(dock):
+        if dock is None or not alive(dock):
             dock = SimDock(host)
             host._sim_dock = dock
             try:
                 area = QtCore.Qt.DockWidgetArea(
                     int(s.value("simulate/dock_area", int(QtCore.Qt.BottomDockWidgetArea.value)))
                 )
-            except Exception:  # noqa: BLE001
+            except TypeError, ValueError:  # a garbled setting: the bottom
                 area = QtCore.Qt.BottomDockWidgetArea
             if area not in (
                 QtCore.Qt.LeftDockWidgetArea,
@@ -1781,7 +1883,7 @@ class SimulateWindow(QtWidgets.QMainWindow):
                 # the first layout: the page and the tag list get the room, Outputs a strip
                 self.resizeDocks([self.dock_outputs], [120], QtCore.Qt.Vertical)
                 self.resizeDocks([self.dock_inputs], [300], QtCore.Qt.Horizontal)
-        except Exception:  # noqa: BLE001 -- a stored layout is a convenience only
+        except Exception:  # noqa: BLE001  # swallow-ok: a stored layout is a convenience
             pass
         self.show()
         self._show_dock()
@@ -1814,9 +1916,9 @@ class SimulateWindow(QtWidgets.QMainWindow):
             def again(dock=dock, docked_size=docked_size, r=(x, y, w, h)):
                 # (Qt gives a newly floated dock its docked size once shown; a size someone
                 # set meanwhile is kept)
-                if _alive(dock) and dock.isFloating() and dock.size() == docked_size:
+                if alive(dock) and dock.isFloating() and dock.size() == docked_size:
                     dock.setGeometry(*r)
-                if _alive(self) and s.value("simulate/docked_state") is None:
+                if alive(self) and s.value("simulate/docked_state") is None:
                     # (the first layout again at the window's own size: Outputs a strip)
                     self.resizeDocks([self.dock_outputs], [120], QtCore.Qt.Vertical)
 
@@ -1831,7 +1933,7 @@ class SimulateWindow(QtWidgets.QMainWindow):
                 dock.setGeometry(*rect)
                 # (and once it is shown: Qt gives a newly floated dock its docked size)
                 QtCore.QTimer.singleShot(
-                    0, dock, lambda: _alive(dock) and dock.isFloating() and dock.setGeometry(*rect)
+                    0, dock, lambda: alive(dock) and dock.isFloating() and dock.setGeometry(*rect)
                 )
         set_docked_setting(True)
         self._show_dock_action()
@@ -1840,7 +1942,7 @@ class SimulateWindow(QtWidgets.QMainWindow):
 
             def keep_host(host=host, g=host_geom):
                 if (
-                    _alive(host)
+                    alive(host)
                     and not host.isMaximized()
                     and (host.height() > g.height() or host.width() > g.width())
                 ):
@@ -1891,16 +1993,16 @@ class SimulateWindow(QtWidgets.QMainWindow):
             self.windowTitleChanged.disconnect(self._dock_title)
         except RuntimeError, TypeError:
             pass
-        if host is not None and _alive(host):
+        if host is not None and alive(host):
             host.removeEventFilter(self)
-        if _alive(dock):
+        if alive(dock):
             dock.removeEventFilter(self)
         self._key_scope()
         self._key_eater.disarm()
         self.hide()
         self.setParent(None)
         self.setWindowFlags(QtCore.Qt.Window)
-        if _alive(dock):
+        if alive(dock):
             dock.hide()
         self._show_dock_action()
 
@@ -1912,7 +2014,7 @@ class SimulateWindow(QtWidgets.QMainWindow):
         self._save_layout()
 
         def again():
-            if self._dock is dock and _alive(dock):
+            if self._dock is dock and alive(dock):
                 self._layout_views()
                 self._show_popups()
 
@@ -2053,11 +2155,11 @@ class SimulateWindow(QtWidgets.QMainWindow):
             return None
         from .sim_tools import tools_of
 
-        key = os.path.normcase(os.path.abspath(project_dir))
+        key = path_key(project_dir)
         for p in [self.panel_view()] + self.tab_pages() + list(self._views):
             if p is None or getattr(p, "left", False) or not getattr(p, "page_path", ""):
                 continue
-            if os.path.normcase(os.path.dirname(os.path.abspath(p.page_path))) != key:
+            if folder_key(p.page_path) != key:
                 continue
             t = tools_of(p.sim)
             if t is not None and t.available():
@@ -2067,11 +2169,11 @@ class SimulateWindow(QtWidgets.QMainWindow):
     def find(self, page_path: str, views: bool = False) -> Optional[SimulatedPage]:
         """The tab showing ``page_path``; ``views`` = else a window shown inside a tab or
         over the window (an SA page opens in its workspace's pane, not a tab of its own)."""
-        key = os.path.normcase(os.path.abspath(page_path)) if page_path else None
+        key = path_key(page_path) if page_path else None
         if not key:
             return None
         for p in self.tab_pages() + (list(self._views) if views else []):
-            if os.path.normcase(os.path.abspath(p.page_path)) == key and not getattr(p, "left", False):
+            if path_key(p.page_path) == key and not getattr(p, "left", False):
                 return p
         return None
 
@@ -2107,7 +2209,7 @@ class SimulateWindow(QtWidgets.QMainWindow):
                 if not getattr(S, "DEMO", False):
                     prestart(page_path, engine_setting() or None)
             except Exception:  # noqa: BLE001
-                pass
+                logsetup.note_exception("sim.window.open_page/prestart")
             # ... and the helper process makes the page's model meanwhile (the tab takes the
             # same job: page_model_job keeps it for the document)
             try:
@@ -2116,8 +2218,6 @@ class SimulateWindow(QtWidgets.QMainWindow):
                 if doc is not None and not getattr(S, "DEMO", False) and not C.disabled():
                     page_model_job(page_path, doc)
             except Exception:  # noqa: BLE001 -- the tab makes it, as before
-                from ...infra import logsetup
-
                 logsetup.note_exception("sim.window.open_page_model")
         if parsed is not None and page_path:
             try:
@@ -2125,12 +2225,14 @@ class SimulateWindow(QtWidgets.QMainWindow):
                     page_path, parsed, doc if getattr(doc, "parsed", None) is parsed else None
                 )
             except Exception:  # noqa: BLE001 -- fall back to the model / the file
+                logsetup.note_exception("sim.window.open_page/runtime_page")
                 if page is not None:
                     page = copy.deepcopy(page)
         elif page is not None:
             try:
                 page = copy.deepcopy(page)
             except Exception:  # noqa: BLE001 -- read the file instead
+                logsetup.note_exception("sim.window.open_page/copy")
                 page = None
         autorun = bool(run and options.get("autorun"))
         sp = SimulatedPage(
@@ -2142,7 +2244,7 @@ class SimulateWindow(QtWidgets.QMainWindow):
             try:
                 sp.sim.clock("run")
             except Exception:  # noqa: BLE001
-                pass
+                logsetup.note_exception("sim.window.open_page/clock")
         sp.tick()
         self._tab_changed(self.tabs.currentIndex())
         if not self._timer.isActive():
@@ -2191,7 +2293,7 @@ class SimulateWindow(QtWidgets.QMainWindow):
     def open_settings(self) -> None:
         """The Simulate options: the editor's Settings window at its Simulate page (the
         options apply when it closes with OK); with no editor window, a dialog of their own."""
-        host = self._host if self._host is not None and _alive(self._host) else self._default_host()
+        host = self._host if self._host is not None and alive(self._host) else self._default_host()
         if host is not None:
             from ..prefs.settings_dialog import SettingsDialog
 
@@ -2488,7 +2590,7 @@ class SimulateWindow(QtWidgets.QMainWindow):
         ``sheet`` its properties sheet open. The reverse of Outputs' Show on Page."""
         host = self.host_window()
         opener = getattr(self, "_opener", None)
-        if host is None and opener is not None and _alive(opener):
+        if host is None and opener is not None and alive(opener):
             host = opener
         if host is None:
             host = self._default_host()
@@ -2497,17 +2599,13 @@ class SimulateWindow(QtWidgets.QMainWindow):
             self.status_message("No editor window is open to edit the page in.", at_least_ms=6000)
             return False
         try:
-            host.open_document(path)
-        except Exception:  # noqa: BLE001 -- said below
-            from ...infra import logsetup
-
-            logsetup.note_exception("simulate.edit_in_editor")
-        doc = getattr(host, "doc", None)
-        if doc is None or os.path.normcase(
-            os.path.abspath(getattr(doc, "path", "") or "")
-        ) != os.path.normcase(os.path.abspath(path)):
-            self.status_message("The editor could not open %s." % os.path.basename(path), at_least_ms=6000)
+            doc = host.open_shown(path)
+        except Exception as e:  # noqa: BLE001 -- swallow-ok: said in the status line
+            self.status_message(
+                "The editor could not open %s: %s" % (os.path.basename(path), e), at_least_ms=6000
+            )
             return False
+        host = next((w for w in host._windows() if w.doc is doc), host)
         host.show()
         host.raise_()
         host.activateWindow()
@@ -2571,7 +2669,7 @@ class SimulateWindow(QtWidgets.QMainWindow):
             opened
             and opened[1] is not None
             and getattr(osim, "workspace_page", "")
-            and os.path.normcase(os.path.abspath(opened[0])) == os.path.normcase(os.path.abspath(path))
+            and path_key(opened[0]) == path_key(path)
         ):
             page = opened[1]
             owner.opened_with = None  # one scene draws it (a second window reads the file)
@@ -2756,8 +2854,8 @@ class SimulateWindow(QtWidgets.QMainWindow):
             if anchor is None:
                 root = self.root_of(sp)
                 rinfo = root.engine_info or {}
-                ox = winhost._int(rinfo.get("x"))
-                oy = winhost._int(rinfo.get("y"))
+                ox = winhost.as_int(rinfo.get("x"))
+                oy = winhost.as_int(rinfo.get("y"))
                 rc = root.canvas
             else:
                 ox = oy = 0
@@ -2945,7 +3043,7 @@ class SimulateWindow(QtWidgets.QMainWindow):
             try:
                 with sp.sim._lock:
                     sp.sim._window_gone = True  # freed in the engine: no closePage
-            except Exception:  # noqa: BLE001 -- another source
+            except AttributeError:  # another source
                 pass
         sp.stop()
         if closing is not None:
@@ -2972,7 +3070,7 @@ class SimulateWindow(QtWidgets.QMainWindow):
         try:
             cur.reload_from_doc()
         except Exception as exc:  # noqa: BLE001 -- say why, keep the simulation
-            QtWidgets.QMessageBox.warning(self, "Reload Page", "The page could not be reloaded. %s" % exc)
+            warn(self, "Reload Page", "The page could not be reloaded. %s" % exc)
         self._show_edit_note()
 
     def _show_edit_note(self) -> None:
@@ -3000,8 +3098,9 @@ class SimulateWindow(QtWidgets.QMainWindow):
         try:
             from ... import editing
 
-            return int(editing._LIBRARY_GENERATION[0])
+            return int(editing.LIBRARY_GENERATION[0])
         except Exception:  # noqa: BLE001
+            logsetup.note_exception("sim.window._library_generation")
             return 0
 
     def _sessions(self) -> list:
@@ -3065,17 +3164,17 @@ class SimulateWindow(QtWidgets.QMainWindow):
         n = self.live.reload_now(s)
         if n:
             self.status_message(
-                "Reload Cicode: %d file%s sent to the simulator." % (n, "" if n == 1 else "s"),
+                "Reload Cicode: %s sent to the simulator." % (plural(n, "file")),
                 at_least_ms=5000,
             )
 
     def _libraries_changed(self, paths) -> None:
         """Library files changed on disk: drop caches and reload pages that use them."""
-        from .live_reload import _key, editor_wrote, library_run_going
+        from .live_reload import editor_wrote, library_run_going
 
         if library_run_going():
             for p in paths or ():
-                self._lib_held[_key(p)] = p
+                self._lib_held[path_key(p)] = p
             return
         paths = [p for p in paths or () if not editor_wrote(p)]
         if not paths:
@@ -3102,12 +3201,12 @@ class SimulateWindow(QtWidgets.QMainWindow):
 
     def _pages_changed(self, paths) -> None:
         """Page files changed on disk: reload the tabs that show them."""
-        from .live_reload import _key, editor_documents, file_stamp
+        from .live_reload import editor_documents, file_stamp
 
-        keys = {_key(p) for p in paths}
+        keys = {path_key(p) for p in paths}
         auto = bool(options.get("reload_page"))
         for p in self.pages():
-            if getattr(p, "left", False) or not p.page_path or _key(p.page_path) not in keys:
+            if getattr(p, "left", False) or not p.page_path or path_key(p.page_path) not in keys:
                 continue
             if p.doc is not None and any(d is p.doc for d in editor_documents(p.page_path)):
                 continue
@@ -3429,6 +3528,7 @@ class SimulateWindow(QtWidgets.QMainWindow):
             try:
                 return fn()
             except Exception:  # noqa: BLE001 -- a source problem must not break the view
+                logsetup.note_exception("sim.window._status_of")
                 return S.SimStatus("The simulation does not answer.", level="danger")
         if getattr(cur, "demo", False):
             return S.SimStatus(DEMO_NOTE, demo=True, level="warn")
@@ -3523,7 +3623,7 @@ class SimulateWindow(QtWidgets.QMainWindow):
                 st.setValue(C.SETTING, path)
             else:
                 st.remove(C.SETTING)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001  # swallow-ok: a setting is a convenience
             pass
         # (the tabs only: the windows shown in them or opened from them close with their
         # windows, a tab's Reconnect closes its page first; their own Reconnect would send a
@@ -3545,7 +3645,7 @@ class SimulateWindow(QtWidgets.QMainWindow):
         try:
             cur.sim.clock(mode, value)
         except Exception:  # noqa: BLE001
-            pass
+            logsetup.note_exception("sim.window._clock")
         if mode == "step":
             self.tick()
         self._show_clock()
@@ -3555,7 +3655,7 @@ class SimulateWindow(QtWidgets.QMainWindow):
         try:
             options.put("show_errors", errs)
             options.put("show_numbers", nums)
-        except Exception:  # noqa: BLE001 -- a setting is a convenience
+        except Exception:  # noqa: BLE001  # swallow-ok: a setting is a convenience
             pass
         for p in self.pages():
             p.canvas.set_show_errors(errs)
@@ -3641,7 +3741,7 @@ class SimulateWindow(QtWidgets.QMainWindow):
             with open(path, "w", encoding="utf-8") as fh:
                 json.dump(sc, fh, indent=1)
         except OSError as e:
-            QtWidgets.QMessageBox.warning(self, "Save Recording", "The recording was not saved: %s" % e)
+            warn(self, "Save Recording", "The recording was not saved: %s" % e)
             return None
         self.status_message("Saved %d steps to %s." % (len(sc.get("steps") or ()), path), at_least_ms=6000)
         return path
@@ -3662,12 +3762,10 @@ class SimulateWindow(QtWidgets.QMainWindow):
             with open(path, encoding="utf-8") as fh:
                 sc = json.load(fh)
         except (OSError, ValueError) as e:
-            QtWidgets.QMessageBox.warning(self, "Play Scenario", "The scenario was not read: %s" % e)
+            warn(self, "Play Scenario", "The scenario was not read: %s" % e)
             return False
         if not isinstance(sc, dict) or not str(sc.get("format", "")).startswith("ctsim-scenario"):
-            QtWidgets.QMessageBox.warning(
-                self, "Play Scenario", "This is not a scenario file (ctsim-scenario/0)."
-            )
+            warn(self, "Play Scenario", "This is not a scenario file (ctsim-scenario/0).")
             return False
         sc.setdefault("description", os.path.basename(path))
         return t.play(sc)
@@ -3725,7 +3823,7 @@ class SimulateWindow(QtWidgets.QMainWindow):
                 return False
         why = t.load_snapshot(path)
         if why:
-            QtWidgets.QMessageBox.warning(self, "Load Snapshot", "The snapshot was not loaded: %s" % why)
+            warn(self, "Load Snapshot", "The snapshot was not loaded: %s" % why)
             return False
         self.status_message("Loaded %s." % path, at_least_ms=5000)
         return True
@@ -3781,7 +3879,7 @@ class SimulateWindow(QtWidgets.QMainWindow):
 
         try:
             app_settings().setValue("sim/user", str(choice))
-        except Exception:  # noqa: BLE001 -- a setting is a convenience
+        except Exception:  # noqa: BLE001  # swallow-ok: a setting is a convenience
             pass
         cur = self.current()
         fn = getattr(cur.sim, "set_user", None) if cur is not None else None
@@ -3809,6 +3907,7 @@ class SimulateWindow(QtWidgets.QMainWindow):
             try:
                 cs = cur.sim.clock_state()
             except Exception:  # noqa: BLE001
+                logsetup.note_exception("sim.window._show_clock")
                 cs = None
         self.clock.show_state(cs)
 
@@ -3952,14 +4051,12 @@ class SimulateWindow(QtWidgets.QMainWindow):
             if owner.page_path:
                 note_startup_drawing(owner.page_path, path)
         if path:
-            key = os.path.normcase(os.path.abspath(path))
+            key = path_key(path)
             doc = next(
                 (
                     t.doc
                     for t in self.pages()
-                    if t.doc is not None
-                    and t.page_path
-                    and os.path.normcase(os.path.abspath(t.page_path)) == key
+                    if t.doc is not None and t.page_path and path_key(t.page_path) == key
                 ),
                 None,
             )
@@ -4056,7 +4153,7 @@ class SimulateWindow(QtWidgets.QMainWindow):
         # the last Python reference here would delete the window while Qt is closing it, and
         # its signal lambdas keep it alive anyway)
         super().closeEvent(ev)
-        if self._dock is not None and _alive(self._dock):
+        if self._dock is not None and alive(self._dock):
             self._dock.hide()  # (docked: its dock goes with it)
 
     def shut_down(self) -> None:
@@ -4083,16 +4180,6 @@ class SimulateWindow(QtWidgets.QMainWindow):
             self.tabs.removeTab(0)
             w.deleteLater()
         self._tab_changed(-1)
-
-
-def _alive(obj) -> bool:
-    """``obj`` is a Qt object whose C++ side still exists."""
-    try:
-        import shiboken6
-
-        return obj is not None and shiboken6.isValid(obj)
-    except Exception:  # noqa: BLE001
-        return obj is not None
 
 
 #: the Simulate window (a Python reference keeps the parentless window alive; it is hidden,
@@ -4123,14 +4210,12 @@ def user_setting() -> str:
 
     try:
         v = str(app_settings().value("sim/user", "full") or "full")
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # swallow-ok: a setting is a convenience
         v = "full"
     return v if v in ("full", "none") or v.startswith("user:") else "full"
 
 
-def open_simulation(
-    page_path: str, page=None, sim=None, show: bool = True, parsed=None, doc=None, host=None
-) -> SimulatedPage:
+def open_simulation(page_path: str, page=None, sim=None, parsed=None, doc=None, host=None) -> SimulatedPage:
     """Simulate a page in the Simulate window (Tools > Simulate Page); ``doc`` = the editor's
     document (the engine simulates it as it is, unsaved edits included); ``host`` = the editor
     window that asks (the window docks there when it was docked last, setting 'sim/docked')."""
@@ -4140,10 +4225,7 @@ def open_simulation(
         prefetch_startup_drawing(page_path)
     w = simulate_window()
     sp = w.open_page(page_path, page=page, sim=sim, parsed=parsed, doc=doc)
-    if show:
-        w.present(host)
-    elif host is not None:
-        w._opener = host
+    w.present(host)
     return sp
 
 
@@ -4160,21 +4242,14 @@ def _startup_drawings_file() -> str:
 
 
 def _startup_drawings() -> dict:
-    try:
-        with open(_startup_drawings_file(), encoding="utf-8") as fh:
-            got = json.load(fh)
-        return got if isinstance(got, dict) else {}
-    except OSError, ValueError:  # swallow-ok: none remembered yet (or unreadable: start again)
-        return {}
+    from ...format.fileio import read_json_dict
 
-
-def _project_key(page_path: str) -> str:
-    return os.path.normcase(os.path.dirname(os.path.abspath(page_path)))
+    return read_json_dict(_startup_drawings_file())
 
 
 def note_startup_drawing(page_path: str, drawing_path: str) -> None:
     """The simulator of ``page_path``'s project asked for ``drawing_path`` first (window 0)."""
-    key = _project_key(page_path)
+    key = folder_key(page_path)
     known = _startup_drawings()
     if known.get(key) == drawing_path:
         return
@@ -4194,10 +4269,10 @@ def prefetch_startup_drawing(page_path: str) -> None:
     time (page_model_file_job keeps it for the simulator's ask)."""
     if not page_path:
         return
-    path = _startup_drawings().get(_project_key(page_path))
+    path = _startup_drawings().get(folder_key(page_path))
     if not isinstance(path, str) or not path or not os.path.isfile(path):
         return
-    if os.path.normcase(os.path.abspath(path)) == os.path.normcase(os.path.abspath(page_path)):
+    if path_key(path) == path_key(page_path):
         return  # (the page itself: its own model goes with the open)
     page_model_file_job(path)
 

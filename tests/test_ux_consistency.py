@@ -131,8 +131,8 @@ def win(tmp_path, fx_page):
     yield w
     for e in getattr(w, "_docs", []):
         e["doc"].dirty = False
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.hide()
 
 
@@ -674,11 +674,22 @@ def test_find_replace_and_pack_libraries_work_with_no_page_open(fx_install):
         assert dlg is not None
         assert dlg._rb_project.isChecked() and not dlg._rb_page.isEnabled() and not dlg._rb_all.isEnabled()
         assert dlg._cb_project.currentText() == "FxMain"
+        # the project chosen is the one the next window starts with, a page of another open too
+        dlg._cb_project.setCurrentText("FxOther")
         dlg.close()
-        pack = PackLibrariesDialog(w, "")
-        assert pack.project.count() > 0 and pack.project.currentText() == "FxMain"
-        assert pack.project_dir() and os.path.isdir(pack.project_dir())
-        assert not pack.include_chain()
+        QtWidgets.QApplication.processEvents()
+        w._find_dialog(False)
+        assert w._find_dlg._cb_project.currentText() == "FxOther"
+        w._find_dlg.close()
+        QtWidgets.QApplication.processEvents()
+        w.open_document(fx_install.page("FxShapes"))
+        w._find_dialog(True)
+        assert w._find_dlg._cb_project.currentText() == "FxOther"
+        w._find_dlg.close()
+        w.doc.dirty = False
+        pack = PackLibrariesDialog(w, w.doc.path)
+        assert pack.scope.has_projects() and pack.scope.project() == "FxMain"
+        assert pack.project_dirs() == [fx_install.project("FxMain")]
         pack.deleteLater()
     finally:
         app_settings().remove("updatepages/root")

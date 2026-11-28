@@ -97,7 +97,6 @@ OPTION_DEFAULTS = {
     # after a library is saved, the Graphics Builder is closed (ui/builder_close): it reads
     # the library again when it next opens; with a page open there it asks first
     "auto_close_builder": False,
-    "watch_files": True,
     # Settings > Canvas: the mouse wheel scrolls the page (Ctrl + the wheel zooms); off: the
     # wheel zooms
     "wheel_scrolls": False,
@@ -213,6 +212,7 @@ SETTINGS_KEYS = {
     "import/threshold": 128,
     "import/tolerance": 0,
     "library/copy_preview": True,
+    "library/paste_linked": True,
     "newpage/linked": True,
     "opt/autosave_minutes": None,
     "opt/codepage": "auto",
@@ -262,13 +262,13 @@ SETTINGS_KEYS = {
     # its sub box 'Also compose their nested genies again where they differ from their
     # libraries' (genieusage.chain_plan compose_all): slow, so off by default
     "updatepages/chain_compose_all": False,
-    "opt/genie_save_pages": "",
+    "opt/genie_save_pages": "ask",
     # after a symbol save, what uses it (symbol_save_pages: ask / always / never)
-    "opt/symbol_save_pages": "",
+    "opt/symbol_save_pages": "ask",
     # after a template save, the templates built on it and the closed pages that use it
     # (template_save_pages: ask / always / never)
-    "opt/template_save_pages": "",
-    "opt/disk_reload": "",
+    "opt/template_save_pages": "ask",
+    "opt/disk_reload": "ask",
     "opt/shift_arrow": "resize",
     # the Properties panel: labels beside / above the fields ('auto': above under 300 px),
     # the folded sections (by title), the Graphics Builder's own notes ('!*' keys) under All
@@ -571,7 +571,7 @@ SETTINGS_KEYS = {
     # Settings > Pages and libraries > When a page
     # opens: an automatic update of an open tab (a changed template, symbol or genie, the
     # chain's reload) waits this long for the user's steps to redo, which it would clear
-    # (s, from its first wait; 0: it does not wait; ui/window/files.redo_wait_s)
+    # (s, from its first wait; 0: it does not wait; ui/window/open_genie_updates.redo_wait_s)
     "opt/auto_update_redo_wait_s": 60,
     # what is open comes first: a page or genie open in a tab takes a
     # saved genie, symbol or template at once, also while the Genie Saved question is up and
@@ -706,6 +706,8 @@ KEY_GROUPS = (
     ("sim/", "Options"),
     ("goto/", "Options"),
     ("find/", "Options"),
+    ("scope/", "Options"),
+    ("remember/", "Options"),
     ("rename/", "Options"),
     ("import/", "Options"),
     ("objects/", "Options"),
@@ -779,7 +781,7 @@ def option(key: str, default: Optional[bool] = None) -> bool:
         default = OPTION_DEFAULTS.get(key, False)
     try:
         return stored_bool(app_settings().value("opt/" + key, default), default)
-    except Exception:  # noqa: BLE001 -- a garbled value must not break the caller
+    except Exception:  # noqa: BLE001  # swallow-ok: a garbled value reads as the default
         return bool(default)
 
 
@@ -1236,53 +1238,44 @@ SYMBOL_SAVE_PAGES = GENIE_SAVE_PAGES
 TEMPLATE_SAVE_PAGES = GENIE_SAVE_PAGES
 
 
+#: what happens after a save, or a change on disk: ask / always / never
+SAVE_MODES = ("ask", "always", "never")
+
+
+def _mode(key: str) -> str:
+    return one_of(key, SAVE_MODES)
+
+
+def _set_mode(key: str, mode: str) -> None:
+    if mode in SAVE_MODES:
+        app_settings().setValue(key, mode)
+
+
 def genie_save_pages() -> str:
-    """'ask' | 'always' | 'never' (opt/genie_save_pages; default 'ask')."""
-    st = app_settings()
-    try:
-        v = str(st.value("opt/genie_save_pages", "", type=str) or "")
-        if v in ("ask", "always", "never"):
-            return v
-    except Exception:  # noqa: BLE001
-        pass
-    return "ask"
+    """What uses a saved genie is updated: 'ask' | 'always' | 'never'."""
+    return _mode("opt/genie_save_pages")
 
 
 def set_genie_save_pages(mode: str) -> None:
-    if mode in ("ask", "always", "never"):
-        app_settings().setValue("opt/genie_save_pages", mode)
+    _set_mode("opt/genie_save_pages", mode)
 
 
 def symbol_save_pages() -> str:
-    """'ask' | 'always' | 'never': update a symbol's users after its save."""
-    try:
-        v = str(app_settings().value("opt/symbol_save_pages", "", type=str) or "")
-        if v in ("ask", "always", "never"):
-            return v
-    except Exception:  # noqa: BLE001  # swallow-ok: a bad value reads as the default
-        pass
-    return "ask"
+    """What uses a saved symbol is updated: 'ask' | 'always' | 'never'."""
+    return _mode("opt/symbol_save_pages")
 
 
 def set_symbol_save_pages(mode: str) -> None:
-    if mode in ("ask", "always", "never"):
-        app_settings().setValue("opt/symbol_save_pages", mode)
+    _set_mode("opt/symbol_save_pages", mode)
 
 
 def template_save_pages() -> str:
-    """'ask' | 'always' | 'never': update a template's users after its save."""
-    try:
-        v = str(app_settings().value("opt/template_save_pages", "", type=str) or "")
-        if v in ("ask", "always", "never"):
-            return v
-    except Exception:  # noqa: BLE001  # swallow-ok: a bad value reads as the default
-        pass
-    return "ask"
+    """What uses a saved template is updated: 'ask' | 'always' | 'never'."""
+    return _mode("opt/template_save_pages")
 
 
 def set_template_save_pages(mode: str) -> None:
-    if mode in ("ask", "always", "never"):
-        app_settings().setValue("opt/template_save_pages", mode)
+    _set_mode("opt/template_save_pages", mode)
 
 
 #: a page or library open here that another program changed (the Graphics Builder saved it):
@@ -1295,20 +1288,12 @@ DISK_RELOAD = (
 
 
 def disk_reload() -> str:
-    """'ask' | 'always' | 'never' (opt/disk_reload). Unset: the older on / off option
-    opt/watch_files (on = 'ask', off = 'never')."""
-    try:
-        v = str(app_settings().value("opt/disk_reload", "", type=str) or "")
-        if v in ("ask", "always", "never"):
-            return v
-    except Exception:  # noqa: BLE001 -- swallow-ok: a garbled setting reads as its default
-        pass
-    return "ask" if option("watch_files") else "never"
+    """'ask' | 'always' | 'never' (opt/disk_reload)."""
+    return _mode("opt/disk_reload")
 
 
 def set_disk_reload(mode: str) -> None:
-    if mode in ("ask", "always", "never"):
-        app_settings().setValue("opt/disk_reload", mode)
+    _set_mode("opt/disk_reload", mode)
 
 
 #: view settings that are not on / off options, and their defaults
@@ -1365,7 +1350,7 @@ def surround_mode() -> str:
     default = VIEW_DEFAULTS["view/surround"]
     try:
         mode = str(app_settings().value("view/surround", default, type=str) or default)
-    except Exception:  # noqa: BLE001 -- a garbled value reads as the default
+    except Exception:  # noqa: BLE001  # swallow-ok: a garbled value reads as the default
         return default
     return mode if mode in dict(SURROUND_LABELS) else default
 
@@ -1502,68 +1487,5 @@ EXPORT_FORMAT = 1
 LOCAL_PREFIXES = ("session/",)
 
 
-def _portable(key: str) -> bool:
-    return not key.startswith(EXPORT_GROUP + "/") and not key.startswith(LOCAL_PREFIXES)
-
-
 class SettingsFileError(ValueError):
     """A settings file that cannot be exported to / imported from."""
-
-
-def export_settings(path: str, overrides: Optional[dict] = None) -> int:
-    """Export every setting to an INI file."""
-    from ... import __version__
-
-    st = app_settings()
-    values = {k: st.value(k) for k in st.allKeys() if _portable(k)}
-    for k, v in (overrides or {}).items():
-        if _portable(k):
-            values[k] = v
-    if os.path.exists(path):
-        try:
-            os.remove(path)
-        except OSError as e:
-            raise SettingsFileError("Could not replace %s: %s" % (path, e)) from e
-    out = QtCore.QSettings(path, QtCore.QSettings.Format.IniFormat)
-    for k, v in values.items():
-        out.setValue(k, v)
-    out.setValue(EXPORT_GROUP + "/format", EXPORT_FORMAT)
-    out.setValue(EXPORT_GROUP + "/version", __version__)
-    out.sync()
-    if out.status() != QtCore.QSettings.Status.NoError or not os.path.isfile(path):
-        raise SettingsFileError(
-            "Could not write %s. Check that the folder exists and that you may write to it." % path
-        )
-    return len(values)
-
-
-def import_settings(path: str) -> int:
-    """Replace every setting with the ones in ``path``."""
-    if not os.path.isfile(path):
-        raise SettingsFileError("%s does not exist." % path)
-    src = QtCore.QSettings(path, QtCore.QSettings.Format.IniFormat)
-    if src.status() != QtCore.QSettings.Status.NoError:
-        raise SettingsFileError("%s could not be read as a settings file." % path)
-    fmt = src.value(EXPORT_GROUP + "/format")
-    try:
-        fmt = int(fmt)
-    except TypeError, ValueError:
-        fmt = None
-    if fmt is None:
-        raise SettingsFileError(
-            "%s is not a settings file exported from ctgedit (Settings > Export)." % os.path.basename(path)
-        )
-    if fmt > EXPORT_FORMAT:
-        raise SettingsFileError(
-            "%s was exported by a newer ctgedit; update ctgedit to import it." % os.path.basename(path)
-        )
-    values = {k: src.value(k) for k in src.allKeys() if _portable(k)}
-    st = app_settings()
-    local = {k: st.value(k) for k in st.allKeys() if k.startswith(LOCAL_PREFIXES)}
-    st.clear()
-    for k, v in values.items():
-        st.setValue(k, v)
-    for k, v in local.items():
-        st.setValue(k, v)
-    st.sync()
-    return len(values)

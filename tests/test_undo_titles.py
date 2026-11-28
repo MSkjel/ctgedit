@@ -10,7 +10,7 @@ ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
 LABEL_CALLS = {
     "_apply",
     "batch",
-    "_Command",
+    "Command",
     "_push_step",
     "_body_edit",
     "_multi_body_edit",
@@ -141,6 +141,6 @@ def test_the_menu_and_the_status_bar_use_the_titles(fx_page):
         assert w.statusBar().currentMessage() == "Redid Move."
     finally:
         # (hidden, not closed: a close asks about the unsaved changes)
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.hide()

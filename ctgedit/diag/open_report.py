@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from ..infra.paths import lib_path_dirs, path_key
+
+
 import os
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 from ..model.document import ObjectKind
+from ..infra.logsetup import note_exception as _note_exc
 
 #: link extension -> what the log calls it
 KIND_OF_EXT = {"ctm": "genie", "ctl": "symbol", "ctt": "template"}
@@ -127,6 +131,7 @@ def _reference(po, obj):
         try:
             props = po.raw_properties()
         except Exception:  # noqa: BLE001
+            _note_exc("open_report._reference")
             props = {}
     sym = props.get("SYMBOL") if props else None
     return reference_from_symbol_value(sym) if sym else None
@@ -138,7 +143,7 @@ def _verdict(resolver, ref) -> Tuple[str, List[str]]:
         if resolver.resolve(ref) is not None:
             return "", []
     except Exception:  # noqa: BLE001
-        pass
+        _note_exc("open_report._verdict", element=ref.element)
     from ..format.symbols import LIBRARY_EXTENSIONS
 
     files: List[str] = []
@@ -147,6 +152,7 @@ def _verdict(resolver, ref) -> Tuple[str, List[str]]:
         try:
             libs = resolver.libraries(ref.library, ext)
         except Exception:  # noqa: BLE001
+            _note_exc("open_report._verdict", library=ref.library)
             libs = []
         for lib in libs:
             files.append(lib.path)
@@ -154,7 +160,7 @@ def _verdict(resolver, ref) -> Tuple[str, List[str]]:
                 if lib.has_element(ref.element):
                     readable_missing = True
             except Exception:  # noqa: BLE001
-                pass
+                _note_exc("open_report._verdict", element=ref.element)
     if not files:
         return REASON_NO_LIBRARY, []
     return (REASON_UNREADABLE if readable_missing else REASON_NO_ELEMENT), files
@@ -178,7 +184,7 @@ def include_chain(project_dir: str) -> List[Tuple[str, str, List[str]]]:
         dirs = P.resolve_project_dirs(name, user_dirs, masters)
         fresh = []
         for p in dirs:
-            key = os.path.normcase(os.path.abspath(p))
+            key = path_key(p)
             if key in seen:
                 continue
             seen.add(key)
@@ -221,18 +227,12 @@ def page_report(doc) -> PageReport:
     try:
         rep.includes = include_chain(pdir)
     except Exception:  # noqa: BLE001 -- a report only
+        _note_exc("open_report.page_report", project=pdir)
         rep.includes = []
-    chain = (
-        [pdir]
-        + [p for p in os.environ.get("CTG_LIB_PATH", "").split(os.pathsep) if p]
-        + [d for _n, _v, dirs in rep.includes for d in dirs]
-    )
-    roots = [os.path.normcase(os.path.abspath(d)).rstrip("\\/") + os.sep for d in chain]
+    chain = [pdir] + lib_path_dirs() + [d for _n, _v, dirs in rep.includes for d in dirs]
+    roots = [path_key(d).rstrip("\\/") + os.sep for d in chain]
     rep.outside = [
-        p
-        for _k, paths in rep.libraries
-        for p in paths
-        if not any(os.path.normcase(os.path.abspath(p)).startswith(r) for r in roots)
+        p for _k, paths in rep.libraries for p in paths if not any(path_key(p).startswith(r) for r in roots)
     ]
     seen: Dict[tuple, Unresolved] = {}
     no_art: Dict[tuple, Unresolved] = {}
@@ -246,6 +246,7 @@ def page_report(doc) -> PageReport:
         try:
             ref = _reference(po, o)
         except Exception:  # noqa: BLE001
+            _note_exc("open_report.page_report")
             ref = None
         if ref is None or "_compositioncaches" in ref.library.lower():
             continue

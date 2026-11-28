@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
-from ..main_window_base import (  # noqa: F401
-    ElementDocument,
+from ...infra.paths import path_key
+
+from ..prefs.settings import option
+
+from ..names import name_list
+
+from ..main_window_base import (
     QtCore,
     app_settings,
     contextlib,
     editing_mod,
     os,
 )
-from ..main_window_base import _PendingPage
+from ..main_window_base import PendingPage
 from ...infra import caches as _caches
 from ...infra import logsetup
 
@@ -58,7 +63,7 @@ def chain_saves_settled(libraries, first=None) -> list:
     for p in libraries or ():
         if not p:
             continue
-        k = _key(p)
+        k = path_key(p)
         own.add(k)
         st = _stamp(p)
         if st is not None and written_stamp(p) == st:
@@ -71,7 +76,7 @@ def chain_saves_settled(libraries, first=None) -> list:
     _HELD.clear()
     changed = []
     for p in held:
-        k = _key(p)
+        k = path_key(p)
         st = _stamp(p)
         if st is not None and _SEEN_CACHE.get(k) == st:
             continue
@@ -82,10 +87,6 @@ def chain_saves_settled(libraries, first=None) -> list:
     if not changed:
         return []
     return libraries_changed_on_disk(changed, first=first)
-
-
-def _key(path: str) -> str:
-    return os.path.normcase(os.path.abspath(path))
 
 
 def _stamp(path: str):
@@ -136,14 +137,14 @@ def libraries_changed_on_disk(paths, first=None, during: str = "") -> list:
     from ...format.fileio import note_changed
     from ..main_window import MainWindow
 
-    keys = {_key(p) for p in paths}
+    keys = {path_key(p) for p in paths}
     for p in paths:
         # (a version of the file the caches have not seen, even when its (mtime, size) is
         # the one they read)
         note_changed(p)
     editing_mod.libraries_changed()
-    gen = editing_mod._LIBRARY_GENERATION[0]
-    auto = app_settings().value("opt/auto_update_genies", True, type=bool)
+    gen = editing_mod.LIBRARY_GENERATION[0]
+    auto = option("auto_update_genies")
     done, took, waiting = [], [], []
     wins = [w for w in MainWindow.editor_windows() if w is first] + [
         w for w in MainWindow.editor_windows() if w is not first
@@ -157,7 +158,7 @@ def libraries_changed_on_disk(paths, first=None, during: str = "") -> list:
         order = [e for e in entries if e["doc"] is shown] + [e for e in entries if e["doc"] is not shown]
         for e in order:
             doc = e["doc"]
-            if isinstance(doc, _PendingPage):
+            if isinstance(doc, PendingPage):
                 continue
             if auto:
                 e["genie_gen"] = gen
@@ -200,7 +201,7 @@ def libraries_changed_on_disk(paths, first=None, during: str = "") -> list:
             w._follow_used_by_windows()
     if done or took or waiting:
         names = sorted({os.path.basename(p) for p in paths})
-        files = ", ".join(names[:3]) + (" and %d more" % (len(names) - 3) if len(names) > 3 else "")
+        files = name_list(names, 3)
         if during:
             text = "%s changed during the update of what uses %s: %s." % (
                 files,
@@ -259,7 +260,7 @@ class LibraryWatch:
     # -- settings ------------------------------------------------------------------------
     @staticmethod
     def _library_watch_on() -> bool:
-        return bool(app_settings().value("opt/library_watch", True, type=bool))
+        return bool(option("library_watch"))
 
     def _apply_library_watch(self) -> None:
         """Settings > Pages and libraries > Files and folders changed (the apply hook): the
@@ -291,7 +292,7 @@ class LibraryWatch:
         out, seen = [], set()
         for e in list(getattr(self, "_docs", ())):
             doc = e["doc"]
-            if isinstance(doc, _PendingPage) or not getattr(doc, "path", ""):
+            if isinstance(doc, PendingPage) or not getattr(doc, "path", ""):
                 continue
             der = getattr(doc, "_derivation", None)
             res = getattr(der, "resolver", None) if der is not None else None
@@ -305,7 +306,7 @@ class LibraryWatch:
                     logsetup.note_exception("ui.window.libwatch.folders", page=doc.path)
                     paths = [os.path.dirname(os.path.abspath(doc.path))]
             for p in paths:
-                k = _key(p)
+                k = path_key(p)
                 if k not in seen and os.path.isdir(p):
                     seen.add(k)
                     out.append(os.path.abspath(p))
@@ -318,7 +319,7 @@ class LibraryWatch:
             return
         want = self._library_folders()
         have = getattr(self._lib_watch, "folders", None) if self._lib_watch is not None else None
-        if have is not None and {_key(p) for p in have} == {_key(p) for p in want}:
+        if have is not None and {path_key(p) for p in have} == {path_key(p) for p in want}:
             return
         self._close_library_watch()
         if not want:
@@ -349,7 +350,7 @@ class LibraryWatch:
         paths, self._lib_pending = self._lib_pending, set()
         if _chain_holds(self._tabs_wait_for_runs()):
             for p in paths:
-                _HELD[_key(p)] = p
+                _HELD[path_key(p)] = p
             return []
         during = ""
         if _chain_running():
@@ -358,7 +359,7 @@ class LibraryWatch:
             during = UpdatePagesRun.users_busy
         changed = []
         for p in sorted(paths):
-            k = _key(p)
+            k = path_key(p)
             st = _stamp(p)
             if st is not None and _SEEN_CACHE.get(k) == st:
                 continue

@@ -1,5 +1,6 @@
 """A page save next to other writers."""
 
+from ctgedit.format.fileio import find_ci
 import json
 import os
 import subprocess
@@ -51,14 +52,13 @@ def _index_matches_scan(proj) -> list:
     """The project's .NDX files (pg*, activex, pages, changes, ...) whose entries are not
     their table's records (recnos 1..n, each key its record's field)."""
     from ctgedit.format.dbf import Dbf, Ndx
-    from ctgedit.io import pgregister as PR
 
     bad = []
     for fn in os.listdir(proj):
         low = fn.lower()
         if not low.endswith(".ndx"):
             continue
-        dp = PR._find_file(proj, fn[:-4] + ".DBF")
+        dp = find_ci(proj, fn[:-4] + ".DBF")
         if dp is None:
             continue
         with Dbf(dp, writable=False) as d, Ndx(os.path.join(proj, fn), writable=False) as nx:
@@ -130,7 +130,7 @@ def test_a_held_table_refuses_a_batch_save_and_delays_an_editor_saves_rows(proj)
     PR.delete_page_rows(proj, PAGE)  # (so the register has rows to write)
     before = _tables(proj)
     ctg = open(page, "rb").read()
-    close = _share_read_handle(PR._find_file(proj, "pgdynobj.DBF"))
+    close = _share_read_handle(find_ci(proj, "pgdynobj.DBF"))
     try:
         doc = EditableDocument.open(page)
         with pytest.raises(ProjectDatabaseInUse) as e:

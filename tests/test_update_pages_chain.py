@@ -1,5 +1,6 @@
 """Update Pages: save the library genies in the chain first."""
 
+from ctgedit.ui.main_window import MainWindow
 import os
 import sys
 import types
@@ -138,7 +139,7 @@ def test_the_saved_chain_is_current(chain, tmp_path):
     assert not GU.chain_plan([str(proj)]).elements
     m = backups.read_manifest(bk)
     assert m["kind"] == "update-pages"
-    assert sorted(os.path.basename(e["library"]) for e in m["entries"]) == ["chainlib.ctm", "chaintpl.ctt"]
+    assert sorted(os.path.basename(e["original"]) for e in m["entries"]) == ["chainlib.ctm", "chaintpl.ctt"]
     info = next(b for b in backups.list_backups(str(tmp_path)) if b.path == bk)
     assert info.noun == "files"
 
@@ -328,8 +329,8 @@ def _run(
     try:
         w._update_pages()
     finally:
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.close()
         w.deleteLater()
     return calls, shown, w
@@ -363,7 +364,6 @@ def test_cancel_while_saving_the_chain_stops_before_the_pages(app, tmp_path, mon
 
 def test_the_summary_lists_the_chain_first():
     from ctgedit.io import genieusage as GU
-    from ctgedit.ui.window.library import LibraryCommands
 
     chain = GU.UpdateUsersReport(
         elements_saved=["l.b", "l.t"],
@@ -374,7 +374,7 @@ def test_the_summary_lists_the_chain_first():
     )
     rep = _fake_report()
     rep.updated = []
-    lines = LibraryCommands._update_pages_summary(rep, "BK", (0, 0, 0, 0), chain=chain)
+    lines = MainWindow._update_pages_summary(rep, "BK", (0, 0, 0, 0), chain=chain)
     # (every line ends in one full stop)
     assert lines[:5] == [
         "2 library genies saved again first: l.b, l.t.",
@@ -386,7 +386,7 @@ def test_the_summary_lists_the_chain_first():
     assert lines[5].startswith("2 pages checked in 1 project,")
     assert any(x.startswith("Backups of the changed libraries: BK") for x in lines)
     # without the chain the box is as it was
-    plain = LibraryCommands._update_pages_summary(rep, "BK", (0, 0, 0, 0))
+    plain = MainWindow._update_pages_summary(rep, "BK", (0, 0, 0, 0))
     assert plain[0].startswith("2 pages checked") and not any("librar" in x for x in plain)
 
 
@@ -478,14 +478,13 @@ def test_the_summary_puts_the_skips_to_act_on_first():
     """The supplied libraries' genies are one counted line after the skips the user can act
     on; past 10 of those a line says how many more (the log has them all)."""
     from ctgedit.io import genieusage as GU
-    from ctgedit.ui.window.library import LibraryCommands
 
     shipped = ["sxw.g%02d: %s" % (i, GU.SHIPPED_WHY) for i in range(12)]
     chain = GU.UpdateUsersReport(
         elements_saved=["l.b"],
         skipped=shipped + ["l.w: it has unsaved changes in the editor (save it there, then update again)"],
     )
-    lines = LibraryCommands._chain_summary(chain)
+    lines = MainWindow._chain_summary(chain)
     # (a cut list ends 'and N more')
     assert lines == [
         "1 library genie saved again first: l.b.",
@@ -494,11 +493,11 @@ def test_the_summary_puts_the_skips_to_act_on_first():
         "sxw.g02, sxw.g03, sxw.g04, sxw.g05, sxw.g06, sxw.g07, sxw.g08, sxw.g09 and 2 more.",
     ]
     one = GU.UpdateUsersReport(skipped=["sxw.g: %s" % GU.SHIPPED_WHY])
-    assert LibraryCommands._chain_summary(one) == [
+    assert MainWindow._chain_summary(one) == [
         "1 genie in libraries supplied with Plant SCADA was left alone: sxw.g."
     ]
     many = GU.UpdateUsersReport(skipped=["l.e%02d: its library file is read only" % i for i in range(13)])
-    lines = LibraryCommands._chain_summary(many)
+    lines = MainWindow._chain_summary(many)
     assert lines[:10] == ["Not saved again: l.e%02d: its library file is read only." % i for i in range(10)]
     assert lines[10] == "3 more were not saved again. The log lists them."
     assert len(lines) == 11

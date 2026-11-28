@@ -10,28 +10,27 @@ from typing import Dict, List, NamedTuple, Optional, Tuple
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from ..number_field import NumberField
-from .fields import NUMBER_RANGES, _L_EXPR, _L_SLIDER, _Field, _i, _OptionalSpin, _Sub
+from .fields import NUMBER_RANGES, L_EXPR, L_SLIDER, Field, i, OptionalSpin, Sub
+from ...infra.logsetup import note_exception as _note_exc
 
 #: CtDraw's 'At minimum / maximum' spin range (the table the
 #: Properties panel shares: fields.NUMBER_RANGES)
 _LO, _HI = NUMBER_RANGES["offset"][:2]
-#: the angle controls' range (-360 .. 360)
-_ANG = NUMBER_RANGES["angle"][1]
 
 
 def _px(label, key, default):
     lo, hi, unit = NUMBER_RANGES["offset"]
-    return _i(label, key, default, unit, lo=lo, hi=hi)
+    return i(label, key, default, unit, lo=lo, hi=hi)
 
 
 def _pc(label, key, default):
     lo, hi, unit = NUMBER_RANGES["size"]
-    return _i(label, key, default, unit, lo=lo, hi=hi)
+    return i(label, key, default, unit, lo=lo, hi=hi)
 
 
 def _deg(label, key, default):
     lo, hi, unit = NUMBER_RANGES["angle"]
-    return _i(label, key, default, unit, lo=lo, hi=hi)
+    return i(label, key, default, unit, lo=lo, hi=hi)
 
 
 _MOVE_NOTE = "Offsets are pixels from where the object is drawn. A negative offset moves the other way."
@@ -41,10 +40,10 @@ _ROT_NOTE = (
 )
 _SCALE_NOTE = "Sizes are percentages of the size drawn; more than 100 % is allowed."
 
-MOVE_H = _Sub(
+MOVE_H = Sub(
     "Horizontal",
     [
-        _Field("Movement expression:", "MVX", limit=_L_EXPR, range=True),
+        Field("Movement expression:", "MVX", limit=L_EXPR, range=True),
         _px("Offset at minimum (left):", "MVXMINPT", 0),
         _px("Offset at maximum (right):", "MVXMAXPT", 500),
     ],
@@ -52,10 +51,10 @@ MOVE_H = _Sub(
     primary="MVX",
     note=_MOVE_NOTE,
 )
-MOVE_V = _Sub(
+MOVE_V = Sub(
     "Vertical",
     [
-        _Field("Movement expression:", "MVY", limit=_L_EXPR, range=True),
+        Field("Movement expression:", "MVY", limit=L_EXPR, range=True),
         _px("Offset at maximum (up):", "MVYMAXPT", 500),
         _px("Offset at minimum (down):", "MVYMINPT", 0),
     ],
@@ -63,10 +62,10 @@ MOVE_V = _Sub(
     primary="MVY",
     note=_MOVE_NOTE,
 )
-MOVE_ROT = _Sub(
+MOVE_ROT = Sub(
     "Rotational",
     [
-        _Field("Angle expression:", "ROT", limit=_L_EXPR, range=True),
+        Field("Angle expression:", "ROT", limit=L_EXPR, range=True),
         _deg("Angle at minimum (anticlockwise):", "ROTMINPC", 0),
         _deg("Angle at maximum (clockwise):", "ROTMAXPC", 360),
     ],
@@ -74,10 +73,10 @@ MOVE_ROT = _Sub(
     primary="ROT",
     note=_ROT_NOTE,
 )
-SCALE_H = _Sub(
+SCALE_H = Sub(
     "Horizontal",
     [
-        _Field("Scaling expression:", "SZX", limit=_L_EXPR, range=True),
+        Field("Scaling expression:", "SZX", limit=L_EXPR, range=True),
         _pc("Width at minimum:", "SZXMINPC", 0),
         _pc("Width at maximum:", "SZXMAXPC", 100),
     ],
@@ -85,10 +84,10 @@ SCALE_H = _Sub(
     primary="SZX",
     note=_SCALE_NOTE,
 )
-SCALE_V = _Sub(
+SCALE_V = Sub(
     "Vertical",
     [
-        _Field("Scaling expression:", "SZY", limit=_L_EXPR, range=True),
+        Field("Scaling expression:", "SZY", limit=L_EXPR, range=True),
         _pc("Height at minimum:", "SZYMINPC", 0),
         _pc("Height at maximum:", "SZYMAXPC", 100),
     ],
@@ -97,11 +96,11 @@ SCALE_V = _Sub(
     note=_SCALE_NOTE,
 )
 _TAG_WIZARD = ("tag",)
-SLIDER_H = _Sub(
+SLIDER_H = Sub(
     "Horizontal",
     [
-        _Field("Tag:", "MVXSL", limit=_L_SLIDER, wizard=_TAG_WIZARD),
-        _Field("Continuous update of tag", "MVXSLMODE", "slmode", tag="MVXSL"),
+        Field("Tag:", "MVXSL", limit=L_SLIDER, wizard=_TAG_WIZARD),
+        Field("Continuous update of tag", "MVXSLMODE", "slmode", tag="MVXSL"),
         _px("Offset at minimum (left):", "MVXMINPT", 0),
         _px("Offset at maximum (right):", "MVXMAXPT", 500),
     ],
@@ -109,11 +108,11 @@ SLIDER_H = _Sub(
     primary="MVXSL",
     note="The offsets are the horizontal movement's: they limit the slide.",
 )
-SLIDER_V = _Sub(
+SLIDER_V = Sub(
     "Vertical",
     [
-        _Field("Tag:", "MVYSL", limit=_L_SLIDER, wizard=_TAG_WIZARD),
-        _Field("Continuous update of tag", "MVYSLMODE", "slmode", tag="MVYSL"),
+        Field("Tag:", "MVYSL", limit=L_SLIDER, wizard=_TAG_WIZARD),
+        Field("Continuous update of tag", "MVYSLMODE", "slmode", tag="MVYSL"),
         _px("Offset at maximum (up):", "MVYMAXPT", 500),
         _px("Offset at minimum (down):", "MVYMINPT", 0),
     ],
@@ -121,11 +120,11 @@ SLIDER_V = _Sub(
     primary="MVYSL",
     note="The offsets are the vertical movement's: they limit the slide.",
 )
-SLIDER_ROT = _Sub(
+SLIDER_ROT = Sub(
     "Rotational",
     [
-        _Field("Tag:", "ROTSL", limit=_L_SLIDER, wizard=_TAG_WIZARD),
-        _Field("Continuous update of tag", "ROTSLMODE", "slmode", tag="ROTSL"),
+        Field("Tag:", "ROTSL", limit=L_SLIDER, wizard=_TAG_WIZARD),
+        Field("Continuous update of tag", "ROTSLMODE", "slmode", tag="ROTSL"),
         _deg("Angle at minimum (anticlockwise):", "ROTMINPC", 0),
         _deg("Angle at maximum (clockwise):", "ROTMAXPC", 360),
     ],
@@ -589,7 +588,7 @@ class MotionEditor:
         self._read_only = False
 
     # -- building ----------------------------------------------------------------------
-    def add_axis(self, family: str, picker: AxisPicker, sub: _Sub) -> None:
+    def add_axis(self, family: str, picker: AxisPicker, sub: Sub) -> None:
         self._axes.setdefault(family, []).append((picker, sub))
         picker.changed.connect(lambda f=family, p=picker: self._axis_changed(f, p))
         drops = getattr(self.sheet._doc, "_genie_root_drops", None)
@@ -597,10 +596,10 @@ class MotionEditor:
             if drops is not None and drops(self.sheet._index, AXES[family].mode):
                 self._dropped.add(family)
         except Exception:  # noqa: BLE001 -- a hint only
-            pass
+            _note_exc("objprops.motion.add_axis")
         self._load_axis(family)
 
-    def watch(self, sub: _Sub) -> None:
+    def watch(self, sub: Sub) -> None:
         """Fill ``sub``'s companion fields with CtDraw's defaults when its
         primary field is typed."""
         w = self.sheet.field_widget(sub.primary)
@@ -658,7 +657,7 @@ class MotionEditor:
             if not entries:
                 continue
             f, w = entries[0]
-            if not isinstance(w, _OptionalSpin) or w.locked or not w.isEnabledTo(w.parentWidget()):
+            if not isinstance(w, OptionalSpin) or w.locked or not w.isEnabledTo(w.parentWidget()):
                 continue
             default = COMPANION_DEFAULTS[ck]
             if on:
@@ -684,7 +683,7 @@ class MotionEditor:
                 out.extend(axis_edits(AXES[family], state))
         return out
 
-    def on_clear(self, sub: _Sub) -> None:
+    def on_clear(self, sub: Sub) -> None:
         for family, pickers in self._axes.items():
             if not any(ps is sub for _p, ps in pickers):
                 continue
@@ -729,7 +728,7 @@ def motion_editor(sheet) -> MotionEditor:
 _PAGE_AXIS = {"move_rot": "rot", "slider_rot": "rot", "scale_h": "sx", "scale_v": "sy"}
 
 
-def _build(sheet, page, sub: _Sub):
+def _build(sheet, page, sub: Sub):
     ed = motion_editor(sheet)
     family = _PAGE_AXIS.get(page.id)
 

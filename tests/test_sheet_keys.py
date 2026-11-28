@@ -275,8 +275,8 @@ def test_window_apply_refreshes_and_is_one_ctrl_z(page):
         win.undo()
         assert win.doc.object_properties(i) == before
     finally:
-        if win in MainWindow._instances:
-            MainWindow._instances.remove(win)
+        if win in MainWindow.instances:
+            MainWindow.instances.remove(win)
 
 
 # ------------------------------------------------------------------ sliders / clear

@@ -16,6 +16,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from ... import __version__
 from ...infra import updates
 from ...infra.logsetup import note_exception
+from ..messages import warn
 
 #: the check when ctgedit starts: at most once in this many seconds, this long after the start
 STARTUP_INTERVAL_S = 20 * 3600
@@ -273,7 +274,7 @@ def install_and_quit(installer: str, window=None) -> bool:
 
     app.release_app_mutex()
     if not QtCore.QProcess.startDetached(installer, list(INSTALLER_ARGS)):
-        QtWidgets.QMessageBox.warning(
+        warn(
             None,
             "Check for Updates",
             "The installer did not start. Run it yourself: %s" % installer,

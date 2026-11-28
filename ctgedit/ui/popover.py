@@ -2,22 +2,9 @@
 
 from __future__ import annotations
 
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore
 
 from .colour_picker import ColourPicker
-
-
-class Popover(QtWidgets.QFrame):
-    def __init__(self, parent=None):
-        super().__init__(parent, QtCore.Qt.Popup)
-        self.setObjectName("Popover")
-        self.setStyleSheet("#Popover { background: #23262b; border: 1px solid #3a3f46; border-radius: 6px; }")
-
-    def open_under(self, widget: QtWidgets.QWidget) -> None:
-        self.adjustSize()
-        pos = widget.mapToGlobal(QtCore.QPoint(0, widget.height() + 2))
-        self.move(pos)
-        self.show()
 
 
 class ColourPopover(ColourPicker):

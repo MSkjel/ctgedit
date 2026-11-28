@@ -141,7 +141,7 @@ def _fill_applied(doc) -> None:
         if doc._in_genie_context(i):
             continue
         props = doc.object_properties(i)
-        get = F._getter(props)
+        get = F.getter(props)
         fc = doc.fill_colour(i)
         target = F.target_values(fc, get)
         if fc.mode == F.THRESHOLD:

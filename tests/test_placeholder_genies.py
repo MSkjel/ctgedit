@@ -66,8 +66,8 @@ def test_opening_the_page_places_them_as_an_automatic_step(page):
         assert "place genies" in [u.label for u in w.doc._undo]
     finally:
         w.doc.dirty = False
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.close()
         app.processEvents()
 

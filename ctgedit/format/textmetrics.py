@@ -8,18 +8,20 @@ import os
 import re
 import sys
 import threading
+import weakref
 from typing import Optional, Tuple
 
 from .cnum import is_digits
 from .page import PageObject
 from .textcodec import CODEC
+from ..infra.logsetup import note_exception as _note_exc
 
 # lfEscapement per orient = CtDraw's {0, 0, 1800, -900, 900}
 # (orient 3 = 90 CW, 4 = 270 CW)
 _ESCAPEMENT = {1: 0, 2: 1800, 3: -900, 4: 900}
 
 
-class _Gdi:
+class Gdi:
     """Screen-DC GDI access (Windows); ``None`` elsewhere."""
 
     _inst = None
@@ -109,7 +111,7 @@ class _Gdi:
         if cls._inst is None:
             try:
                 cls._inst = cls()
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001 -- swallow-ok: no GDI (not Windows): no metrics
                 return None
         return cls._inst
 
@@ -133,6 +135,8 @@ def _lines(raw: bytes):
     return out
 
 
+#: the lookup use_tag_formats installed: the function, or a weak reference to a document's
+#: bound method (a closed document is not kept for it)
 _tag_format = None
 
 
@@ -142,12 +146,15 @@ def use_tag_formats(lookup) -> None:
     tag is unknown. The editing layer installs its project's (single-threaded
     UI: the document being edited)."""
     global _tag_format
-    _tag_format = lookup
+    bound = getattr(lookup, "__self__", None) is not None and getattr(lookup, "__func__", None) is not None
+    _tag_format = weakref.WeakMethod(lookup) if bound else lookup
 
 
 def installed_tag_format():
-    """The tag-database lookup :func:`use_tag_formats` installed (None: none)."""
-    return _tag_format
+    """The tag-database lookup :func:`use_tag_formats` installed (None: none, or its
+    document is gone)."""
+    f = _tag_format
+    return f() if isinstance(f, weakref.WeakMethod) else f
 
 
 _INSTALLED = object()
@@ -157,7 +164,7 @@ def measured_string(
     po: PageObject, caption: Optional[str], tag_format=_INSTALLED, props: Optional[dict] = None
 ) -> Optional[str]:
     """The string a text displays, or None when it needs a tag lookup that isn't installed."""
-    lookup = _tag_format if tag_format is _INSTALLED else tag_format
+    lookup = installed_tag_format() if tag_format is _INSTALLED else tag_format
     if props is None:
         props = po.raw_properties()
     try:
@@ -243,6 +250,7 @@ def _expr_tag_format(expr: str, lookup) -> Optional[str]:
         try:
             fmt = lookup(m.group(0))
         except Exception:  # noqa: BLE001 -- a lookup failure: no format
+            _note_exc("textmetrics._expr_tag_format", name=m.group(0))
             fmt = None
         if fmt:
             return fmt
@@ -252,7 +260,7 @@ def _expr_tag_format(expr: str, lookup) -> Optional[str]:
 def system_dpi() -> Optional[int]:
     """The LOGPIXELSY text extents are measured at: the system DPI a
     system-aware process (CtDraw) sees. None without GDI."""
-    g = _Gdi.get()
+    g = Gdi.get()
     return None if g is None else int(g.logpixelsy)
 
 
@@ -286,7 +294,7 @@ def dpi_report() -> dict:
     process's own awareness, and that awareness (0 unaware, 1 system,
     2 per monitor)."""
     out = {"text_dpi": system_dpi(), "process_dpi": None, "awareness": None}
-    g = _Gdi.get()
+    g = Gdi.get()
     if g is None:
         return out
     try:
@@ -297,7 +305,7 @@ def dpi_report() -> dict:
         u.GetThreadDpiAwarenessContext.restype = g.ct.c_void_p
         u.GetAwarenessFromDpiAwarenessContext.argtypes = [g.ct.c_void_p]
         out["awareness"] = int(u.GetAwarenessFromDpiAwarenessContext(u.GetThreadDpiAwarenessContext()))
-    except Exception:  # noqa: BLE001 -- diagnostics only
+    except Exception:  # noqa: BLE001 -- swallow-ok: diagnostics only; older Windows lacks some calls
         pass
     return out
 
@@ -314,7 +322,7 @@ def extent(
     text: str, face: str, points: int, attribs: int, orient: int, charset: int, anchor: Tuple[int, int]
 ) -> Optional[Tuple[int, int, int, int]]:
     """The union box of ``text`` laid out from the baseline ``anchor``."""
-    g = _Gdi.get()
+    g = Gdi.get()
     if g is None:
         return None
     key = (text, face, points, attribs, orient, charset, g.logpixelsy)
@@ -437,7 +445,7 @@ def _extent(g, text, face, points, attribs, orient, charset, anchor):
 
 def caption_metrics(lines, face: str, points: int, attribs: int, charset: int = 0):
     """Measure a button caption's lines with the button font."""
-    g = _Gdi.get()
+    g = Gdi.get()
     if g is None:
         return None
     with g.system_aware():
@@ -533,7 +541,7 @@ _ANSI_FIXED_FONT = 11
 
 def named_font_lines(font: Optional[Tuple[str, int]], strings) -> Optional[tuple]:
     """Measure strings in a project's named font."""
-    g = _Gdi.get()
+    g = Gdi.get()
     if g is None:
         return None
     strings = tuple(strings)

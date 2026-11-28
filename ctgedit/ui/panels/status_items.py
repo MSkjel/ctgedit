@@ -1,6 +1,8 @@
 """The status bar."""
 
 from __future__ import annotations
+
+from ...infra.paths import path_key
 from ..style.theme import sp as _sp  # (the spacing scale)
 
 import os
@@ -607,7 +609,7 @@ class ProjectButton(QtWidgets.QToolButton):
         head = m.addAction("Pages of %s" % name)
         head.setEnabled(False)
         pages = project_pages(pdir)
-        here = os.path.normcase(os.path.abspath(doc.path))
+        here = path_key(doc.path)
         for p in pages[: self.MAX_PAGES]:
             a = m.addAction(os.path.splitext(os.path.basename(p))[0])
             a.setCheckable(True)
@@ -955,18 +957,19 @@ class ZoomField(QtWidgets.QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         self.button = ZoomButton(window, self)
         lay.addWidget(self.button)
-        self.spin = QtWidgets.QSpinBox(self)
-        self.spin.setRange(1, 6400)
-        self.spin.setSuffix(" %")
-        self.spin.setAccessibleName("Zoom")
-        self.spin.setToolTip("Type a zoom and press Enter. Esc goes back")
-        self.spin.hide()
-        self.spin.editingFinished.connect(self._spin_done)
-        self.spin.installEventFilter(self)
-        lay.addWidget(self.spin)
+        from ..editor.navbar import ZoomField as ZoomEntry
+
+        # (the navigation bar's field: the same zoom typing, Up / Down through the levels)
+        self.entry = ZoomEntry(window.view, self)
+        self.entry.setAccessibleName("Zoom")
+        self.entry.setToolTip("Type a zoom and press Enter. Esc goes back")
+        self.entry.hide()
+        self.entry.returnPressed.connect(self._entry_done)
+        self.entry.installEventFilter(self)
+        lay.addWidget(self.entry)
 
     def watched(self) -> list:
-        return [self.button, self.spin]
+        return [self.button, self.entry]
 
     def setText(self, text: str) -> None:  # noqa: N802 -- (tabs.py blanks it on close)
         self.button.setText(text)
@@ -986,38 +989,30 @@ class ZoomField(QtWidgets.QWidget):
 
     def edit(self) -> None:
         """Ctrl+click: type a zoom in place."""
-        v = self._win.view
-        self.spin.setValue(int(round(v.zoom() * 100)))
+        from ..editor.navbar import zoom_text
+
+        self.entry.setText(zoom_text(self._win.view.zoom()))
         self.button.hide()
-        self.spin.show()
-        self.spin.setFocus(QtCore.Qt.OtherFocusReason)
-        self.spin.selectAll()
+        self.entry.show()
+        self.entry.setFocus(QtCore.Qt.OtherFocusReason)
+        self.entry.selectAll()
 
-    def _spin_done(self) -> None:
-        if self.spin.isHidden():
-            return
-        if self.spin.hasFocus() or getattr(self, "_apply", False):
-            self._win.view.set_zoom(self.spin.value() / 100.0)
-        self._close_spin()
+    def _entry_done(self) -> None:
+        # (the field applied it: a zoom it could not read stays, marked, to be corrected)
+        if not self.entry.invalid():
+            self._close_entry()
 
-    def _close_spin(self) -> None:
-        self._apply = False
-        self.spin.hide()
+    def _close_entry(self) -> None:
+        self.entry.hide()
         self.button.show()
         self._win.view.setFocus(QtCore.Qt.OtherFocusReason)
 
     def eventFilter(self, obj, ev) -> bool:  # noqa: N802 -- Qt naming
-        if obj is self.spin and ev.type() == QtCore.QEvent.KeyPress:
-            if ev.key() == QtCore.Qt.Key_Escape:
-                self._close_spin()
-                return True
-            if ev.key() in (QtCore.Qt.Key_Return, QtCore.Qt.Key_Enter):
-                self.spin.interpretText()
-                self._apply = True
-                self._spin_done()
-                return True
-        if obj is self.spin and ev.type() == QtCore.QEvent.FocusOut and not self.spin.isHidden():
-            QtCore.QTimer.singleShot(0, self, self._close_spin)
+        if obj is self.entry and ev.type() == QtCore.QEvent.KeyPress and ev.key() == QtCore.Qt.Key_Escape:
+            self._close_entry()
+            return True
+        if obj is self.entry and ev.type() == QtCore.QEvent.FocusOut and not self.entry.isHidden():
+            QtCore.QTimer.singleShot(0, self, self._close_entry)
         return False
 
 

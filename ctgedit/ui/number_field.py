@@ -427,12 +427,10 @@ class ScrubLabel(QtWidgets.QLabel):
         field: NumberField,
         parent=None,
         enabled: bool = True,
-        preview: Optional[Callable[[Optional[int]], None]] = None,
     ):
         super().__init__(text, parent)
         self.field = field
         self.setBuddy(field)
-        self.preview = preview
         self._enabled = False
         self._press: Optional[QtCore.QPointF] = None
         self._last_x = 0.0
@@ -510,8 +508,6 @@ class ScrubLabel(QtWidgets.QLabel):
         if v != self.field.value():
             self.field.note_drag()
             self.field.setValue(v)
-            if self.preview is not None:
-                self.preview(v)
 
     def finish(self, commit: bool = True) -> None:
         """End the drag: ``commit`` applies the value once, else it goes back."""
@@ -519,8 +515,6 @@ class ScrubLabel(QtWidgets.QLabel):
         self._press = None
         self._dragging = False
         self.releaseKeyboard()
-        if self.preview is not None and was:
-            self.preview(None)
         if not was:
             return
         if commit:

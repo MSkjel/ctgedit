@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ...infra.paths import path_key
+
 import bisect
 import os
 import re
@@ -14,6 +16,13 @@ from ... import cicode_names as _cicode_names
 from ..panels import panel_options as _panels
 from . import validators as V
 from .range_field import RangeField, default_range, join_range, split_range
+from ...infra.logsetup import note_exception as _note_exc
+
+#: Qt's roles, read once (an attribute of QtCore.Qt costs about 1 us)
+_DISPLAY_ROLE = QtCore.Qt.DisplayRole
+_EDIT_ROLE = QtCore.Qt.EditRole
+_FOREGROUND_ROLE = QtCore.Qt.ForegroundRole
+_TOOLTIP_ROLE = QtCore.Qt.ToolTipRole
 
 # -- context -------------------------------------------------------------------
 #: (project dir, extra names) -> [tag index, names]
@@ -23,10 +32,10 @@ _COMPLETION_MODELS: dict = {}
 _WARMED: set = set()
 
 
-def _warm_tags(project_dir: str) -> None:
+def warm_tags(project_dir: str) -> None:
     """Read the scope's tag index in a background thread (once per folder), so
     the first completion or Insert Tag finds it read."""
-    key = os.path.normcase(os.path.abspath(project_dir))
+    key = path_key(project_dir)
     if key in _WARMED:
         return
     _WARMED.add(key)
@@ -36,7 +45,7 @@ def _warm_tags(project_dir: str) -> None:
             from ...io.project import tag_index
 
             tag_index(project_dir)
-        except Exception:  # noqa: BLE001 -- a warm-up only
+        except Exception:  # noqa: BLE001  # swallow-ok: a warm-up; the read that needs it notes a failure
             pass
 
     import threading
@@ -78,6 +87,7 @@ class TagCompletionModel(QtCore.QAbstractTableModel):
             try:
                 self._index = tag_index(self.project_dir) if self.project_dir else TagIndex(())
             except Exception:  # noqa: BLE001
+                _note_exc("objprops.expression.tag_index")
                 self._index = TagIndex(())
         return self._index
 
@@ -202,17 +212,21 @@ class TagCompletionModel(QtCore.QAbstractTableModel):
     def columnCount(self, parent=QtCore.QModelIndex()) -> int:  # noqa: N802
         return 2
 
-    def data(self, index, role=QtCore.Qt.DisplayRole):
-        if not index.isValid() or index.row() >= len(self._rows):
+    def data(self, index, role=_DISPLAY_ROLE):
+        # (the popup's column widths ask every row for every role on each key press)
+        if role != _DISPLAY_ROLE and role != _EDIT_ROLE and role != _FOREGROUND_ROLE:
             return None
-        if role in (QtCore.Qt.DisplayRole, QtCore.Qt.EditRole):
-            return self._rows[index.row()][index.column()]
-        if role == QtCore.Qt.ForegroundRole and index.column() == 1:
+        row = index.row()
+        if not 0 <= row < len(self._rows):
+            return None
+        if role != _FOREGROUND_ROLE:
+            return self._rows[row][index.column()]
+        if index.column() == 1:
             try:
                 from ..style.theme import COLORS
 
                 return QtGui.QColor(COLORS.get("text_dim", "#969ca5"))
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001  # swallow-ok: the default colour without the theme
                 return QtGui.QColor("#969ca5")
         return None
 
@@ -286,7 +300,8 @@ def completion_model_for(project_dir: Optional[str]) -> TagCompletionModel:
 
             key = scope(project_dir).key
         except Exception:  # noqa: BLE001
-            key = (os.path.normcase(os.path.abspath(project_dir)),)
+            _note_exc("objprops.expression.completion_model_for")
+            key = (path_key(project_dir),)
     m = _COMPLETION_MODELS.get(key)
     if m is None:
         m = TagCompletionModel(project_dir)
@@ -330,8 +345,8 @@ class ExpressionContext:
 
                 preload(pdir)
             except Exception:  # noqa: BLE001
-                pass
-            _warm_tags(pdir)
+                _note_exc("objprops.expression.for_document")
+            warm_tags(pdir)
             # (and the equipment names an Alarm Indicator page or a genie form completes)
             from ..panels.sa_pickers import warm_equipment
 
@@ -351,6 +366,7 @@ class ExpressionContext:
             try:
                 self._index = tag_index(self.project_dir) if self.project_dir else TagIndex(())
             except Exception:  # noqa: BLE001 -- the list is an aid, never required
+                _note_exc("objprops.expression.tag_index")
                 self._index = TagIndex(())
             self._names = None  # (the names follow the new index)
         return self._index
@@ -369,7 +385,7 @@ class ExpressionContext:
                 return True
         except Exception:  # noqa: BLE001  # swallow-ok: not known: read in the background
             pass
-        _warm_tags(self.project_dir)
+        warm_tags(self.project_dir)
         return False
 
     def _index_current(self) -> bool:
@@ -471,6 +487,7 @@ class ExpressionContext:
             try:
                 self._trends = trend_tags(self.project_dir) if self.project_dir else ()
             except Exception:  # noqa: BLE001
+                _note_exc("objprops.expression.trend_tags")
                 self._trends = ()
         return self._trends
 
@@ -479,6 +496,7 @@ class ExpressionContext:
         try:
             return self.functions().is_function(name)
         except Exception:  # noqa: BLE001
+            _note_exc("objprops.expression.is_function")
             return None
 
     def is_name(self, name: str) -> Optional[bool]:
@@ -541,7 +559,7 @@ def _wizard_icon() -> QtGui.QIcon:
         from ..style.theme import COLORS
 
         fg = QtGui.QColor(COLORS.get("text", "#d4d4d4"))
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # swallow-ok: the default colour without the theme
         fg = QtGui.QColor("#d4d4d4")
     pm = QtGui.QPixmap(16, 16)
     pm.fill(QtCore.Qt.transparent)
@@ -824,6 +842,7 @@ class ExpressionField(QtWidgets.QLineEdit):
         try:
             lo, hi, why = default_range(self.inner_text(), lookup)
         except Exception:  # noqa: BLE001
+            _note_exc("objprops.expression._update_hint")
             lo, hi, why = "0.0", "100.0", ""
         self._range.set_default_hint(lo, hi, why)
 
@@ -1156,8 +1175,8 @@ class _RowsModel(QtCore.QAbstractTableModel):
     def columnCount(self, parent=QtCore.QModelIndex()) -> int:  # noqa: N802
         return len(self._headers)
 
-    def data(self, index, role=QtCore.Qt.DisplayRole):
-        if role not in (QtCore.Qt.DisplayRole, QtCore.Qt.ToolTipRole) or not index.isValid():
+    def data(self, index, role=_DISPLAY_ROLE):
+        if (role != _DISPLAY_ROLE and role != _TOOLTIP_ROLE) or not index.isValid():
             return None
         cols = self._rows[index.row()][0]
         return str(cols[index.column()]) if index.column() < len(cols) else ""
@@ -1185,12 +1204,16 @@ class ListPickerDialog(QtWidgets.QDialog):
         self.resize(640, 460)
         lay = QtWidgets.QVBoxLayout(self)
         top = QtWidgets.QHBoxLayout()
-        self.search = SearchField("Search", tip=self.SEARCH_TIP)
+        self.search = SearchField("Search", tip=self.SEARCH_TIP, regex_key="%s filter" % self.TITLE)
         top.addWidget(self.search, 1)
         self.kind = QtWidgets.QComboBox()
         for label, _pred in self.FILTERS:
             self.kind.addItem(label)
         self.kind.setVisible(bool(self.FILTERS))
+        if self.FILTERS:
+            from ..remember import keep
+
+            keep(self.kind, "%s kind" % self.TITLE)
         top.addWidget(self.kind)
         self._top = top
         lay.addLayout(top)
@@ -1216,11 +1239,10 @@ class ListPickerDialog(QtWidgets.QDialog):
         self.view.doubleClicked.connect(lambda _i: self._accept())
         self.search.returnPressed.connect(self._accept)
         self._result = None
-        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
-        try:
+        from ..busy import wait_cursor
+
+        with wait_cursor():
             self.load()
-        finally:
-            QtWidgets.QApplication.restoreOverrideCursor()
         self.view.selectionModel().currentChanged.connect(lambda cur, _p: self._show(cur))
         self._apply_filter()
         # (the least each column gets; the helper fits them when the list is first shown)

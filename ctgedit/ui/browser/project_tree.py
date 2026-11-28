@@ -110,7 +110,7 @@ def included_by_note(info: ProjectInfo, shown: int = 2) -> str:
     return "included by %s%s" % (head, " +%d" % more if more > 0 else "")
 
 
-class _RowDelegate(QtWidgets.QStyledItemDelegate):
+class RowDelegate(QtWidgets.QStyledItemDelegate):
     """Paints a row as its name, a dim note and a right-aligned dim count."""
 
     def paint(self, p: QtGui.QPainter, opt, index) -> None:
@@ -208,7 +208,7 @@ class ProjectTree(QtWidgets.QTreeWidget):
         self.setTextElideMode(QtCore.Qt.ElideMiddle)
         self.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
         self.setAccessibleName("Projects")
-        self.setItemDelegate(_RowDelegate(self))
+        self.setItemDelegate(RowDelegate(self))
         self._section_font = QtGui.QFont(self.font())
         self._section_font.setBold(True)
         self.itemExpanded.connect(self._fill_pending)
@@ -275,7 +275,7 @@ class ProjectTree(QtWidgets.QTreeWidget):
         it.setData(0, TipRole, tip)
         if scope is not None:
             it.setData(0, ScopeRole, scope)
-        it.setIcon(0, icon(glyph, 16))
+        it.setIcon(0, icon(glyph))
         if tip:
             it.setToolTip(0, tip)
         if not selectable:

@@ -173,7 +173,30 @@ class PictureImportDialog(QtWidgets.QDialog):
         lay.addWidget(QtWidgets.QLabel(intro))
         body = QtWidgets.QHBoxLayout()
         lay.addLayout(body, 1)
+        body.addLayout(self._build_preview_column(), 1)
 
+        right = QtWidgets.QVBoxLayout()
+        self._build_size(right, target, fit, each_size)
+        self._build_kind(right, drawing)
+        self._build_pixels(right, st)
+        self._build_transparency(right)
+        # -- favourite
+        self.favourite = QtWidgets.QCheckBox("Keep in File > Import Recent as a favourite")
+        self.favourite.setVisible(len(self.sources) == 1 and bool(src.path))
+        self.favourite.setChecked(bool(src.path) and B.is_favourite(src.path))
+        right.addWidget(self.favourite)
+        right.addStretch(1)
+        body.addLayout(right)
+
+        self._build_footer(lay, action)
+        self._set_start(src, st, target, fit)
+        self._connect_changes()
+        self._sync_enabled()
+        self._update_preview()
+        self.resize(820, 520)
+
+    def _build_preview_column(self) -> QtWidgets.QVBoxLayout:
+        """The left column: the picture the preview shows, the preview and its notes."""
         left = QtWidgets.QVBoxLayout()
         self.which = QtWidgets.QComboBox()
         for s in self.sources:
@@ -186,10 +209,11 @@ class PictureImportDialog(QtWidgets.QDialog):
         self.info = QtWidgets.QLabel()
         self.info.setWordWrap(True)
         left.addWidget(self.info)
-        body.addLayout(left, 1)
+        return left
 
-        right = QtWidgets.QVBoxLayout()
-        # -- size
+    def _build_size(self, right: QtWidgets.QVBoxLayout, target, fit, each_size: bool) -> None:
+        """The 'Size on the page' group: the size choices and the custom width and height
+        (hidden when every copy keeps its own size)."""
         box = QtWidgets.QGroupBox("Size on the page")
         g = QtWidgets.QGridLayout(box)
         self.size_mode = QtWidgets.QButtonGroup(self)
@@ -232,7 +256,9 @@ class PictureImportDialog(QtWidgets.QDialog):
             # (Replace Everywhere: every copy keeps its own size; the preview shows one)
             box.setVisible(False)
             right.addWidget(QtWidgets.QLabel("Each copy keeps its size on the page."))
-        # -- kind (a metafile)
+
+    def _build_kind(self, right: QtWidgets.QVBoxLayout, drawing: Optional[bool]) -> None:
+        """The 'Place it as' group: a metafile as a drawing or a bitmap."""
         self.kind_box = QtWidgets.QGroupBox("Place it as")
         kl = QtWidgets.QVBoxLayout(self.kind_box)
         self.r_drawing = QtWidgets.QRadioButton("A drawing that stays sharp when resized")
@@ -243,7 +269,11 @@ class PictureImportDialog(QtWidgets.QDialog):
         kl.addWidget(self.r_bitmap)
         self.kind_box.setVisible(drawing is None and any(s.kind == "metafile" for s in self.sources))
         right.addWidget(self.kind_box)
-        # -- pixels
+
+    def _build_pixels(self, right: QtWidgets.QVBoxLayout, st) -> None:
+        """The 'Pixels' group: store the picture at its size on the page, and its notes."""
+        from ..style import theme
+
         self.px_box = QtWidgets.QGroupBox("Pixels")
         pl = QtWidgets.QVBoxLayout(self.px_box)
         self.store = QtWidgets.QCheckBox("Store the picture at its size on the page")
@@ -257,13 +287,16 @@ class PictureImportDialog(QtWidgets.QDialog):
         pl.addWidget(self.store)
         self.stored = QtWidgets.QLabel()
         pl.addWidget(self.stored)
-        from ..style import theme
-
         self.large = theme.note_label("", "warn", self)
         self.large.setVisible(False)
         pl.addWidget(self.large)
         right.addWidget(self.px_box)
-        # -- transparency
+
+    def _build_transparency(self, right: QtWidgets.QVBoxLayout) -> None:
+        """The 'Transparency' group: what is transparent, the alpha threshold, the
+        transparent colour (picked from the preview) and its tolerance."""
+        from ..objprops.colour_field import ColourPairField
+
         tbox = QtWidgets.QGroupBox("Transparency")
         tg = QtWidgets.QGridLayout(tbox)
         tg.addWidget(QtWidgets.QLabel("Transparent:"), 0, 0)
@@ -287,8 +320,6 @@ class PictureImportDialog(QtWidgets.QDialog):
         tg.addWidget(self.threshold, 1, 1)
         self.colour_label = QtWidgets.QLabel("Colour:")
         tg.addWidget(self.colour_label, 2, 0)
-        from ..objprops.colour_field import ColourPairField
-
         self.colour = ColourPairField("Transparent colour", flash=False)
         tg.addWidget(self.colour, 2, 1)
         self.pick = QtWidgets.QToolButton()
@@ -307,13 +338,11 @@ class PictureImportDialog(QtWidgets.QDialog):
         self.tolerance.setToolTip("Also colours this close to it (for photos and smoothed edges)")
         tg.addWidget(self.tolerance, 3, 1)
         right.addWidget(tbox)
-        # -- favourite
-        self.favourite = QtWidgets.QCheckBox("Keep in File > Import Recent as a favourite")
-        self.favourite.setVisible(len(self.sources) == 1 and bool(src.path))
-        self.favourite.setChecked(bool(src.path) and B.is_favourite(src.path))
-        right.addWidget(self.favourite)
-        right.addStretch(1)
-        body.addLayout(right)
+
+    def _build_footer(self, lay: QtWidgets.QVBoxLayout, action: str) -> None:
+        """Under the columns: show the options at every import, the problem note and the
+        buttons (OK named ``action``)."""
+        from ..style import theme
 
         self.again = QtWidgets.QCheckBox("Show these options at every import")
         self.again.setToolTip("Settings > Canvas also chooses whether they show for a paste and a drop")
@@ -330,7 +359,9 @@ class PictureImportDialog(QtWidgets.QDialog):
         self.buttons.rejected.connect(self.reject)
         lay.addWidget(self.buttons)
 
-        # the starting choices
+    def _set_start(self, src: B.Source, st, target, fit) -> None:
+        """The starting choices: the transparency from the picture and the setting, the
+        size mode last used (where it applies) and its size."""
         key = B.transparent_colour()
         self.colour.set_pair(0xFFFFFF if key is None else key)
         if src.has_alpha:
@@ -355,6 +386,9 @@ class PictureImportDialog(QtWidgets.QDialog):
         self.h.setValue(h0)
         self._busy = False
 
+    def _connect_changes(self) -> None:
+        """A change of any choice redraws the preview after a pause; the size fields follow
+        the size mode and each other."""
         self._timer = QtCore.QTimer(self)
         self._timer.setSingleShot(True)
         self._timer.setInterval(150)
@@ -374,9 +408,6 @@ class PictureImportDialog(QtWidgets.QDialog):
             sig.connect(lambda *_a: self._changed())
         self.pick.toggled.connect(self._picking)
         self.preview.picked.connect(self._picked)
-        self._sync_enabled()
-        self._update_preview()
-        self.resize(820, 520)
 
     # -- the size --------------------------------------------------------------------
     def _button(self, mode: str) -> QtWidgets.QRadioButton:

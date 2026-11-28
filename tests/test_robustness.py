@@ -46,8 +46,8 @@ def win():
 
     w = MainWindow()
     yield w
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
 
 
 @pytest.fixture()
@@ -416,10 +416,12 @@ def test_recovery_dialog_lists_the_copies_and_confirms_a_discard(tmp_path, monke
     assert "page on disk has changed" not in dlg.list.item(0).text()
     dlg.list.item(1).setCheckState(QtCore.Qt.Unchecked)
     assert [s.title for s in dlg.selected()] == ["One"]
-    monkeypatch.setattr(QtWidgets.QMessageBox, "question", lambda *a, **k: QtWidgets.QMessageBox.Cancel)
+    from ctgedit.ui import messages
+
+    monkeypatch.setattr(messages, "confirm", lambda *a, **k: False)
     dlg.btn_discard.click()
     assert dlg.choice == RecoveryDialog.LATER  # cancelled: nothing chosen
-    monkeypatch.setattr(QtWidgets.QMessageBox, "question", lambda *a, **k: QtWidgets.QMessageBox.Discard)
+    monkeypatch.setattr(messages, "confirm", lambda *a, **k: a[3] == "Discard")
     dlg.btn_discard.click()
     assert dlg.choice == RecoveryDialog.DISCARD
 
@@ -433,14 +435,15 @@ def test_restore_backup_command_puts_packed_libraries_back(win, tmp_path, monkey
     shutil.copy2(sample, page)
     win.open_document(page)
     before = {p: open(p, "rb").read() for p in libs}
-    monkeypatch.setattr(gb, "_ctdraw_pids", lambda: [])
+    monkeypatch.setattr(gb, "ctdraw_pids", lambda: [])
     told = []
     monkeypatch.setattr(
         type(win),
         "_show_run_results",
         lambda self, title, lines, **k: told.append((title, "\n".join(lines))) or False,
     )
-    win._pack_libraries(False, ask=False)
+    win._pack_libraries([os.path.dirname(win.doc.path)])
+    win._pack_job.finish_now()
     assert {p: open(p, "rb").read() for p in libs} != before
     assert told[-1][0] == "Pack Libraries" and "2 library files packed" in told[-1][1]
 
@@ -460,10 +463,10 @@ def test_restore_backup_confirmation_counts_in_the_singular(monkeypatch):
     from ctgedit.infra.backups import BackupInfo
     from ctgedit.ui.recovery import RestoreBackupDialog
 
+    from ctgedit.ui import messages
+
     asked = []
-    monkeypatch.setattr(
-        QtWidgets.QMessageBox, "warning", lambda *a, **k: asked.append(a[2]) or QtWidgets.QMessageBox.Cancel
-    )
+    monkeypatch.setattr(messages, "confirm", lambda *a, **k: asked.append(a[2]) or False)
     one = BackupInfo("x", "update-pages", time.time(), [{"page": "P"}])
     five = BackupInfo("y", "pack", time.time(), [{"original": str(i)} for i in range(5)])
     for b in (one, five):
@@ -699,14 +702,20 @@ def test_pack_is_refused_while_the_graphics_builder_runs(win, pages, tmp_path, m
     monkeypatch.setattr(
         QtWidgets.QMessageBox, "warning", lambda *a, **k: seen.append(a[2]) or QtWidgets.QMessageBox.Ok
     )
-    monkeypatch.setattr(gb, "_ctdraw_pids", lambda: [4242])
-    win._pack_libraries(False, ask=False)
+    monkeypatch.setattr(gb, "ctdraw_pids", lambda: [4242])
+    win._pack_libraries([os.path.dirname(win.doc.path)])
     assert seen and "Graphics Builder is running" in seen[0]
     assert {p: open(p, "rb").read() for p in libs} == before
     # without it the pack runs and makes a backup
-    monkeypatch.setattr(gb, "_ctdraw_pids", lambda: [])
+    monkeypatch.setattr(gb, "ctdraw_pids", lambda: [])
     monkeypatch.setattr(type(win), "_show_run_results", lambda self, title, lines, **k: False)
-    win._pack_libraries(False, ask=False)
+    win._pack_libraries([os.path.dirname(win.doc.path)])
+    from ctgedit.ui.jobs.update_run import UpdatePagesRun
+
+    # (it packs in a helper process: the other runs wait for it meanwhile)
+    assert "Pack Libraries is running" in UpdatePagesRun.busy_text("Run Update Pages")
+    win._pack_job.finish_now()
+    assert not UpdatePagesRun.busy_text("Run Update Pages")
     assert {p: open(p, "rb").read() for p in libs} != before
     from ctgedit.infra import backups
 

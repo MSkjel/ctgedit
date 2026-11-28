@@ -104,8 +104,8 @@ def win():
             pass
     for e in getattr(w, "_docs", []):
         e["doc"].dirty = False
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.hide()
     w.deleteLater()
     _pump()
@@ -567,8 +567,8 @@ def test_the_panel_tab_position_and_compact_titles_are_read(win, sim):
     try:
         assert w2.tabPosition(QtCore.Qt.RightDockWidgetArea) == South
     finally:
-        if w2 in MainWindow._instances:
-            MainWindow._instances.remove(w2)
+        if w2 in MainWindow.instances:
+            MainWindow.instances.remove(w2)
         w2.hide()
         w2.deleteLater()
 

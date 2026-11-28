@@ -139,8 +139,8 @@ def win():
     yield w
     for e in list(getattr(w, "_docs", [])):
         e["doc"].dirty = False
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.hide()
     w.deleteLater()
     _pump(1)
@@ -579,7 +579,7 @@ def test_surround_setting_persists_and_follows_theme(win, monkeypatch):
     try:
         assert other.scene.surround() == "page" and other.surround_actions["page"].isChecked()
     finally:
-        MainWindow._instances.remove(other)
+        MainWindow.instances.remove(other)
         other.deleteLater()
     sc = _scene(_page())
     monkeypatch.setattr(SC.PageScene, "_MARGIN_COLOUR", QtGui.QColor(theme.DARK["desk"]))

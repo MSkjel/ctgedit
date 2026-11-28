@@ -577,8 +577,8 @@ def win(proj):
     yield w
     for d in list(w._dialogs.values()):
         d.reject()
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     for e in w._docs:
         e["doc"].dirty = False
     w.close()
@@ -649,7 +649,7 @@ def test_window_pack_asks_then_deletes_only_unused_instances(win, monkeypatch):
     import ctgedit.backend.graphics_builder as gb
     from ctgedit.format import element as E
 
-    monkeypatch.setattr(gb, "_ctdraw_pids", lambda: [])
+    monkeypatch.setattr(gb, "ctdraw_pids", lambda: [])
     # (the pack's result window: not shown here)
     monkeypatch.setattr(type(win), "_show_run_results", lambda self, title, lines, **k: False)
     doc = win.doc
@@ -662,11 +662,13 @@ def test_window_pack_asks_then_deletes_only_unused_instances(win, monkeypatch):
 
     answer = ["Keep Them"]
     monkeypatch.setattr(messages, "choose", lambda *a, **k: (asked.append(a[2]), answer[0])[1])
-    win._pack_libraries(False, ask=False)
+    win._pack_libraries([os.path.dirname(win.doc.path)])
+    win._pack_job.finish_now()
     assert len(asked) == 1 and "1 composite genie instance" in asked[0]
     assert spare.hash in E.LibraryFile.open(lib).element_names()
     answer[0] = "Delete Unused"
-    win._pack_libraries(False, ask=False)
+    win._pack_libraries([os.path.dirname(win.doc.path)])
+    win._pack_job.finish_now()
     names = set(E.LibraryFile.open(lib).element_names())
     assert spare.hash not in names and h_keep in names
     assert not os.path.exists(os.path.join(spare.cache_dir, "Instances", spare.hash + ".xml"))

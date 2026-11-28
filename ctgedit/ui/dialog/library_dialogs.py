@@ -2,6 +2,15 @@
 
 from __future__ import annotations
 
+from ...infra.paths import folder_key, path_key
+
+from ..dialog_buttons import dialog_buttons
+
+from ...infra.logsetup import note_exception as _note_exc
+
+from ..names import name_list, plural
+
+
 import os
 from typing import Callable, Optional
 
@@ -9,7 +18,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 from ..browser.thumbs import PREVIEW_SIZE, ROW_SIZE
 from ..prefs.settings import app_settings
-from ..style.theme import COLORS
+from ..style.theme import COLORS, note_label
 
 _PREVIEW = PREVIEW_SIZE
 _ICON = ROW_SIZE
@@ -37,6 +46,7 @@ def shipped_library(path: str) -> Optional[str]:
 
         return shipped_project(path)
     except Exception:  # noqa: BLE001
+        _note_exc("library_dialogs.shipped_library", path=path)
         return None
 
 
@@ -134,16 +144,10 @@ class CopyToLibraryDialog(QtWidgets.QDialog):
         self._ed_elem.setPlaceholderText("Element name (at most 31 characters)")
         name_form.addRow("Name:", self._ed_elem)
         left.addLayout(name_form)
-        self._hint = QtWidgets.QLabel("")
-        self._hint.setStyleSheet("color:%s;" % COLORS["text_dim"])
-        self._hint.setWordWrap(True)
+        self._hint = note_label("")
         self._hint.setTextFormat(QtCore.Qt.RichText)
         left.addWidget(self._hint)
-        buttons = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
-        )
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
+        buttons = dialog_buttons(self)
         self._buttons = buttons
         outer.addLayout(left, 1)
         right = QtWidgets.QVBoxLayout()
@@ -180,6 +184,7 @@ class CopyToLibraryDialog(QtWidgets.QDialog):
 
             self._catalog = catalog_for()
         except Exception:  # noqa: BLE001
+            _note_exc("library_dialogs._catalog_or_none")
             self._catalog = None
         return self._catalog
 
@@ -209,22 +214,23 @@ class CopyToLibraryDialog(QtWidgets.QDialog):
                 info = cat.project_for_dir(self._start_dir) or cat.folder(self._start_dir)
                 first = [(p.name, p.dir) for p in cat.closure(info)]
             except Exception:  # noqa: BLE001
+                _note_exc("library_dialogs._fill_projects/start", folder=self._start_dir)
                 first = []
             try:
                 from ...io.catalog import natural_key
 
                 rest = [(p.name, p.dir) for p in sorted(cat.projects(), key=lambda p: natural_key(p.name))]
             except Exception:  # noqa: BLE001
+                _note_exc("library_dialogs._fill_projects/all")
                 rest = []
             for start in self._more_projects:
                 try:
                     info = cat.project_for_dir(start) or cat.folder(start)
                     rest.extend((p.name, p.dir) for p in cat.closure(info))
                 except Exception:  # noqa: BLE001
+                    _note_exc("library_dialogs._fill_projects/folder", folder=start)
                     continue
-        if not first or os.path.normcase(os.path.abspath(first[0][1])) != os.path.normcase(
-            os.path.abspath(self._start_dir)
-        ):
+        if not first or path_key(first[0][1]) != path_key(self._start_dir):
             first.insert(
                 0, (os.path.basename(os.path.normpath(self._start_dir)) or self._start_dir, self._start_dir)
             )
@@ -232,7 +238,7 @@ class CopyToLibraryDialog(QtWidgets.QDialog):
         for group in (first, rest):
             added = False
             for name, d in group:
-                key = os.path.normcase(os.path.abspath(d))
+                key = path_key(d)
                 if key in seen:
                     continue
                 if not added and group is rest and self._cmb_proj.count():
@@ -269,10 +275,10 @@ class CopyToLibraryDialog(QtWidgets.QDialog):
     def _set_library(self, path: str) -> None:
         # the library's own project first (Save As of an element of an
         # included project starts there)
-        d = os.path.normcase(os.path.dirname(os.path.abspath(path)))
+        d = folder_key(path)
         for k in range(self._cmb_proj.count()):
             data = self._cmb_proj.itemData(k)
-            if data and os.path.normcase(os.path.abspath(str(data))) == d:
+            if data and path_key(str(data)) == d:
                 if k != self._cmb_proj.currentIndex():
                     self._cmb_proj.setCurrentIndex(k)
                 break
@@ -361,6 +367,7 @@ class CopyToLibraryDialog(QtWidgets.QDialog):
 
                 sums = read_element_summaries(lib)
             except Exception:  # noqa: BLE001
+                _note_exc("library_dialogs._fill_elements", library=lib)
                 sums = []
             for k, s in enumerate(sums):
                 it = QtWidgets.QListWidgetItem(s.name)
@@ -593,11 +600,7 @@ class HotSpotDialog(QtWidgets.QDialog):
                 row.addWidget(btn)
             row.addStretch(1)
             lay.addLayout(row)
-        buttons = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
-        )
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
+        buttons = dialog_buttons(self)
         lay.addWidget(buttons)
 
     def _put(self, pt) -> None:
@@ -629,7 +632,7 @@ class UsedByDialog(QtWidgets.QDialog):
         self._on_open = on_open
         lay = QtWidgets.QVBoxLayout(self)
         head = QtWidgets.QLabel(
-            ("%s.%s is placed on %d page%s:" % (stem, element, len(usage), "" if len(usage) == 1 else "s"))
+            ("%s.%s is placed on %s:" % (stem, element, plural(len(usage), "page")))
             if usage
             else "No page of its project, or of the projects that include it, places %s.%s." % (stem, element)
         )
@@ -648,10 +651,7 @@ class UsedByDialog(QtWidgets.QDialog):
         self._list.itemDoubleClicked.connect(lambda _it, _c: self._open())
         lay.addWidget(self._list, 1)
         if note:
-            n = QtWidgets.QLabel(note)
-            n.setWordWrap(True)
-            n.setStyleSheet("color:%s;" % COLORS["text_dim"])
-            lay.addWidget(n)
+            lay.addWidget(note_label(note))
         buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Close)
         self._btn_open = buttons.addButton("Open Page", QtWidgets.QDialogButtonBox.ActionRole)
         self._btn_open.setEnabled(bool(usage) and on_open is not None)
@@ -716,9 +716,7 @@ class ElementUsersDialog(QtWidgets.QDialog):
         self._tree.itemDoubleClicked.connect(lambda _it, _c: self._open())
         self._tree.currentItemChanged.connect(lambda *_a: self._sync())
         lay.addWidget(self._tree, 1)
-        self._note = QtWidgets.QLabel(note)
-        self._note.setWordWrap(True)
-        self._note.setStyleSheet("color:%s;" % COLORS["text_dim"])
+        self._note = note_label(note)
         self._note.setVisible(bool(note))
         lay.addWidget(self._note)
         # the library files that could not be read (whole): set_usage
@@ -728,6 +726,7 @@ class ElementUsersDialog(QtWidgets.QDialog):
         lay.addWidget(self._problems)
         buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Close)
         self._btn_open = buttons.addButton("Open", QtWidgets.QDialogButtonBox.ActionRole)
+        self._btn_open.setDefault(True)  # (Enter opens the row, as a double-click does)
         self._btn_open.clicked.connect(self._open)
         self._btn_update = buttons.addButton("Update Out of Date…", QtWidgets.QDialogButtonBox.ActionRole)
         self._btn_update.setToolTip(
@@ -738,9 +737,13 @@ class ElementUsersDialog(QtWidgets.QDialog):
         self._btn_refresh = buttons.addButton("Refresh", QtWidgets.QDialogButtonBox.ActionRole)
         self._btn_refresh.clicked.connect(self.refresh)
         self._btn_refresh.setVisible(on_refresh is not None)
+        # (focus on them never takes Enter from Open)
+        for b in (self._btn_update, self._btn_refresh, buttons.button(QtWidgets.QDialogButtonBox.Close)):
+            b.setAutoDefault(False)
         buttons.rejected.connect(self.reject)
         lay.addWidget(buttons)
         self.set_usage(usage)
+        self._tree.setFocus(QtCore.Qt.OtherFocusReason)
 
     # -- contents -------------------------------------------------------------------------
     def set_usage(self, usage) -> None:
@@ -791,11 +794,10 @@ class ElementUsersDialog(QtWidgets.QDialog):
             n += " (%s)" % el if el else ""
             if n not in names:
                 names.append(n)
-        more = " and %d more" % (len(names) - 10) if len(names) > 10 else ""
         return (
-            "Some library files could not be read in full: %s%s. Their genies are listed as far as "
+            "Some library files could not be read in full: %s. Their genies are listed as far as "
             "they could be read, and Update skips them."
-        ) % (", ".join(names[:10]), more)
+        ) % name_list(names)
 
     def _status_text(self, u) -> str:
         from ...io import genieusage as GU

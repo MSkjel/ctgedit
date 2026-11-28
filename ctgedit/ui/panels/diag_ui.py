@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+from ..style.theme import set_note_role
+
+from ...infra.paths import path_key
+
+from ..names import plural
+
 import contextlib
 import logging
 import os
@@ -13,8 +19,8 @@ from PySide6 import QtCore, QtWidgets
 from ...infra import logsetup
 from ..prefs.settings import option
 from ...editing import ui_state
+from ..messages import inform
 
-_AMBER = "color:#e0a030; padding:0 4px;"
 DISPLAY_OUT_OF_DATE = "The display of this page may be out of date. Use View > Refresh."
 
 
@@ -67,7 +73,7 @@ class UnresolvedReferencesDialog(QtWidgets.QDialog):
         missing = [name for name, _via, dirs in report.includes if not dirs]
         if missing:
             warn = QtWidgets.QLabel("Included projects not found on this computer: %s" % ", ".join(missing))
-            warn.setStyleSheet(_AMBER)
+            set_note_role(warn, "warn", "padding: 0 4px;")
             warn.setWordWrap(True)
             lay.addWidget(warn)
         bb = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Close)
@@ -127,14 +133,14 @@ class DiagnosticsMixin:
         self._refs_chip = QtWidgets.QToolButton(self)
         self._refs_chip.setAutoRaise(True)
         self._refs_chip.setVisible(False)
-        self._refs_chip.setStyleSheet(_AMBER)
+        set_note_role(self._refs_chip, "warn", "padding: 0 4px;")
         self._refs_chip.setAccessibleName("Symbols not found")
         self._refs_chip.clicked.connect(self._show_unresolved)
         lay.addWidget(self._refs_chip)
         self._display_chip = QtWidgets.QToolButton(self)
         self._display_chip.setAutoRaise(True)
         self._display_chip.setVisible(False)
-        self._display_chip.setStyleSheet(_AMBER)
+        set_note_role(self._display_chip, "warn", "padding: 0 4px;")
         self._display_chip.setAccessibleName("Display may be out of date")
         self._display_chip.clicked.connect(self._on_display_chip)
         lay.addWidget(self._display_chip)
@@ -180,7 +186,7 @@ class DiagnosticsMixin:
             chip.setVisible(n > 0)
             if n:
                 objs = sum(u.count for u in rep.unresolved)
-                chip.setText("⚠ %d symbol%s not found" % (n, "" if n == 1 else "s"))
+                chip.setText("⚠ %s not found" % (plural(n, "symbol")))
                 chip.setToolTip(
                     "%d library reference%s (%d object%s) not found. Click to see "
                     "the list." % (n, "" if n == 1 else "s", objs, "" if objs == 1 else "s")
@@ -330,6 +336,7 @@ class DiagnosticsMixin:
         try:
             snap = OR.change_snapshot(doc)
         except Exception:  # noqa: BLE001
+            logsetup.note_exception("diag_ui._auto_step")
             snap = None
         steps = len(getattr(doc, "_undo", ()) or ())
         try:
@@ -390,14 +397,14 @@ class DiagnosticsMixin:
             return "the page has been changed since it was opened"
         if getattr(doc, "damage", None):
             return "the page file is damaged"
-        stamp = doc._stamp(doc.path)
+        stamp = doc.disk_stamp(doc.path)
         if stamp is None or stamp != getattr(doc, "_disk_stamp", None):
             return "the page file changed since it was opened"
         return ""
 
     @staticmethod
     def _display_key(doc):
-        return (os.path.normcase(os.path.abspath(doc.path)), getattr(doc, "_disk_stamp", None))
+        return (path_key(doc.path), getattr(doc, "_disk_stamp", None))
 
     @staticmethod
     def _display_memo_key(doc) -> str:
@@ -410,7 +417,7 @@ class DiagnosticsMixin:
         stamp = getattr(doc, "_disk_stamp", None)
         raw = repr(
             (
-                os.path.normcase(os.path.abspath(doc.path)),
+                path_key(doc.path),
                 stamp,
                 buildinfo.version_string(),
                 reader.get_label_mode(),
@@ -616,7 +623,7 @@ class DiagnosticsMixin:
 
         doc = getattr(self, "doc", None)
         if not _is_page_doc(doc):
-            QtWidgets.QMessageBox.information(self, "Check Page Display", "Open a page first.")
+            inform(self, "Check Page Display", "Open a page first.")
             return None
         # (an earlier version's tab, File > Page History, is checked against its own bytes:
         # the page's file on disk is another version)

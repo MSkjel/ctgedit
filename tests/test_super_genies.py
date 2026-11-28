@@ -1,5 +1,6 @@
 """Super genies: storage, pages and Attach."""
 
+from ctgedit.format.fileio import find_ci
 import hashlib
 import os
 import shutil
@@ -48,9 +49,9 @@ def _project(fxlib, tmp_path, name="FxHost", lib=False):
     src_dir = os.path.join(os.path.dirname(fxlib), "FxMain")
     proj = tmp_path / "User" / name
     proj.mkdir(parents=True)
-    shutil.copyfile(PR._find_file(src_dir, "PROJECT.CIT"), str(proj / "PROJECT.CIT"))
+    shutil.copyfile(find_ci(src_dir, "PROJECT.CIT"), str(proj / "PROJECT.CIT"))
     for t in ["pages", "changes"] + list(PR.PAGE_TABLES) + ["activex", "pglang"]:
-        src = PR._find_file(src_dir, t + ".DBF")
+        src = find_ci(src_dir, t + ".DBF")
         if src is None:
             continue
         d = Dbf(src, writable=False)
@@ -389,8 +390,8 @@ def test_super_genie_page_is_the_page_ctdraw_creates(fxlib, monkeypatch):
     target = os.path.join(os.path.dirname(fxlib), "FxMain", "!fx_popup.ctg")
     ctdraws = _deflated_streams(want_ctf)
     assert ctdraws  # (the background DIB at least)
-    ours = CTF._compress
-    monkeypatch.setattr(CTF, "_compress", lambda raw: ctdraws.get(raw) or ours(raw))
+    ours = CTF.compress
+    monkeypatch.setattr(CTF, "compress", lambda raw: ctdraws.get(raw) or ours(raw))
     blob = CTF.build_ctf(data2, target, resolver=SymbolResolver.for_page(target, [fxlib]))
     import ctfcompare  # (without the classic zlib: the DIBs deflated again first)
 
@@ -728,7 +729,7 @@ def test_update_pages_leaves_current_super_genie_pages_alone(fx_install):
         assert doc.update_supergenie_page(force=True) == 0
         assert not doc.can_undo()
         assert doc.genie_instances() == []
-        cur = U._Current(SymbolResolver.for_page(path))
+        cur = U.Current(SymbolResolver.for_page(path))
         assert not U.stale_supergenie(path, cur)
         assert not U.stale_elements(path, cur)
 
@@ -764,7 +765,7 @@ def test_update_pages_recreates_a_changed_super_genie_page(fxlib, tmp_path):
     assert el.set_associations([("Tag", "Pump1\n\nThe pump tag")])
     el.set_page_property("SgVar", "2")
     el.save()
-    cur = U._Current(__import__("ctgedit.format.symbols", fromlist=["x"]).SymbolResolver.for_page(page))
+    cur = U.Current(__import__("ctgedit.format.symbols", fromlist=["x"]).SymbolResolver.for_page(page))
     assert U.stale_supergenie(page, cur)
     rep = U.update_pages(proj)
     assert rep.supergenies == 1 and rep.updated == ["!fx_popup"], rep
@@ -1012,8 +1013,8 @@ def test_opening_a_super_genie_page_asks_first(fxlib, tmp_path, monkeypatch):
     finally:
         for e in list(w._docs):
             e["doc"].dirty = False
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.hide()
         w.deleteLater()
     # an ordinary page is not asked about (the guard never shows its dialog)
@@ -1082,8 +1083,8 @@ def test_window_placement_creates_the_page_with_a_thumbnail(fxlib, tmp_path):
     finally:
         for e in list(w._docs):
             e["doc"].dirty = False
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.hide()
         w.deleteLater()
 
@@ -1129,8 +1130,8 @@ def test_saving_a_super_genie_recreates_open_pages_and_offers_update_pages(fxlib
     finally:
         for e in list(w._docs):
             e["doc"].dirty = False
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.hide()
         w.deleteLater()
 
@@ -1200,7 +1201,7 @@ def test_revert_keeps_a_read_only_super_genie_page_read_only(fxlib, tmp_path, mo
     finally:
         for e in list(w._docs):
             e["doc"].dirty = False
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.hide()
         w.deleteLater()

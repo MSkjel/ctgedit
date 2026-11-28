@@ -19,7 +19,7 @@ PAGE_TABS = {"On page shown": "Events", "HasPanes": "Environment", "Content type
 def check_on_save() -> bool:
     try:
         return bool(app_settings().value(CHECK_ON_SAVE, True, type=bool))
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # swallow-ok: a garbled setting reads as the default
         return True
 
 
@@ -78,7 +78,7 @@ class WorkspaceChecksPanel(QtWidgets.QWidget):
             from ..help import set_help
 
             set_help(self, HELP_TOPIC)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001  # swallow-ok: the help link is optional
             pass
 
     def clear(self, text: str = "") -> None:

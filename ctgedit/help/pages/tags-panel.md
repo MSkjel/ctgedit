@@ -53,6 +53,15 @@ the panel to the front with the search box ready to type in.
   and the tag name is on the clipboard to paste into the right field. A genie inside another
   genie is bound through the outermost genie.
 
+## Where the page uses a tag
+
+Choose a tag in the list: **On this page** under it lists every field of the page that uses it,
+and whether the field **Reads** the tag or **Writes** it (a command that assigns it, such as
+`Pump1_Run = 1`, toggles it with `Toggle`, or gives its name to `TagWrite`; a slider does both).
+`Pump1.Value` counts as a use of `Pump1`. Double-click a use to select its object. With **Mark
+on page** ticked, the objects are outlined on the page, blue where they read the tag and amber
+where they write it; point at one to see its fields.
+
 Expression fields also complete tag names as you type, and their Wizard's **Insert Tag…** lists
 the tags, local variables and equipment items the page can use, with their project (see
 [Expressions](properties.md#expressions)).

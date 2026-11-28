@@ -8,12 +8,7 @@ them all at once, across a project and the projects it includes.
 
 1. Choose Tools > Update Pages… (or [open it from here](action:update_pages)). Nothing needs to
    be open.
-2. Under **Projects**, pick the **Root project**. It starts at the open page's project, or the
-   root you used last time, or Plant SCADA's active project. Any project can be the root, even
-   one with no pages of its own. **Browse…** picks a project folder that isn't listed.
-3. Under **Projects to update**, tick the projects whose pages you want updated. The **Pages**
-   column shows how many registered pages each has. See [The include tree](#the-include-tree).
-4. Under **Update**, choose what to bring up to date:
+2. Under **Update**, choose what to bring up to date:
    - **Page templates**: pages whose template changed get the new template objects. This
      includes pages linked to a template built on another template that changed (see
      [Templates](templates.md#a-template-built-on-another-template)). "Also apply the
@@ -26,13 +21,18 @@ them all at once, across a project and the projects it includes.
    - **Update every page, also the ones that are up to date**: skips the change check and
      rewrites every page. Use it when a page doesn't match its library but Update Pages says
      it's up to date. It's much slower.
-5. Leave **Back up each page before it is changed** ticked.
-6. Choose how many **Helper processes** to use (see [Helper processes](#helper-processes)).
+3. Leave **Back up each page before it is changed** ticked.
+4. Choose how many **Helper processes** to use (see [Helper processes](#helper-processes)).
+5. Under **Projects**, pick the **Root project**. It starts at the open page's project, or the
+   root you used last time, or Plant SCADA's active project. Any project can be the root, even
+   one with no pages of its own. **Browse…** picks a project folder that isn't listed.
+6. Under **Projects to update**, tick the projects whose pages you want updated. The **Pages**
+   column shows how many registered pages each has. See [The include tree](#the-include-tree).
 7. Click **Update Pages**.
 
 A progress window shows how far it has got (see [Progress figures](#progress-figures)).
 **Stop After This Page** stops the run; the pages already done stay updated (the summary lists
-them). **Cancel** in the window before the run changes nothing.
+them). **Cancel** in the dialog, before the run starts, changes nothing.
 
 Only pages that use a changed element are rewritten. Each is saved normally: the page, its
 fast-display file and its project database rows. Compile the project afterwards to see the

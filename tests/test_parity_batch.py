@@ -469,7 +469,7 @@ def test_main_window_parity_bindings():
         assert w.act_run.shortcut().toString() == "F5"
         assert w.act_bitmap_editor.shortcut().toString() == "F9"
         assert "freehand" in w.tool_actions
-        assert w in MainWindow._instances
+        assert w in MainWindow.instances
         w.show()  # the Window menu lists visible windows
         # one window without pages: no 'Pages' and no 'Windows' section
         w._fill_window_list()
@@ -487,7 +487,7 @@ def test_main_window_parity_bindings():
         w._tile_windows(False)
     finally:
         for x in (w, w2):
-            if x is not None and x in MainWindow._instances:
-                MainWindow._instances.remove(x)
+            if x is not None and x in MainWindow.instances:
+                MainWindow.instances.remove(x)
             if x is not None:
                 x.hide()

@@ -1,12 +1,17 @@
 """Shared picker widgets, one per concept."""
 
 from __future__ import annotations
+
+from ..infra.logsetup import note_exception as _note_exc
+
+from ..infra.paths import lib_path_dirs
 from .style.theme import sp as _sp
 
 import os
 from typing import Callable, Dict, List, Optional, Tuple
 
 from PySide6 import QtCore, QtGui, QtWidgets
+from .messages import warn
 
 #: the text an empty page / area field shows (CtDraw's)
 NONE_TEXT = "<None>"
@@ -34,7 +39,7 @@ def library_stem(path: str) -> str:
     return os.path.splitext(os.path.basename(path or ""))[0]
 
 
-def _preview_size() -> QtCore.QSize:
+def preview_size() -> QtCore.QSize:
     from .browser import thumbs
 
     return QtCore.QSize(thumbs.PREVIEW_SIZE)
@@ -56,7 +61,7 @@ def _search_dirs(project_dir: str) -> List[str]:
     folder: only CTG_LIB_PATH, never the current directory)."""
     from ..format.projects import include_search_dirs
 
-    extra = [p for p in os.environ.get("CTG_LIB_PATH", "").split(os.pathsep) if p]
+    extra = lib_path_dirs()
     dirs: List[str] = []
     for d in ([project_dir] if project_dir else []) + extra:
         if d not in dirs:
@@ -211,6 +216,7 @@ def element_thumbnail(
         s = read_element_summary(lib_path, element)
         rgba = s.thumbnail_rgba() if s is not None else None
     except Exception:  # noqa: BLE001 -- no thumbnail
+        _note_exc("pick_fields.element_thumbnail")
         rgba = None
     if not rgba:
         return None
@@ -323,7 +329,7 @@ class TemplatePicker(QtWidgets.QWidget):
         mid.addWidget(self.list, 1)
         side = QtWidgets.QVBoxLayout()
         self.preview = QtWidgets.QLabel()
-        self.preview.setFixedSize(_preview_size())
+        self.preview.setFixedSize(preview_size())
         self.preview.setAlignment(QtCore.Qt.AlignCenter)
         self.preview.setFrameShape(QtWidgets.QFrame.StyledPanel)
         side.addWidget(self.preview)
@@ -385,7 +391,7 @@ class TemplatePicker(QtWidgets.QWidget):
         self.cb_res.clear()
         self.cb_res.addItem(self.ALL, "")
         if not self._style_is_missing():
-            for r in self._catalog.resolutions(self.style()):
+            for r in self._catalog.resolutions(self.style_name()):
                 self.cb_res.addItem(_RESOLUTION_LABELS.get(r, r), r)
         want = self._want_res or ""
         j = self.cb_res.findData(want, QtCore.Qt.UserRole, QtCore.Qt.MatchFixedString) if want else -1
@@ -410,7 +416,7 @@ class TemplatePicker(QtWidgets.QWidget):
         out: dict = {}
         if self._style_is_missing():
             return out
-        for path, s in self._catalog.elements(self.style()):
+        for path, s in self._catalog.elements(self.style_name()):
             name, r, tb = split_element(s.name)
             if res and r.lower() != res.lower():
                 continue
@@ -433,7 +439,7 @@ class TemplatePicker(QtWidgets.QWidget):
             label = name if not r else "%s\n%s" % (name, r)
             it = QtWidgets.QListWidgetItem(QtGui.QIcon(thumbnail_pixmap(s, card, self._background)), label)
             it.setData(QtCore.Qt.UserRole, (name, r))
-            it.setToolTip("\n".join("%s.%s" % (self.style(), v[1].name) for v in var.values()))
+            it.setToolTip("\n".join("%s.%s" % (self.style_name(), v[1].name) for v in var.values()))
             self.list.addItem(it)
             if first is None:
                 first = it
@@ -445,7 +451,7 @@ class TemplatePicker(QtWidgets.QWidget):
             ):
                 chosen = it
         miss = self._missing
-        if miss is not None and (self._style_is_missing() or miss[0].lower() == self.style().lower()):
+        if miss is not None and (self._style_is_missing() or miss[0].lower() == self.style_name().lower()):
             it = QtWidgets.QListWidgetItem(
                 QtGui.QIcon(thumbnail_pixmap(None, card, self._background)), "%s.%s (not found)" % miss
             )
@@ -460,7 +466,7 @@ class TemplatePicker(QtWidgets.QWidget):
             self.list.setCurrentItem(pick)
         self.list.blockSignals(False)
         if self.list.count() == 0 and self._catalog.styles():
-            self._show_note("Style %s has no templates for this resolution." % self.style())
+            self._show_note("Style %s has no templates for this resolution." % self.style_name())
         elif self._catalog.styles():
             self._show_note("")
         self._selected()
@@ -515,7 +521,7 @@ class TemplatePicker(QtWidgets.QWidget):
         else:
             path, s = ch
             self.preview.setPixmap(thumbnail_pixmap(s, size, self._background))
-            self.preview.setToolTip("%s.%s" % (self.style(), s.name))
+            self.preview.setToolTip("%s.%s" % (self.style_name(), s.name))
             from ..format.template_place import split_element
 
             _n, r, tb = split_element(s.name)
@@ -529,7 +535,7 @@ class TemplatePicker(QtWidgets.QWidget):
         self.changed.emit()
 
     # -- values ---------------------------------------------------------------------
-    def style(self) -> str:
+    def style_name(self) -> str:
         """The style (template library) shown."""
         if self._style_is_missing():
             return self._missing[0] if self._missing else ""
@@ -629,6 +635,7 @@ def _page_names(project_dir: Optional[str]) -> List[Tuple[str, str]]:
 
         rows = P.chain_page_names(project_dir)
     except Exception:  # noqa: BLE001 -- the list is an aid
+        _note_exc("pick_fields._page_names")
         return []
     out = []
     for r in rows or ():
@@ -688,9 +695,15 @@ def project_dirs(name: str, includes: bool) -> list:
 
 
 class ProjectScopeField(QtWidgets.QWidget):
-    """'All pages of the project' picker."""
+    """The project picker of the dialogs that work on whole projects, with 'And the projects
+    it includes'. ``remember``: the dialog's name its choice is kept under (scope/<name>/);
+    a remembered project is chosen, unless ``fixed``: then ``current_path``'s project (the
+    page or project the dialog was opened for). Else the open page's project, else the one
+    Update Pages ran on last. A folder the install does not list is added by name."""
 
     changed = QtCore.Signal()
+
+    INCLUDES_TEXT = "And the projects it includes"
 
     def __init__(
         self,
@@ -698,23 +711,38 @@ class ProjectScopeField(QtWidgets.QWidget):
         parent=None,
         *,
         what: str = "The project whose pages are searched",
+        includes_what: str = "the pages",
         horizontal: bool = False,
+        remember: str = "",
+        fixed: bool = False,
     ):
         super().__init__(parent)
+        from .prefs.settings import app_settings
+
         lay = QtWidgets.QHBoxLayout(self) if horizontal else QtWidgets.QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         self.combo = QtWidgets.QComboBox()
         self.combo.setSizeAdjustPolicy(QtWidgets.QComboBox.AdjustToContents)
         self.combo.setToolTip(what)
         projects, self.here = project_choices(current_path or "")
-        for name, _d in projects:
-            self.combo.addItem(name)
-        if self.here:
-            self.combo.setCurrentText(self.here)
-        self.includes = QtWidgets.QCheckBox("And the projects it includes")
+        for name, folder in projects:
+            self.combo.addItem(name, folder)
+        folder = os.path.dirname(os.path.abspath(current_path)) if current_path else ""
+        if folder and not self.here and os.path.isdir(folder):
+            self.here = os.path.basename(os.path.normpath(folder))
+            self.combo.insertItem(0, self.here, folder)
+        self.includes = QtWidgets.QCheckBox(self.INCLUDES_TEXT)
         self.includes.setToolTip(
-            "Also the pages of the projects it includes (not AVEVA's own Include and System projects)"
+            "Also %s of the projects it includes (not AVEVA's own Include and System projects)"
+            % includes_what
         )
+        self._key = "scope/%s/" % remember if remember else ""
+        st = app_settings()
+        kept = str(st.value(self._key + "project", "") or "") if self._key else ""
+        if not ((not fixed and self.set_project(kept)) or self.set_project(self.here)):
+            self.set_project(str(st.value("updatepages/root", "") or ""))
+        if self._key and not fixed:
+            self.includes.setChecked(st.value(self._key + "includes", False, type=bool))
         for w in (self.combo, self.includes):
             row = QtWidgets.QHBoxLayout()
             row.setContentsMargins(0 if horizontal else _sp(4), 0, 0, 0)
@@ -722,8 +750,17 @@ class ProjectScopeField(QtWidgets.QWidget):
             if w is self.includes:
                 row.addStretch(1)
             lay.addLayout(row)
-        self.combo.currentTextChanged.connect(lambda _t: self.changed.emit())
-        self.includes.toggled.connect(lambda _on: self.changed.emit())
+        self.combo.currentTextChanged.connect(lambda _t: self._changed())
+        self.includes.toggled.connect(lambda _on: self._changed())
+
+    def _changed(self) -> None:
+        if self._key:
+            from .prefs.settings import app_settings
+
+            st = app_settings()
+            st.setValue(self._key + "project", self.project())
+            st.setValue(self._key + "includes", self.includes.isChecked())
+        self.changed.emit()
 
     def has_projects(self) -> bool:
         return self.combo.count() > 0
@@ -738,8 +775,16 @@ class ProjectScopeField(QtWidgets.QWidget):
             return True
         return False
 
+    def project_dir(self) -> str:
+        """The chosen project's folder ('' = none)."""
+        return str(self.combo.currentData() or "")
+
     def project_dirs(self) -> list:
-        return project_dirs(self.project(), self.includes.isChecked())
+        """The chosen project's folder, and with 'And the projects it includes' theirs (a
+        folder the install does not list: itself)."""
+        listed = project_dirs(self.project(), self.includes.isChecked())
+        own = self.project_dir()
+        return listed or ([own] if own else [])
 
 
 def genie_entries(path: str) -> list:
@@ -784,7 +829,7 @@ class GenieChecklist(QtWidgets.QWidget):
         from .style.theme import SearchField
 
         # (the one search box of the UI guide, as every other list's filter)
-        self.filter = SearchField("Filter genies", delay_ms=120)
+        self.filter = SearchField("Filter genies", delay_ms=120, enter_filters=True)
         self.here_only = QtWidgets.QCheckBox("Placed here only")
         self.here_only.setToolTip("List only the genies placed here")
         self.here_only.setChecked(bool(counts))
@@ -802,8 +847,8 @@ class GenieChecklist(QtWidgets.QWidget):
         make_resizable(self.tree, "GenieChecklist/genies", stretch=0, fit_view=True)
         lay.addWidget(self.tree, 1)
         row = QtWidgets.QHBoxLayout()
-        self.b_all = QtWidgets.QPushButton("Select All")
-        self.b_none = QtWidgets.QPushButton("Clear All")
+        self.b_all = QtWidgets.QPushButton("Tick Shown")
+        self.b_none = QtWidgets.QPushButton("Untick All")
         self.b_all.setToolTip("Tick every genie shown")
         self.b_none.setToolTip("Untick every genie")
         self.b_all.clicked.connect(lambda: self.tick_all(True))
@@ -1172,6 +1217,7 @@ class LibraryElementField(QtWidgets.QWidget):
             try:
                 self._path = self._resolve(*self._value) or None
             except Exception:  # noqa: BLE001 -- no thumbnail then
+                _note_exc("pick_fields.ElementPreview/set_value")
                 self._path = None
         self._show()
         if emit:
@@ -1231,7 +1277,7 @@ class LibraryElementField(QtWidgets.QWidget):
         if self._validate is not None:
             why = self._validate(lib, element, path)
             if why:
-                QtWidgets.QMessageBox.warning(self, self.title, why)
+                warn(self, self.title, why)
                 return False
         full = path if path and os.path.splitext(path)[1] else None
         self.set_value((lib, element), full, emit=True)

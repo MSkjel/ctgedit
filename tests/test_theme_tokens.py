@@ -78,8 +78,8 @@ def win():
     yield w
     for d in list(getattr(w, "_dialogs", {}).values()):
         d.close()
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.hide()
     w.deleteLater()
     _pump()

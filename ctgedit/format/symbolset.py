@@ -11,6 +11,7 @@ from . import placement as P
 from .page import PageObject
 from . import codes as _codes
 from . import forest as _forest
+from ..infra.logsetup import note_exception as _note_exc
 
 SET_TC = 0x0C
 STATE_TC = 0x07
@@ -165,6 +166,7 @@ def state_symbol(po: PageObject) -> Optional[Tuple[str, str, str]]:
 
         ref = reference_from_object(po)
     except Exception:  # noqa: BLE001
+        _note_exc("symbolset.state_symbol")
         ref = None
     if ref is None or (group and (ref.ext or "ctl").lower() != "ctl"):
         return None

@@ -10,7 +10,7 @@ from typing import List, Optional
 
 from .container import Container
 from . import page as _page
-from .page import PageBlock, PageObject, _XFORM_DOUBLES, _geom_name_len, _parse_object
+from .page import PageBlock, PageObject, XFORM_DOUBLES, geom_name_len, parse_object
 from .attributes import AttributesPage, PropertyList
 from .textcodec import CODEC
 
@@ -38,11 +38,11 @@ ATTR_TRAILING_PAD = 0x200
 def rect1_offset_in_body(body: bytes) -> int:
     """rect1 offset in body_raw (after u16 reserved + u16 handle + name lpstr +
     3 transforms + anchor)."""
-    o = _geom_name_len(body, 0)
+    o = geom_name_len(body, 0)
     for _ in range(3):
         mode = body[o]
         o += 1
-        o += _XFORM_DOUBLES.get(mode, 6 if mode > 3 else 0) * 8
+        o += XFORM_DOUBLES.get(mode, 6 if mode > 3 else 0) * 8
     return o + 4  # skip anchor (point, 4 bytes)
 
 
@@ -99,14 +99,14 @@ def refresh_object_bags(po: PageObject) -> None:
     payload = object_payload(po)
     d = getattr(po, "__dict__", None)
     if d is None:  # not a PageObject: parse, keep nothing
-        fresh = _parse_object(po.index, po.record_offset, len(payload), po.next_link, payload)
+        fresh = parse_object(po.index, po.record_offset, len(payload), po.next_link, payload)
         po.bags, po.text_exprs = fresh.bags, fresh.text_exprs
         po.font_face, po.bytes_covered = fresh.font_face, fresh.bytes_covered
         return
     nm = d.get(NODE_ARRAY_MEMO_ATTR)
     if nm is not None and nm[0] is not po.body_raw:
         del d[NODE_ARRAY_MEMO_ATTR]  # geometry.find_node_array's memo is stale
-    coverage = _page._WANT_COVERAGE
+    coverage = _page.WANT_COVERAGE
     fp = d.get(FRESH_PARSE_ATTR)
     if fp is not None:
         if not coverage and fp[0] == payload:
@@ -136,7 +136,7 @@ def refresh_object_bags(po: PageObject) -> None:
             d[FRESH_PARSE_ATTR] = (payload, fresh)
             return
         del d[FRESH_PARSE_ATTR]
-    fresh = _parse_object(po.index, po.record_offset, len(payload), po.next_link, payload)
+    fresh = parse_object(po.index, po.record_offset, len(payload), po.next_link, payload)
     po.bags = fresh.bags
     po.text_exprs = fresh.text_exprs
     po.font_face = fresh.font_face
@@ -175,7 +175,7 @@ def restore_parse(po: PageObject, state) -> bool:
     """Put back a :func:`parse_state` of the record's present payload: what
     :func:`refresh_object_bags` leaves after parsing these bytes (the parse is a pure
     function of them). False, and nothing changed, when ``state`` is not of these bytes."""
-    if state is None or _page._WANT_COVERAGE:
+    if state is None or _page.WANT_COVERAGE:
         return False
     d = getattr(po, "__dict__", None)
     if d is None or state[0] != object_payload(po):
@@ -235,8 +235,8 @@ def _same_bags_after(old: bytes, new: bytes, fresh) -> bool:
         if k >= 0 and spans[k][0] <= d < spans[k][1]:
             return False
     n = len(new)
-    parse_entry = _page._parse_entry
-    for m in _page._BAG_CANDIDATE.finditer(new, start, min(n, hi + 8)):
+    parse_entry = _page.parse_entry
+    for m in _page.BAG_CANDIDATE.finditer(new, start, min(n, hi + 8)):
         c = m.start()
         if c > hi:
             break
@@ -283,15 +283,16 @@ def _rewrite_bag(po: PageObject, bag, new_pairs: list[tuple[str, str]]) -> None:
 # and every CtDraw-written record carries the section.
 
 
-def _strict(po: PageObject):
+def _strict(po: PageObject, value_bag_only: bool = False):
     """The strict record model (genie_place.decode), or None when the record
-    does not walk (an unframed element-trailer record)."""
+    does not walk (an unframed element-trailer record). ``value_bag_only``: only e0.b1's
+    pairs are decoded (the walk and its failures are the same)."""
     if getattr(po, "raw_payload", None) is not None:
         return None
     GP = _gp()
     try:
-        return GP.decode(po)
-    except Exception:  # noqa: BLE001 -- no forward walk: the caller falls back
+        return GP.decode(po, value_bag_only=value_bag_only)
+    except Exception:  # noqa: BLE001 -- swallow-ok: no forward walk: the caller falls back
         return None
 
 
@@ -382,7 +383,7 @@ def value_bag(po: PageObject) -> "list[tuple[str, str]] | None":
 
 
 def _value_bag_of(po: PageObject) -> "list[tuple[str, str]] | None":
-    r = _strict(po)
+    r = _strict(po, value_bag_only=True)
     if r is None:
         return None
     return list(r.entries[0][1].pairs) if r.entries else []
@@ -776,7 +777,7 @@ def set_object_text(po: PageObject, new_text: str, label: bool | None = None) ->
     if label and not already:
         new_text = "@(%s)" % new_text
     if not po.text_exprs:
-        return _set_plain_caption(po, new_text)
+        return set_plain_caption(po, new_text)
     targets = {e.encode(CODEC, "replace") for e in po.text_exprs}
     wrapped = new_text if (already or label is not None) else "@(%s)" % new_text
     repl = wrapped.encode(CODEC, "replace")
@@ -890,7 +891,7 @@ def sync_button_caption(po: PageObject) -> bool:
     return True
 
 
-def _set_plain_caption(po: PageObject, new_text: str) -> bool:
+def set_plain_caption(po: PageObject, new_text: str) -> bool:
     """Rewrite a plain (non-``@()``) text caption."""
     from . import geometry as G
 

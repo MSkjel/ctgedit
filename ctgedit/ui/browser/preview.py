@@ -1,6 +1,11 @@
 """The preview pane: the embedded thumbnail first, a real render on request."""
 
 from __future__ import annotations
+
+from ..style.theme import COLORS, set_note_role, type_qss
+
+from ...infra import logsetup
+from ..prefs.settings import option
 from ..style.theme import sp as _sp  # (the spacing scale)
 
 import contextlib
@@ -17,7 +22,6 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 from ...io.catalog import Entry, ProjectCatalog
 from ..panels import panel_options as _panels
-from ..style.theme import COLORS, type_qss
 from .thumbs import PREVIEW_SIZE, ThumbnailService, load_summary
 
 
@@ -170,10 +174,8 @@ def _opened_page(path: str):
 
     try:
         from ...editing import EditableDocument
-        from ..prefs.settings import app_settings
 
-        s = app_settings()
-        genies = s.value("opt/auto_update_genies", True, type=bool)
+        genies = option("auto_update_genies")
         pre = []
 
         def remembered(d) -> bool:
@@ -187,16 +189,14 @@ def _opened_page(path: str):
 
         doc = EditableDocument.open(path, before_derive=remembered)
         doc.apply_open_updates(
-            symbols=s.value("opt/auto_update_symbols", True, type=bool),
+            symbols=option("auto_update_symbols"),
             genies=genies and not any(pre),
-            template=s.value("opt/auto_update_template", True, type=bool),
-            placeholders=s.value("opt/auto_placeholder_missing", True, type=bool),
+            template=option("auto_update_template"),
+            placeholders=option("auto_placeholder_missing"),
         )
         if doc.page is not None:
             return doc.page
     except Exception:  # noqa: BLE001 -- the reader's page then
-        from ...infra import logsetup
-
         logsetup.note_exception("preview._opened_page", page=path)
     return reader.read_page(path)
 
@@ -245,6 +245,7 @@ def render_to_files(
         if opts.get("boxes"):
             res["boxes"] = root_boxes(pg)
     except Exception as e:  # noqa: BLE001 -- reported to the editor
+        logsetup.note_exception("preview.render_to_files", page=page)
         res = {"error": str(e).strip() or "the page could not be read"}
     with contextlib.suppress(OSError):
         write_atomic(out + ".json", json.dumps(res).encode("utf-8"))
@@ -389,6 +390,7 @@ class _PreviewRenderer(QtCore.QObject):
                 req["options"] = dict(options)
             write_atomic(job["out"] + ".req", json.dumps(req).encode("utf-8"))
         except Exception as e:  # noqa: BLE001 -- reported to the pane
+            logsetup.note_exception("preview.request", page=path)
             err = "could not start the render process: %s: %s" % (type(e).__name__, e)
         if err:
             self._kill(job)
@@ -659,7 +661,7 @@ class PreviewPane(QtWidgets.QFrame):
         self.btn_live.clicked.connect(self.live_render)
         self.btn_live.setAutoDefault(False)
         self.live_status = QtWidgets.QLabel("")
-        self.live_status.setStyleSheet("color:%s;" % COLORS["text_dim"])
+        set_note_role(self.live_status, "text_dim")
         live_row.addWidget(self.btn_live)
         live_row.addWidget(self.live_status, 1)
         lay.addLayout(live_row)
@@ -671,7 +673,7 @@ class PreviewPane(QtWidgets.QFrame):
         lay.addWidget(self.name)
         self.subtitle = QtWidgets.QLabel()
         self.subtitle.setWordWrap(True)
-        self.subtitle.setStyleSheet("color:%s;" % COLORS["text_dim"])
+        set_note_role(self.subtitle, "text_dim")
         lay.addWidget(self.subtitle)
 
         self.banner = QtWidgets.QFrame()
@@ -713,7 +715,7 @@ class PreviewPane(QtWidgets.QFrame):
             v.setWordWrap(True)
             v.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
             lab = QtWidgets.QLabel(k + ":")
-            lab.setStyleSheet("color:%s;" % COLORS["text_dim"])
+            set_note_role(lab, "text_dim")
             self.form.addRow(lab, v)
             self.fields[k] = v
             self._labels[k] = lab
@@ -724,7 +726,7 @@ class PreviewPane(QtWidgets.QFrame):
         self.path = QtWidgets.QLabel()
         self.path.setWordWrap(True)
         self.path.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
-        self.path.setStyleSheet("color:%s; %s" % (COLORS["text_dim"], type_qss("caption")))
+        set_note_role(self.path, "text_dim", type_qss("caption"))
         self.btn_copy = QtWidgets.QToolButton()
         self.btn_copy.setText("Copy")
         self.btn_copy.setToolTip("Copy the path (Ctrl+Shift+C)")
@@ -1013,11 +1015,18 @@ class PreviewPane(QtWidgets.QFrame):
         dpr = self.devicePixelRatioF() or 1.0
         return (max(320, int(size.width() * dpr * 2)), max(200, int(size.height() * dpr * 2)))
 
+    def _say_failed(self, why: str) -> None:
+        """The preview could not be drawn: said in the pane, the reason in its tooltip and the
+        log."""
+        logsetup.note_problem("preview.render", why)
+        self.live_status.setText("The preview could not be drawn.")
+        self.live_status.setToolTip(why)
+
     def _on_rendered(self, token: int, img, info: dict, err: str) -> None:
         if token != self._token or self._entry is None:
             return  # selection moved on
         if img is None:
-            self.live_status.setText("Render failed: %s" % err)
+            self._say_failed(err)
             self._live_for = None
             return
         self.live_image = img
@@ -1037,6 +1046,7 @@ class PreviewPane(QtWidgets.QFrame):
             page = read_page(e.path)
             err = ""
         except Exception as ex:  # noqa: BLE001
+            logsetup.note_exception("preview.render_now", page=e.path)
             page, err = None, str(ex).strip() or "the page could not be read"
         self._on_parsed(tok, page, err)
         return self.live_image
@@ -1046,14 +1056,15 @@ class PreviewPane(QtWidgets.QFrame):
         if token != self._token or self._entry is None:
             return  # selection moved on
         if page is None:
-            self.live_status.setText("Render failed: %s" % err)
+            self._say_failed(err)
             self._live_for = None
             return
         max_w, max_h = self._render_size()
         try:
             img = render_page_image(page, max_w, max_h)
         except Exception as ex:  # noqa: BLE001 -- a renderer bug must not kill the dialog
-            self.live_status.setText("Render failed: %s" % ex)
+            logsetup.note_exception("preview._on_parsed")
+            self._say_failed(str(ex))
             self._live_for = None
             return
         self._on_rendered(token, img, {"objects": len(page.objects)}, "")

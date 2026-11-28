@@ -31,8 +31,8 @@ def win(tmp_path_factory):
 
         w = MainWindow()
     yield w
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
 
 
 def test_markdown_subset():
@@ -391,8 +391,8 @@ def test_help_actions_run_in_a_window_that_is_still_open(win):
     UH.show_help("index", main=other)
     assert UH.action_target() is other
     other.close()
-    if other in MainWindow._instances:
-        MainWindow._instances.remove(other)
+    if other in MainWindow.instances:
+        MainWindow.instances.remove(other)
     shiboken6.delete(other)
     QtWidgets.QApplication.processEvents()
     ran = []
@@ -404,7 +404,7 @@ def test_help_actions_run_in_a_window_that_is_still_open(win):
 
 
 def test_help_actions_never_run_in_a_closed_window(win):
-    """A closed editor window leaves MainWindow._instances but stays alive
+    """A closed editor window leaves MainWindow.instances but stays alive
     (hidden) while something holds it: an action: link never runs there --
     not even when no other editor window is open, when the manual says so
     in its status bar instead."""
@@ -416,13 +416,13 @@ def test_help_actions_never_run_in_a_closed_window(win):
     other = MainWindow()
     UH.show_help("index", main=other)
     other.close()
-    if other in MainWindow._instances:
-        MainWindow._instances.remove(other)
+    if other in MainWindow.instances:
+        MainWindow.instances.remove(other)
     ran = []
     other.act_help.triggered.connect(lambda *_: ran.append("closed"))
     assert UH.action_target() is win  # the open window, not the closed one
-    saved = list(MainWindow._instances)
-    MainWindow._instances[:] = []  # no editor window open at all
+    saved = list(MainWindow.instances)
+    MainWindow.instances[:] = []  # no editor window open at all
     try:
         assert UH.action_target() is None
         hw = HelpWindow.instance()
@@ -431,7 +431,7 @@ def test_help_actions_never_run_in_a_closed_window(win):
         assert not ran
         assert "no editor window is open" in hw.statusBar().currentMessage()
     finally:
-        MainWindow._instances[:] = saved
+        MainWindow.instances[:] = saved
     HelpWindow.instance().close()
     other.deleteLater()
     QtWidgets.QApplication.processEvents()
@@ -487,7 +487,7 @@ def test_f1_with_a_drawing_tool_opens_that_tools_section(win, monkeypatch):
     from ctgedit.ui import main_window as MW
 
     monkeypatch.setattr(win, "doc", object())
-    tools = [t for t, _l, _i, _k in MW._TOOLS if t != "select"] + list(MW._SPECIAL_TOOLS)
+    tools = [t for t, _l, _i, _k in MW.TOOLS if t != "select"] + list(MW.SPECIAL_TOOLS)
     seen = {}
     for tool in tools:
         monkeypatch.setattr(win.view, "tool", lambda t=tool: t)

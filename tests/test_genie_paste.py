@@ -373,7 +373,7 @@ def test_update_pages_sees_a_pasted_copy_of_an_out_of_date_instance(fx_page):
     base, stamp = n.rsplit("#", 1)
     data["links"][0] = [g, "%s#%08x" % (base, int(stamp, 16) ^ 1)]  # an older version
     dst = _open(fx_page(TARGET))
-    cur = updatepages._Current(SymbolResolver.for_page(dst.path))
+    cur = updatepages.Current(SymbolResolver.for_page(dst.path))
     dst.paste_payload(json.dumps(data))
     dst.save()
     assert updatepages.stale_elements(dst.path, cur) == {("fxparts", "fx_anlist")}

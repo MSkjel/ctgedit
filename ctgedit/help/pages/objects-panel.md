@@ -15,8 +15,14 @@ The Objects panel (View > Panels > Objects) lists the page's objects as a tree, 
 
 The tool tip has the full details. Template objects are grey; large pictures are amber.
 
+A genie nested inside another genie is named by its own element. For an object inside nested
+genies, the tool tip shows the tree from the outermost genie down. Each level shows its element
+and the values it gets. Each level's values are worked out from the level above, as the
+Graphics Builder does when it opens the page: they are the values the objects inside it use. To
+see where each value goes, select the genie and open **Inputs** in the Properties panel.
+
 Settings > Appearance > Objects panel can put the kind and AN first instead. Right-click a row or
-the header > **Columns** to add Name, Kind, AN, Element, Tag and Position columns.
+the header > **Columns** to add Name, Kind, AN, Element, Tag, Parameters and Position columns.
 
 ## Selecting
 

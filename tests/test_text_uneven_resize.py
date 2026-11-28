@@ -315,7 +315,7 @@ def test_a_turned_texts_matrix_is_drawn_after_its_turn():
     def drawn(raw):
         item = QtWidgets.QGraphicsSimpleTextItem("Turn me")
         item.setFont(QtGui.QFont("Arial", 11))
-        assert PageScene._layout_text(item, _Obj(raw), 0, 0, 100, 100)
+        assert PageScene.layout_text(item, _Obj(raw), 0, 0, 100, 100)
         return item
 
     mirrored = drawn({"_text_turns": 1, "_local_xform": (-1.0, 0.0, 0.0, 1.0)})

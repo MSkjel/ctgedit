@@ -613,8 +613,8 @@ def win(arrange):
     w.resize(1400, 1000)
     w.show()
     yield w
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
 
 
 def _drag_handle(w, idx, start, end):

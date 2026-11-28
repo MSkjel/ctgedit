@@ -20,6 +20,8 @@ RAW_EXTRAS = {
     "_ref": "the library reference the record links to (lib.element.<ext)",
     "_resolved_ref": "the reference after resolution (what was found)",
     "_resolved_lib": "the library file the reference resolved to (base name)",
+    "_def_ref": "a genie copy nested in a placed genie or composite (no link of its own): the "
+    "element it places, read from the element record it is composed from (lib.element.<ext)",
     "_symbol_xform": "the transform that maps the resolved element into the placement box",
     "_local_xform": "the slot-1 orthogonal part (a, b, c, d) when it turns or mirrors",
     "_slot_scale": "a genuine anisotropic slot-1 scale (sx, sy) kept by the box fit",

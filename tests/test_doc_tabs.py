@@ -46,11 +46,11 @@ def win(fx_install, monkeypatch):
     w = MainWindow()
     w.resize(1280, 720)
     yield w
-    for x in list(MainWindow._instances):
+    for x in list(MainWindow.instances):
         for e in getattr(x, "_docs", []):
             e["doc"].dirty = False
-        if x in MainWindow._instances:
-            MainWindow._instances.remove(x)
+        if x in MainWindow.instances:
+            MainWindow.instances.remove(x)
         x.hide()
 
 
@@ -322,9 +322,9 @@ def test_a_tab_dragged_back_onto_its_own_bar_moves_there(win, tmp_path):
     from ctgedit.ui.main_window import MainWindow
 
     _open(win, _copies(tmp_path, ["A", "B", "C"]))
-    before = set(MainWindow._instances)
+    before = set(MainWindow.instances)
     win._tab_dropped(win.doc_tabs, 0, 2)  # (its own bar: no new window)
-    assert set(MainWindow._instances) == before
+    assert set(MainWindow.instances) == before
     assert [os.path.basename(e["doc"].path) for e in win._docs] == ["B.ctg", "C.ctg", "A.ctg"]
 
 
@@ -581,11 +581,11 @@ def test_dragging_a_tab_off_the_bar_starts_a_tab_drag(win, tmp_path, monkeypatch
         QtCore.Qt.LeftButton,
         QtCore.Qt.NoModifier,
     )
-    before = set(MainWindow._instances)
+    before = set(MainWindow.instances)
     QtCore.QCoreApplication.sendEvent(bar, move)
     _pump()
     assert seen == [str(uid0).encode("ascii")]
-    new = [w for w in MainWindow._instances if w not in before]
+    new = [w for w in MainWindow.instances if w not in before]
     assert len(new) == 1 and os.path.basename(new[0].doc.path) == "A.ctg"
     assert [os.path.basename(e["doc"].path) for e in win._docs] == ["B.ctg"]
 
@@ -618,10 +618,10 @@ def test_a_tab_dragged_out_opens_in_a_new_window(win, tmp_path):
     a, b = _copies(tmp_path, ["A", "B"])
     _open(win, [a, b])
     doc = win._docs[0]["doc"]
-    before = set(MainWindow._instances)
+    before = set(MainWindow.instances)
     win._tab_dragged_out(0, QtCore.QPoint(600, 400))
     _pump()
-    new = [w for w in MainWindow._instances if w not in before]
+    new = [w for w in MainWindow.instances if w not in before]
     assert len(new) == 1 and new[0].doc is doc
     assert [os.path.basename(e["doc"].path) for e in win._docs] == ["B.ctg"]
 
@@ -652,11 +652,11 @@ def test_a_tab_dragged_along_the_bar_and_then_out_moves_that_page(win, tmp_path,
     for x in range(p.x(), r1.center().x() + r1.width() // 2, 8):
         _send(bar, QtCore.QEvent.MouseMove, QtCore.QPoint(x, p.y()), QtCore.Qt.LeftButton)
     assert moves and [bar.tabText(i) for i in range(3)] == ["BBBB", "AAAA", "CCCC"]
-    before = set(MainWindow._instances)
+    before = set(MainWindow.instances)
     x = r1.center().x() + r1.width() // 2
     for y in range(p.y(), p.y() + 90, 10):
         _send(bar, QtCore.QEvent.MouseMove, QtCore.QPoint(x, y), QtCore.Qt.LeftButton)
-    new = [w for w in MainWindow._instances if w not in before]
+    new = [w for w in MainWindow.instances if w not in before]
     assert len(new) == 1
     assert [os.path.basename(e["doc"].path) for e in new[0]._docs] == ["AAAA.ctg"]
     assert [os.path.basename(e["doc"].path) for e in win._docs] == ["BBBB.ctg", "CCCC.ctg"]
@@ -759,11 +759,11 @@ def _restore(win, paths, current, monkeypatch):
 
 
 def test_close_all_opens_no_restored_tab_on_the_way(win, tmp_path, monkeypatch):
-    from ctgedit.ui.main_window_base import _PendingPage
+    from ctgedit.ui.main_window_base import PendingPage
 
     paths = _copies(tmp_path, ["P0", "P1", "P2", "P3", "P4", "P5"])
     opened = _restore(win, paths, 5, monkeypatch)
-    assert sum(isinstance(e["doc"], _PendingPage) for e in win._docs) == 5
+    assert sum(isinstance(e["doc"], PendingPage) for e in win._docs) == 5
     assert win.close_all_tabs()
     assert opened == [] and win._docs == [] and win.doc is None
 
@@ -867,12 +867,12 @@ def _element_session(tmp_path, current=0):
 
 def test_a_restored_element_tab_is_known_before_it_is_shown(win, tmp_path):
     from ctgedit.ui.main_window import MainWindow
-    from ctgedit.ui.main_window_base import _PendingPage
+    from ctgedit.ui.main_window_base import PendingPage
 
     _a, lib = _element_session(tmp_path)
     assert win.restore_session(reopen=True)
     _pump()
-    assert isinstance(win._docs[1]["doc"], _PendingPage)
+    assert isinstance(win._docs[1]["doc"], PendingPage)
     assert win._tabs_of("element", lib, ELEMENT) == [1]
     assert win._tabs_of("page", lib) == []
     win._open_element(lib, ELEMENT.upper())  # (the Library panel, Edit Definition)

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..names import plural
+
 from PySide6 import QtCore, QtWidgets
 
 #: the columns of the list
@@ -75,7 +77,7 @@ class SaveChangesDialog(QtWidgets.QDialog):
         total = len(self._keys)
 
         def pages(k: int) -> str:
-            return "%d page%s" % (k, "" if k == 1 else "s")
+            return plural(k, "page")
 
         if n == 0:
             text = "No page is ticked. Tick the pages to save, or choose Don't Save."

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..infra.paths import path_key
+
 import os
 import threading
 import time
@@ -119,7 +121,7 @@ def checker_for(project_dir: Optional[str]) -> Optional[ExpressionChecker]:
     one (a page outside a project)."""
     if not project_dir:
         return None
-    key = os.path.normcase(os.path.abspath(project_dir))
+    key = path_key(project_dir)
     c = _CHECKERS.get(key)
     if c is None:
         c = _CHECKERS[key] = ExpressionChecker(project_dir)

@@ -1,5 +1,6 @@
 """Window and panel settings reach every place they should."""
 
+from ctgedit.ui.main_window import MainWindow
 import os
 import types
 
@@ -158,25 +159,34 @@ def test_the_selection_toolbar_takes_overlay_opacity_the_theme_and_the_text_size
     hud = SelectionHUD(view, win)
     assert len(hud._buttons) == 5
     try:
-        # the defaults (dark, 100 %, Overlay opacity 100 %)
-        assert hud.styleSheet() == (
-            "#SelectionHUD { background: rgba(34, 38, 44, 225); "
-            "border: 1px solid #3a3f46; border-radius: 5px; }"
-        )
+        # the defaults (dark, 100 %, Overlay opacity 100 %): the canvas overlays' surface
+        from ctgedit.ui.editor.navbar import surface_qss
+
+        def surface(alpha):
+            bg = QtGui.QColor(theme.COLORS["popup"])
+            return "#SelectionHUD { background: rgba(%d, %d, %d, %d); " % (
+                bg.red(),
+                bg.green(),
+                bg.blue(),
+                alpha,
+            )
+
+        assert hud.styleSheet() == surface_qss("SelectionHUD")
+        assert surface(255) in hud.styleSheet()
+        assert "border: 1px solid %s; border-radius: 8px; }" % theme.COLORS["border"] in hud.styleSheet()
         assert hud._buttons[0].iconSize() == QtCore.QSize(14, 14)
         m = hud.layout().contentsMargins()
         assert (m.left(), m.top(), m.right(), m.bottom()) == (4, 2, 4, 2)
         # Settings > Canvas > Overlay opacity, applied by the dialog's OK: the alpha only
         app_settings().setValue("ui/overlay_opacity", 60)
         apply_canvas_nav(types.SimpleNamespace(hud=hud))
-        assert "rgba(34, 38, 44, 135)" in hud.styleSheet()  # (225 x 60 %)
-        assert "border-radius: 5px" in hud.styleSheet()
+        assert surface(153) in hud.styleSheet()  # (255 x 60 %)
+        assert "border-radius: 8px" in hud.styleSheet()
         assert placed == []  # (hidden: not placed)
-        # the light theme at 150 %: its overlay and border colours, larger icons
+        # the light theme at 150 %: its popup and border colours, larger icons
         theme.apply_theme(app, "light", 1.5)
         _pump()
-        bg = QtGui.QColor(theme.COLORS["overlay"])
-        assert "rgba(%d, %d, %d, 135)" % (bg.red(), bg.green(), bg.blue()) in hud.styleSheet()
+        assert surface(153) in hud.styleSheet()
         assert theme.COLORS["border"] in hud.styleSheet()
         assert hud._buttons[0].iconSize() == QtCore.QSize(21, 21)
         # a visible bar is placed again at its new size, not grown where it was
@@ -252,7 +262,7 @@ def test_a_new_template_with_no_page_open_takes_the_page_defaults_resolution(tmp
         set_document=shown.append,
         statusBar=lambda: types.SimpleNamespace(showMessage=lambda *_a: None),
     )
-    F.PageFiles._create_library_element(win, "template", lib, "pagecontent")
+    MainWindow._create_library_element(win, "template", lib, "pagecontent")
     assert got["size"] == (1024, 768) and shown
     assert F.new_template_size(lib) == (1024, 768)
     set_page_defaults({"resolution": "UHD4K"}, str(folder))
@@ -260,7 +270,7 @@ def test_a_new_template_with_no_page_open_takes_the_page_defaults_resolution(tmp
     set_page_defaults({"resolution": "User"}, str(folder))  # (no size of its own)
     assert F.new_template_size(lib) == F.NEW_TEMPLATE_SIZE == (1920, 1080)
     # a super genie keeps its own size
-    F.PageFiles._create_library_element(win, "supergenie", lib, "!pop")
+    MainWindow._create_library_element(win, "supergenie", lib, "!pop")
     assert got["size"] == (400, 300)
 
 

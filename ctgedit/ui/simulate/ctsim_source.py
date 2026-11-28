@@ -163,7 +163,7 @@ def _log_lines() -> int:
         from .options import log_lines
 
         _LOG_LINES[0] = log_lines()
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # swallow-ok: a setting, the default
         _LOG_LINES[0] = LOG_KEEP
     _LOG_LINES[1] = now
     return _LOG_LINES[0]
@@ -175,7 +175,7 @@ def _tasks_shown() -> bool:
         from . import options
 
         off = {t.strip() for t in str(options.get("log_types_off")).split(",")}
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # swallow-ok: a setting, the default
         return True
     return "task" not in off
 
@@ -453,6 +453,17 @@ class EngineSimulation:
         self.page = None
         self.project = ""
         self.page_name = page_name or ""
+        self._init_page_state()
+        self._init_tag_state()
+        self._init_user_state()
+        self._init_window_state(model, attach_window, project)
+        self._init_options()
+        self._init_alarm_state()
+        _LIVE.add(self)
+
+    def _init_page_state(self) -> None:
+        """The page states from the server: the window it opened, whether its whole state
+        arrived, the changes, drawn list and controls not handed on yet, and the flash."""
         # page states from the server: _window = the window it opened, _live = its whole
         # state arrived (from then on its states are drawn)
         self._window: Optional[int] = None
@@ -467,6 +478,11 @@ class EngineSimulation:
         self._flash_sent = True  # the flash phase the last PageState carried
         self._page_serial = 0
         self._replace_next = False
+
+    def _init_tag_state(self) -> None:
+        """The tags from the server, the page variables, the page changes held while a
+        window's whole state is awaited, the parameters, the tags used at run time and the
+        reloads."""
         # tags from the server
         self._tag_mode = 0  # bumped when the tags switch source
         self._tag_serial = 0
@@ -500,6 +516,10 @@ class EngineSimulation:
         # reloads (the page edited): one at a time, the newest of those waiting runs
         self._reload_gate = threading.Lock()
         self._reload_seq = 0
+
+    def _init_user_state(self) -> None:
+        """The simulated user, the tag search, the associations and undefined tags asked
+        for, the log and the clock."""
         # the simulated user (engine/PROTOCOL.md ctsim/user): what this tab wants on a
         # simulation it drives ('full' / 'none' / 'user:<name>'), what the server said, and
         # the project's users
@@ -528,6 +548,13 @@ class EngineSimulation:
         self._want_speed = 1.0
         self._reported: set = set()
         self.inputs: List[S.InputEvent] = []
+
+    def _init_window_state(
+        self, model: Optional[dict], attach_window: Optional[int], project: Optional[str]
+    ) -> None:
+        """The page model the engine reads, the window this tab shows and the windows of the
+        simulation, the debugger's pause, the tools, the tag writes not logged yet and
+        whether this tab drives the simulation."""
         # the page as the engine reads it (sim/pagemodel: ctsim-page/0), sent with openPage
         self.model = model
         # a window the engine opened (a popup): this tab shows it, it opens no page itself
@@ -562,6 +589,9 @@ class EngineSimulation:
         # the clock and asks for the project's startup code (load {startup: 'auto'}) once
         self._own = False
         self._viewer_of: Optional[C.Session] = None
+
+    def _init_options(self) -> None:
+        """The Simulate settings the window sets, and the SA start."""
         #: Simulate Settings > Run the project's startup code (set by the window)
         self.run_startup = True
         #: Simulate Settings > Show trend history from the start (set by the window): sent
@@ -596,6 +626,10 @@ class EngineSimulation:
         # this view shows an SA page's own workspace pane (set by the window): a reload shows
         # the page again through the workspace (ctsim/navigate)
         self.sa_pane = False
+
+    def _init_alarm_state(self) -> None:
+        """Alarms and equipment: what the panels asked last, what came back, the serials of
+        the changes."""
         # alarms and equipment (ctsim/alarms, ctsim/equipment): what the panels asked last,
         # what came back, the serial of the last ctsim/alarmsChanged
         self._alarm_serial = 0
@@ -611,7 +645,6 @@ class EngineSimulation:
         self._equip_rows: Optional[List[Dict[str, Any]]] = None
         self._equip_total = 0
         self._equip_asked = 0.0
-        _LIVE.add(self)
 
     # -- what the window shows about it -------------------------------------------------
     def status(self) -> S.SimStatus:
@@ -3435,7 +3468,7 @@ class EngineSimulation:
 
         try:
             s.request_async("ctsim/params", {}, done)
-        except Exception:  # noqa: BLE001 -- a lost connection is noticed elsewhere
+        except Exception:  # noqa: BLE001  # swallow-ok: a lost connection is noticed elsewhere
             with self._lock:
                 self._params_busy = False
 

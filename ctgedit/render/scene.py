@@ -18,6 +18,18 @@ from ..format import textmetrics as _textmetrics
 from . import buttons as _btn
 from ..infra.logsetup import note_exception as _note_exc
 
+
+def walk_items(item) -> list:
+    """``item`` and every descendant item (childItems() returns a list: no ownership side
+    effect, unlike parentItem())."""
+    out, stack = [], [item]
+    while stack:
+        it = stack.pop()
+        out.append(it)
+        stack.extend(it.childItems())
+    return out
+
+
 #: a genie parameter token in a caption ('%Line3%', '%Title=default%')
 _GENIE_TOKEN = re.compile(r"%[^%\s=]+(?:=[^%]*)?%")
 
@@ -104,7 +116,7 @@ _PLACEHOLDER_KINDS = frozenset(
 # Drawable LEAF kinds that PAINT THEIR OWN ART even when they own children: a record of one of
 # these whose children are behaviour records (Touch / Keyboard) draws its shape, unlike a real
 # container (group/genie/symbol/symbol_set) whose member leaves draw themselves. Mirrors
-# reader._LEAF_KINDS.
+# reader.LEAF_KINDS.
 _PAINTS_WITH_MEMBERS = frozenset(
     {
         ObjectKind.LINE,
@@ -530,6 +542,11 @@ class _AnPointMarker(QtWidgets.QGraphicsItem):
     """CtDraw's editor marker for a V3/V4 animation point."""
 
     _FONT = None
+    #: the two inks (shared: a paint never changes them)
+    _BLACK = QtGui.QColor(0, 0, 0)
+    _WHITE = QtGui.QColor(255, 255, 255)
+    #: the render hints the marker draws without (as GDI draws it)
+    _SMOOTH = QtGui.QPainter.Antialiasing | QtGui.QPainter.TextAntialiasing
 
     def __init__(self, scene, x: int, y: int, an: int):
         super().__init__()
@@ -540,6 +557,12 @@ class _AnPointMarker(QtWidgets.QGraphicsItem):
         # paint time (off the page: the surround)
         self.under = None
         self.under_text = None
+        # what every paint draws: the cross's arms (MoveTo x-4 .. LineTo x+5), the number's
+        # baseline origin (ascent 9) and the number
+        x, y = self._x, self._y
+        self._arms = (QtCore.QRectF(x - 4, y, 9, 1), QtCore.QRectF(x, y - 4, 1, 9))
+        self._text_at = QtCore.QPointF(x + 3, y)
+        self._label = str(self._an)
 
     def boundingRect(self) -> QtCore.QRectF:
         return QtCore.QRectF(self._x - 4, self._y - 9, 25, 15)
@@ -547,7 +570,7 @@ class _AnPointMarker(QtWidgets.QGraphicsItem):
     @staticmethod
     def _ink(rgb) -> QtGui.QColor:
         r, g, b = (rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF
-        return QtGui.QColor(0, 0, 0) if min(r, g, b) >= 0xEC else QtGui.QColor(255, 255, 255)
+        return _AnPointMarker._BLACK if min(r, g, b) >= 0xEC else _AnPointMarker._WHITE
 
     def _under(self, known, x, y) -> int:
         if known is not None:
@@ -562,11 +585,11 @@ class _AnPointMarker(QtWidgets.QGraphicsItem):
     def paint(self, painter, option, widget=None):
         x, y = self._x, self._y
         painter.save()
-        painter.setRenderHint(QtGui.QPainter.Antialiasing, False)
-        painter.setRenderHint(QtGui.QPainter.TextAntialiasing, False)
+        painter.setRenderHints(self._SMOOTH, False)
         ink = self._ink(self._under(self.under, x, y))
-        painter.fillRect(QtCore.QRectF(x - 4, y, 9, 1), ink)  # MoveTo x-4 .. LineTo x+5
-        painter.fillRect(QtCore.QRectF(x, y - 4, 1, 9), ink)
+        h, v = self._arms
+        painter.fillRect(h, ink)
+        painter.fillRect(v, ink)
         if _AnPointMarker._FONT is None:
             f = QtGui.QFont("Arial")
             f.setPixelSize(10)
@@ -574,7 +597,7 @@ class _AnPointMarker(QtWidgets.QGraphicsItem):
             _AnPointMarker._FONT = f
         painter.setFont(_AnPointMarker._FONT)
         painter.setPen(self._ink(self._under(self.under_text, x + 3, y - 9)))
-        painter.drawText(QtCore.QPointF(x + 3, y), str(self._an))  # baseline: ascent 9
+        painter.drawText(self._text_at, self._label)
         painter.restore()
 
 
@@ -2199,6 +2222,172 @@ class PageScene(QtWidgets.QGraphicsScene):
         self._strip(item, L, T, 1, B - T, black)
         self._strip(item, R - 1, T, 1, B - T, black)
 
+    def _embedded_face_item(self, obj: GraphicObject, x, y, ex, ey) -> QtWidgets.QGraphicsItem | None:
+        """The inline picture of a bitmap, turned as its record says; None when it has none."""
+        pm_item = self._embedded_bitmap_item(obj, x, y, ex, ey)
+        if pm_item is not None:
+            pm_item.setData(0, None)  # page items are re-stamped with their index
+            pm_item.setToolTip(self._tooltip(obj))
+            # an unlinked bitmap's extent is its class-native rect (= rect1); the slot-1
+            # H,K is move history, never an offset. Only a LINEAR part turns the picture,
+            # about the box centre. A METAFILE never turns: CtDraw plays it axis-aligned
+            # into its extent (CtDraw sets no world transform).
+            t = obj.geometry.transform
+            if (
+                (t.a, t.b, t.c, t.d) != (1.0, 0.0, 0.0, 1.0)
+                and not obj.raw.get("_bmp_grafted")
+                and not obj.raw.get("_metafile")
+            ):
+                cx, cy = ex / 2.0, ey / 2.0  # item space (pos = box top-left)
+                pm_item.setTransform(
+                    pm_item.transform()
+                    * QtGui.QTransform(1, 0, 0, 1, -cx, -cy)
+                    * QtGui.QTransform(t.a, t.b, t.c, t.d, 0, 0)
+                    * QtGui.QTransform(1, 0, 0, 1, cx, cy)
+                )
+            return pm_item
+        return None
+
+    def _rect_shape_item(self, obj: GraphicObject, x, y, ex, ey, k) -> QtWidgets.QGraphicsItem | None:
+        """A rectangle, or a number's face and its text (``k``: the kind)."""
+        # an INVISIBLE setpoint/slider HOTSPOT (runtime-animated rect sitting over a filled value
+        # field; reader-tagged ``_no_outline``) draws nothing in CtDraw's editor
+        if obj.raw.get("_no_outline") and not obj.style.filled:
+            return None
+        # (drawn from its data: a stored radius only; an art-stripped face takes its
+        # owner's style)
+        r = obj.style.corner_radius
+        if r:
+            path = QtGui.QPainterPath()
+            path.addRoundedRect(QtCore.QRectF(x, y, max(ex, 1), max(ey, 1)), r, r)
+            item = QtWidgets.QGraphicsPathItem(path)
+        else:
+            item = QtWidgets.QGraphicsRectItem(x, y, max(ex, 1), max(ey, 1))
+        item.setPen(self._pen(obj))
+        item.setBrush(self._brush(obj))
+        if not r and item.pen().style() == _QT_NO_PEN and item.brush().gradient() is not None:
+            # CtDraw fills a GRADIENT over (l, t, r + 1, b + 1) (ctf._Painter.square): a
+            # null-pen gradient face covers its inclusive extent (a solid null-pen fill
+            # covers l..r-1, as Qt's rect fill already does)
+            item.setRect(QtCore.QRectF(x, y, max(ex, 1) + 1, max(ey, 1) + 1))
+        if k == ObjectKind.NUMBER:
+            self._text_label(obj, x, y, ex, ey, parent=item)
+        return item
+
+    def _button_shape_item(self, obj: GraphicObject, x, y, ex, ey) -> QtWidgets.QGraphicsItem:
+        """A button with its icon face or its caption."""
+        item = self._button_item(obj, x, y, ex, ey)
+        mode = obj.raw.get("_button_mode", 0)
+        face = colorref_to_qcolor(obj.raw.get("_button_face"), _btn.sys_colour(_btn.COLOR_BTNFACE))
+        if mode in (0, 4):
+            icon_face = obj.raw.get("_button_icon")
+            if icon_face is not None:
+                # '#lib.element' caption = element bitmap as the face
+                iw, ih, rgba, _a = icon_face
+                img = QtGui.QImage(rgba, iw, ih, iw * 4, QtGui.QImage.Format_RGBA8888).copy()
+                pm = QtGui.QPixmap.fromImage(img)
+                if iw > ex - 2 or ih > ey - 2:
+                    pm = pm.scaled(
+                        int(ex - 2),
+                        int(ey - 2),
+                        QtCore.Qt.KeepAspectRatio,
+                        QtCore.Qt.SmoothTransformation,
+                    )
+                pix = QtWidgets.QGraphicsPixmapItem(pm, item)
+                pix.setPos(x + (ex - pm.width()) / 2.0, y + (ey - pm.height()) / 2.0)
+            else:
+                # caption: style text, else the bag TEXT/Button_Text (a '#'
+                # value is an icon-face ref, handled above -- skip it)
+                cap = obj.style.text
+                if not cap:
+                    props = obj.raw.get("_props") or {}
+                    cap = str(props.get("TEXT") or props.get("Button_Text") or "")
+                    if cap.startswith("#"):
+                        cap = ""
+                if cap:
+                    self._button_caption(obj, cap, x, y, ex, ey, item, face)
+        return item
+
+    def _ellipse_shape_item(self, obj: GraphicObject, x, y, ex, ey) -> QtWidgets.QGraphicsItem:
+        """An ellipse, a pie or an arc."""
+        # (a pie / arc with start == end -- also (0, 0) -- is CtDraw's FULL pie: the
+        # ellipse plus a radius line at the start angle; a full arc = the ellipse)
+        if obj.style.ellipse_style in (1, 2):
+            rect = QtCore.QRectF(x, y, max(ex, 1), max(ey, 1))
+            # CtDraw's angles (as format/ctf.py draws them):
+            # 0 = 12 o'clock, increasing CLOCKWISE (radial point
+            # (cx + sin a rx, cy - cos a ry)); the GDI Pie runs from the
+            # end radial counter-clockwise to the start one, i.e. clockwise
+            # from start to end. Qt: 0 = 3 o'clock, counter-clockwise.
+            ct_start = float(obj.style.start_angle)
+            start = 90.0 - ct_start
+            sweep = ct_start - float(obj.style.end_angle)
+            if sweep >= 0:
+                sweep -= 360.0
+            path = QtGui.QPainterPath()
+            if obj.style.ellipse_style == 1:  # pie
+                path.moveTo(rect.center())
+                path.arcTo(rect, start, sweep)
+                path.closeSubpath()
+            else:  # arc (open)
+                path.arcMoveTo(rect, start)
+                path.arcTo(rect, start, sweep)
+            # a FILLED arc paints its chord region: BeginPath / Arc /
+            # EndPath / FillPath, then strokes the Arc alone; a path item fills
+            # the open subpath implicitly closed and strokes only the arc. An
+            # UNFILLED arc picks by its stroke only (StrokePathItem), not by the chord
+            item = QtWidgets.QGraphicsPathItem(path) if obj.style.ellipse_style == 1 else StrokePathItem(path)
+            item.setPen(self._pen(obj))
+            item.setBrush(self._brush(obj))
+        else:
+            item = QtWidgets.QGraphicsEllipseItem(x, y, max(ex, 1), max(ey, 1))
+            item.setPen(self._pen(obj))
+            item.setBrush(self._brush(obj))
+        return item
+
+    def _polygon_shape_item(self, obj: GraphicObject, x, y, ex, ey, k) -> QtWidgets.QGraphicsItem | None:
+        """A polygon or a pipe (``k``: the kind); None for one with no shape of its own."""
+        g = obj.geometry
+        if k == ObjectKind.PIPE and not g.nodes and not (obj.raw.get("_dwflags", 0) & 0x2):
+            # an ART-STRIPPED pipe (no style block, no vertex array: a genie member whose
+            # shape lives in its element twin) has no shape of its own: nothing, like the
+            # vertex-less polygon rule below (the reader grafts the twin's vertices where
+            # it finds them).
+            return None
+        pts = [QtCore.QPointF(px, py) for px, py in g.nodes] or [
+            QtCore.QPointF(x, y),
+            QtCore.QPointF(x + ex, y + ey),
+        ]
+        if k == ObjectKind.POLYGON and not obj.style.polygon_open and len(pts) >= 3:
+            item = HollowPolygonItem(QtGui.QPolygonF(pts))
+            item.setBrush(self._brush(obj))
+            item.setPen(self._pen(obj))
+        elif k == ObjectKind.POLYGON and not g.nodes:
+            # vertex-less polygon WITHOUT the style block (dwFlags bit 2
+            # clear) is an animation-only record, never a shape
+            if not (obj.raw.get("_dwflags", 0) & 0x2):
+                return None
+            # no decoded vertices -> draw the bounding box (filled if known)
+            item = QtWidgets.QGraphicsRectItem(x, y, max(ex, 1), max(ey, 1))
+            item.setBrush(self._brush(obj))
+            item.setPen(self._pen(obj))
+        else:
+            path = QtGui.QPainterPath(pts[0])
+            for p in pts[1:]:
+                path.lineTo(p)
+            item = StrokePathItem(path)
+            pen = self._pen(obj)
+            if k == ObjectKind.PIPE:
+                item = self._pipe_item(obj, g.nodes or [(x, y), (x + ex, y + ey)], path)
+            else:
+                item.setPen(pen)
+                # an OPEN polygon with a fill style is still FILLED: CtDraw's polygon draw
+                # paints Polygon with the NULL pen when fill_style != 0,
+                # then strokes Polyline() -- Qt fills the open subpath implicitly closed
+                if k == ObjectKind.POLYGON and obj.style.filled and len(pts) >= 3:
+                    item.setBrush(self._brush(obj))
+        return item
+
     def _make_item(self, obj: GraphicObject) -> QtWidgets.QGraphicsItem | None:
         g = obj.geometry
         k = obj.kind
@@ -2208,121 +2397,16 @@ class PageScene(QtWidgets.QGraphicsScene):
         # Bitmap with a decoded inline picture draws the real pixels scaled
         # into its box (the actual symbol/genie art).
         if obj.raw.get("_embedded_bmp") is not None:
-            pm_item = self._embedded_bitmap_item(obj, x, y, ex, ey)
+            pm_item = self._embedded_face_item(obj, x, y, ex, ey)
             if pm_item is not None:
-                pm_item.setData(0, None)  # page items are re-stamped with their index
-                pm_item.setToolTip(self._tooltip(obj))
-                # an unlinked bitmap's extent is its class-native rect (= rect1); the slot-1
-                # H,K is move history, never an offset. Only a LINEAR part turns the picture,
-                # about the box centre. A METAFILE never turns: CtDraw plays it axis-aligned
-                # into its extent (CtDraw sets no world transform).
-                t = obj.geometry.transform
-                if (
-                    (t.a, t.b, t.c, t.d) != (1.0, 0.0, 0.0, 1.0)
-                    and not obj.raw.get("_bmp_grafted")
-                    and not obj.raw.get("_metafile")
-                ):
-                    cx, cy = ex / 2.0, ey / 2.0  # item space (pos = box top-left)
-                    pm_item.setTransform(
-                        pm_item.transform()
-                        * QtGui.QTransform(1, 0, 0, 1, -cx, -cy)
-                        * QtGui.QTransform(t.a, t.b, t.c, t.d, 0, 0)
-                        * QtGui.QTransform(1, 0, 0, 1, cx, cy)
-                    )
                 return pm_item
 
         if k in (ObjectKind.RECTANGLE, ObjectKind.NUMBER):
-            # an INVISIBLE setpoint/slider HOTSPOT (runtime-animated rect sitting over a filled value
-            # field; reader-tagged ``_no_outline``) draws nothing in CtDraw's editor
-            if obj.raw.get("_no_outline") and not obj.style.filled:
-                return None
-            # (drawn from its data: a stored radius only; an art-stripped face takes its
-            # owner's style)
-            r = obj.style.corner_radius
-            if r:
-                path = QtGui.QPainterPath()
-                path.addRoundedRect(QtCore.QRectF(x, y, max(ex, 1), max(ey, 1)), r, r)
-                item = QtWidgets.QGraphicsPathItem(path)
-            else:
-                item = QtWidgets.QGraphicsRectItem(x, y, max(ex, 1), max(ey, 1))
-            item.setPen(self._pen(obj))
-            item.setBrush(self._brush(obj))
-            if not r and item.pen().style() == _QT_NO_PEN and item.brush().gradient() is not None:
-                # CtDraw fills a GRADIENT over (l, t, r + 1, b + 1) (ctf._Painter.square): a
-                # null-pen gradient face covers its inclusive extent (a solid null-pen fill
-                # covers l..r-1, as Qt's rect fill already does)
-                item.setRect(QtCore.QRectF(x, y, max(ex, 1) + 1, max(ey, 1) + 1))
-            if k == ObjectKind.NUMBER:
-                self._text_label(obj, x, y, ex, ey, parent=item)
+            item = self._rect_shape_item(obj, x, y, ex, ey, k)
         elif k == ObjectKind.BUTTON:
-            item = self._button_item(obj, x, y, ex, ey)
-            mode = obj.raw.get("_button_mode", 0)
-            face = colorref_to_qcolor(obj.raw.get("_button_face"), _btn.sys_colour(_btn.COLOR_BTNFACE))
-            if mode in (0, 4):
-                icon_face = obj.raw.get("_button_icon")
-                if icon_face is not None:
-                    # '#lib.element' caption = element bitmap as the face
-                    iw, ih, rgba, _a = icon_face
-                    img = QtGui.QImage(rgba, iw, ih, iw * 4, QtGui.QImage.Format_RGBA8888).copy()
-                    pm = QtGui.QPixmap.fromImage(img)
-                    if iw > ex - 2 or ih > ey - 2:
-                        pm = pm.scaled(
-                            int(ex - 2),
-                            int(ey - 2),
-                            QtCore.Qt.KeepAspectRatio,
-                            QtCore.Qt.SmoothTransformation,
-                        )
-                    pix = QtWidgets.QGraphicsPixmapItem(pm, item)
-                    pix.setPos(x + (ex - pm.width()) / 2.0, y + (ey - pm.height()) / 2.0)
-                else:
-                    # caption: style text, else the bag TEXT/Button_Text (a '#'
-                    # value is an icon-face ref, handled above -- skip it)
-                    cap = obj.style.text
-                    if not cap:
-                        props = obj.raw.get("_props") or {}
-                        cap = str(props.get("TEXT") or props.get("Button_Text") or "")
-                        if cap.startswith("#"):
-                            cap = ""
-                    if cap:
-                        self._button_caption(obj, cap, x, y, ex, ey, item, face)
+            item = self._button_shape_item(obj, x, y, ex, ey)
         elif k == ObjectKind.ELLIPSE:
-            # (a pie / arc with start == end -- also (0, 0) -- is CtDraw's FULL pie: the
-            # ellipse plus a radius line at the start angle; a full arc = the ellipse)
-            if obj.style.ellipse_style in (1, 2):
-                rect = QtCore.QRectF(x, y, max(ex, 1), max(ey, 1))
-                # CtDraw's angles (as format/ctf.py draws them):
-                # 0 = 12 o'clock, increasing CLOCKWISE (radial point
-                # (cx + sin a rx, cy - cos a ry)); the GDI Pie runs from the
-                # end radial counter-clockwise to the start one, i.e. clockwise
-                # from start to end. Qt: 0 = 3 o'clock, counter-clockwise.
-                ct_start = float(obj.style.start_angle)
-                start = 90.0 - ct_start
-                sweep = ct_start - float(obj.style.end_angle)
-                if sweep >= 0:
-                    sweep -= 360.0
-                path = QtGui.QPainterPath()
-                if obj.style.ellipse_style == 1:  # pie
-                    path.moveTo(rect.center())
-                    path.arcTo(rect, start, sweep)
-                    path.closeSubpath()
-                else:  # arc (open)
-                    path.arcMoveTo(rect, start)
-                    path.arcTo(rect, start, sweep)
-                # a FILLED arc paints its chord region: BeginPath / Arc /
-                # EndPath / FillPath, then strokes the Arc alone; a path item fills
-                # the open subpath implicitly closed and strokes only the arc. An
-                # UNFILLED arc picks by its stroke only (StrokePathItem), not by the chord
-                item = (
-                    QtWidgets.QGraphicsPathItem(path)
-                    if obj.style.ellipse_style == 1
-                    else StrokePathItem(path)
-                )
-                item.setPen(self._pen(obj))
-                item.setBrush(self._brush(obj))
-            else:
-                item = QtWidgets.QGraphicsEllipseItem(x, y, max(ex, 1), max(ey, 1))
-                item.setPen(self._pen(obj))
-                item.setBrush(self._brush(obj))
+            item = self._ellipse_shape_item(obj, x, y, ex, ey)
         elif k == ObjectKind.LINE:
             pts = g.nodes or [(x, y), (x + ex, y + ey)]
             path = QtGui.QPainterPath(QtCore.QPointF(*pts[0]))
@@ -2331,44 +2415,7 @@ class PageScene(QtWidgets.QGraphicsScene):
             item = StrokePathItem(path)
             item.setPen(self._pen(obj))
         elif k in (ObjectKind.POLYGON, ObjectKind.PIPE):
-            if k == ObjectKind.PIPE and not g.nodes and not (obj.raw.get("_dwflags", 0) & 0x2):
-                # an ART-STRIPPED pipe (no style block, no vertex array: a genie member whose
-                # shape lives in its element twin) has no shape of its own: nothing, like the
-                # vertex-less polygon rule below (the reader grafts the twin's vertices where
-                # it finds them).
-                return None
-            pts = [QtCore.QPointF(px, py) for px, py in g.nodes] or [
-                QtCore.QPointF(x, y),
-                QtCore.QPointF(x + ex, y + ey),
-            ]
-            if k == ObjectKind.POLYGON and not obj.style.polygon_open and len(pts) >= 3:
-                item = HollowPolygonItem(QtGui.QPolygonF(pts))
-                item.setBrush(self._brush(obj))
-                item.setPen(self._pen(obj))
-            elif k == ObjectKind.POLYGON and not g.nodes:
-                # vertex-less polygon WITHOUT the style block (dwFlags bit 2
-                # clear) is an animation-only record, never a shape
-                if not (obj.raw.get("_dwflags", 0) & 0x2):
-                    return None
-                # no decoded vertices -> draw the bounding box (filled if known)
-                item = QtWidgets.QGraphicsRectItem(x, y, max(ex, 1), max(ey, 1))
-                item.setBrush(self._brush(obj))
-                item.setPen(self._pen(obj))
-            else:
-                path = QtGui.QPainterPath(pts[0])
-                for p in pts[1:]:
-                    path.lineTo(p)
-                item = StrokePathItem(path)
-                pen = self._pen(obj)
-                if k == ObjectKind.PIPE:
-                    item = self._pipe_item(obj, g.nodes or [(x, y), (x + ex, y + ey)], path)
-                else:
-                    item.setPen(pen)
-                    # an OPEN polygon with a fill style is still FILLED: CtDraw's polygon draw
-                    # paints Polygon with the NULL pen when fill_style != 0,
-                    # then strokes Polyline() -- Qt fills the open subpath implicitly closed
-                    if k == ObjectKind.POLYGON and obj.style.filled and len(pts) >= 3:
-                        item.setBrush(self._brush(obj))
+            item = self._polygon_shape_item(obj, x, y, ex, ey, k)
         elif k == ObjectKind.TEXT:
             item = self._text_item(obj, x, y, ex, ey)
             if obj.raw.get("_text_frame") and item is not None:
@@ -2636,7 +2683,7 @@ class PageScene(QtWidgets.QGraphicsScene):
         return QtGui.QFont(f)
 
     @staticmethod
-    def _layout_text(t, obj, x, y, ex, ey) -> bool:
+    def layout_text(t, obj, x, y, ex, ey) -> bool:
         """Place text item ``t`` (its text set) in the object box: True when
         it is turned or mirrored (laid about the box centre). The simulator
         lays a changed display value out again with it (sim_states)."""
@@ -2692,7 +2739,7 @@ class PageScene(QtWidgets.QGraphicsScene):
             t.setBrush(QtGui.QBrush(_QT_NO_BRUSH))  # a Transparent text colour
         else:
             t.setBrush(colorref_to_qcolor(obj.style.text_colour, QtGui.QColor("#111111")))
-        if self._layout_text(t, obj, x, y, ex, ey):
+        if self.layout_text(t, obj, x, y, ex, ey):
             return t
         tx, ty = t.pos().x(), t.pos().y()
         # 3D text effect: hilight/lolight/shadow ghost behind the main draw

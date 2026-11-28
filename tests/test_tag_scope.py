@@ -550,8 +550,8 @@ def test_tag_drop_binds_equipment_from_an_includers_tag(fx_install, monkeypatch)
         assert w.doc.genie_all_params(genie)["Equipment"] == "DROP_EQUIP"
         assert "DROP_EQUIP" in w.statusBar().currentMessage()
     finally:
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.hide()
         w.deleteLater()
         app.processEvents()

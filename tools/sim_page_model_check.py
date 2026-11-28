@@ -14,6 +14,7 @@ always including Mixer, Meters, Overview_L2 and Others), dump to JSON, re-read i
 with the document (pagemodel.check_model).
 """
 
+from ctgedit.format.fileio import find_ci
 import collections
 import json
 import os
@@ -65,11 +66,11 @@ class _Tables:
         self.dbf = {}
         self.ndx = {}
         for t in PR.PAGE_TABLES + ("activex",):
-            p = PR._find_file(project_dir, t + ".DBF")
+            p = find_ci(project_dir, t + ".DBF")
             if p is None:
                 continue
             self.dbf[t] = Dbf(p, writable=False)
-            self.ndx[t] = PR._open_ndx(project_dir, t, writable=False)
+            self.ndx[t] = PR.open_ndx(project_dir, t, writable=False)
 
     def rows(self, table, page):
         from ctgedit.io import pgregister as PR
@@ -79,7 +80,7 @@ class _Tables:
             return None
         return [
             d.decode(r)
-            for _i, r in sorted(PR._page_records(d, self.ndx.get(table), "PAGE", page))
+            for _i, r in sorted(PR.page_records(d, self.ndx.get(table), "PAGE", page))
             if r[:1] != b"*"
         ]
 

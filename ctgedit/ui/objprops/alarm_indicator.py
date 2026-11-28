@@ -8,13 +8,14 @@ from PySide6 import QtCore, QtWidgets
 from ...format import alarmind as AI
 from ..panels.sa_pickers import EquipmentField, EquipmentPickerDialog  # noqa: F401 (re-exported)
 from .colour_field import ColourPairField
-from .fields import _Field, _Sub
+from .fields import Field, Sub
 from ..style.theme import set_note_role
 from ...format import codes as _codes
+from ...infra.logsetup import note_exception as _note_exc
 
-ALARM = _Sub("General", [], family=AI.KEYS)
+ALARM = Sub("General", [], family=AI.KEYS)
 SUBS = [ALARM]
-FIELDS = [_Field("", k) for k in AI.KEYS]
+FIELDS = [Field("", k) for k in AI.KEYS]
 
 HELP_TOPIC = "properties#alarm-indicator"
 #: the Position radios' place in CtDraw's 3 x 3 layout: (row, column)
@@ -41,7 +42,7 @@ class AlarmIndicatorEditor:
             from ..help import set_help
 
             set_help(self.widget, HELP_TOPIC)
-        except Exception:  # noqa: BLE001
+        except RuntimeError:
             pass
         self.reload()
 
@@ -215,7 +216,7 @@ class AlarmIndicatorEditor:
                     and objs[j].type_code not in (_codes.TC.TOUCH, _codes.TC.KEYBOARD, 0xFFFF)
                 ]
                 tcs = [objs[j].type_code for j in kids]
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001  # swallow-ok: no such object, no hint
                 tcs = []
             if (
                 tcs
@@ -243,7 +244,7 @@ class AlarmIndicatorEditor:
             objs = s._doc.parsed.page.objects
             chain = [s._index] + list(s._doc.page.ancestors(s._index))
             return any(objs[a].subtype_size & 0x200 for a in chain)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001  # swallow-ok: no such object, not a genie
             return False
 
     # -- the sheet's editor contract ---------------------------------------------------
@@ -284,6 +285,7 @@ class AlarmIndicatorEditor:
         try:
             return bool(s._doc.set_alarm_indicator(s._index, v))
         except Exception as exc:  # noqa: BLE001 -- reported in the sheet
+            _note_exc("objprops.alarm_indicator.apply")
             s._fail("The alarm indicator could not be written: %s" % exc, self.widget)
             return False
 
@@ -292,6 +294,7 @@ class AlarmIndicatorEditor:
         try:
             stored = dict(s._doc.alarm_indicator(s._index))
         except Exception:  # noqa: BLE001
+            _note_exc("objprops.alarm_indicator.reload")
             stored = dict(AI.page_values({}))
         self._initial = stored
         self._show(stored)

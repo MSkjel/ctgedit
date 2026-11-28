@@ -589,8 +589,8 @@ def win(fx_install):
     yield w
     for dlg in list(w._dialogs.values()):
         dlg.reject()
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.hide()
 
 

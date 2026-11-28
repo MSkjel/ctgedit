@@ -173,9 +173,9 @@ class RunResultsDialog(QtWidgets.QDialog):
     def open_backup_folder(self) -> None:
         """Show the backup folder in Explorer (a seam: tests replace it)."""
         if self.backup and os.path.isdir(self.backup):
-            from PySide6 import QtGui
+            from ..messages import open_folder
 
-            QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(self.backup))
+            open_folder(self.backup)
 
     def buttons(self) -> list:
         """The action buttons' labels, in order (tests)."""

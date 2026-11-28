@@ -109,7 +109,7 @@ def _array_defaults(table, pages):
             for i in range(1, L.get("arr_n", 0)):
                 if not props.get("COL_ARR_%d" % i):
                     seen += 1
-                    bad += CS._pair_at(po.body_raw, L["arr_at"] + 8 * i) != table[i]
+                    bad += CS.pair_at(po.body_raw, L["arr_at"] + 8 * i) != table[i]
     return seen, bad
 
 
@@ -155,7 +155,7 @@ def test_threshold_rows_read_and_write_ctdraws_form():
     assert t.comparison == ">=" and t.pair == (0xFF8000, 0x800000)
     assert t.text() == ">=,85,0x00ff8000,0x00800000"
     # the saver's binary row agrees (u8 flags, u16 value, on, off)
-    assert CS._parse_thr(t.text()) == struct.pack("<BHII", 3, 85, 0xFF8000, 0x800000)
+    assert CS.parse_thr(t.text()) == struct.pack("<BHII", 3, 85, 0xFF8000, 0x800000)
     assert [r.text() for r in F.default_thresholds()] == [
         "<,5,0x000000ff,0x000000ff",
         "<,15,0x00000080,0x00000080",
@@ -187,11 +187,9 @@ def _survives_an_apply(records, short=None):
             L = CS.layout(po)
             slot = EditableDocument.fill_static_slot(po)
             b = po.body_raw
-            static = (
-                CS.state0_source(b, L["style_at"]) if slot is not None else CS._pair_at(b, L["state0_at"])
-            )
-            arr = [CS._pair_at(b, L["arr_at"] + 8 * k) for k in range(L["arr_n"])] if "arr_at" in L else None
-            sta = [CS._pair_at(b, L["sta_at"] + 8 * k) for k in range(L["sta_n"])] if "sta_at" in L else None
+            static = CS.state0_source(b, L["style_at"]) if slot is not None else CS.pair_at(b, L["state0_at"])
+            arr = [CS.pair_at(b, L["arr_at"] + 8 * k) for k in range(L["arr_n"])] if "arr_at" in L else None
+            sta = [CS.pair_at(b, L["sta_at"] + 8 * k) for k in range(L["sta_n"])] if "sta_at" in L else None
             fc = F.read(
                 props,
                 static,
@@ -201,7 +199,7 @@ def _survives_an_apply(records, short=None):
                 binary_states=sta,
             )
             assert F.apply_edits(props, fc, fc.copy()) == ([], None)
-            get = F._getter(props)
+            get = F.getter(props)
             target = F.target_values(fc, get)
             if fc.mode == F.THRESHOLD:
                 for i, row in enumerate(fc.thresholds):
@@ -274,7 +272,7 @@ def test_each_type_round_trips(fx_page):
     assert _col(doc, i) == {"COL_A": "Tag_1 > 5", "COL_MAXON": "0x00ff0000,0x00000000"}
     po = doc.parsed.page.objects[i]
     arr, L = _state(po)
-    assert L["flag"] == 0x23 and CS._pair_at(po.body_raw, L["maxon_at"]) == (0xFF0000, 0)
+    assert L["flag"] == 0x23 and CS.pair_at(po.body_raw, L["maxon_at"]) == (0xFF0000, 0)
     assert po.subtype_size & 0x10  # dynamic
 
     # Multi-state: condition A carries over, a second condition, a state colour
@@ -317,7 +315,7 @@ def test_each_type_round_trips(fx_page):
     assert L["flag"] == 0x09 and L["arr_n"] == 256
     pal = doc.colour_palette()
     for k in (1, 6, 12, 200):  # the palette defaults
-        assert CS._pair_at(po.body_raw, L["arr_at"] + 8 * k) == pal[k]
+        assert CS.pair_at(po.body_raw, L["arr_at"] + 8 * k) == pal[k]
 
     # Threshold with a range; the four default rows
     ed._radios[F.THRESHOLD].setChecked(True)
@@ -454,7 +452,7 @@ def test_off_colour_is_the_appearance_fill(fx_page):
     assert dlg.apply() and len(doc._undo) == n + 1
     po = doc.parsed.page.objects[i]
     assert _static(po) == (0x00AA00, 0x00AA00)
-    assert CS._pair_at(po.body_raw, CS.layout(po)["state0_at"]) == (0x00AA00, 0x00AA00)
+    assert CS.pair_at(po.body_raw, CS.layout(po)["state0_at"]) == (0x00AA00, 0x00AA00)
     # the Appearance field edits the static colour too
     dlg._col_fill.pick(0x445566)
     assert ed._off_col.pair() == (0x445566, 0x445566)
@@ -803,7 +801,7 @@ def test_genie_element_member_new_array_takes_the_palette_defaults(fx_install):
 
         def entries(po):
             L = CS.layout(po)
-            return [CS._pair_at(po.body_raw, L["arr_at"] + 8 * k) for k in range(256)]
+            return [CS.pair_at(po.body_raw, L["arr_at"] + 8 * k) for k in range(256)]
 
         got = entries(d.parsed.page.objects[i])
         assert got[5] == (0x123456, 0x123456)

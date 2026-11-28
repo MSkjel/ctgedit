@@ -51,7 +51,7 @@ def _text(an=5, x=100, y=50, text="Hello", **args):
 
 def _text_item(item):
     from PySide6 import QtWidgets
-    from ctgedit.render.sim_drawn import _walk
+    from ctgedit.render.scene import walk_items as _walk
 
     return next(it for it in _walk(item) if isinstance(it, QtWidgets.QGraphicsSimpleTextItem))
 
@@ -256,7 +256,8 @@ def test_the_list_replaces_keeps_unchanged_items_and_removes_gone_ones():
 
 def test_drawn_items_are_above_every_page_item_and_take_no_clicks():
     from ctgedit.render.scene import PAGE_INDEX_ROLE
-    from ctgedit.render.sim_drawn import Z_DRAWN, _walk
+    from ctgedit.render.scene import walk_items as _walk
+    from ctgedit.render.sim_drawn import Z_DRAWN
 
     sc = _scene()
     sc.sim_layer().apply_drawn({31999: _text(an=31999), 5: _text(y=90)})
@@ -352,7 +353,7 @@ def test_a_file_display_draws_each_line_on_its_an():
     entry = {"an": 20, "kind": "file", "x": 10, "y": 40, "text": "log.txt", "args": {"lines": lines}}
     sc.sim_layer().apply_drawn({20: entry})
     from PySide6 import QtWidgets
-    from ctgedit.render.sim_drawn import _walk
+    from ctgedit.render.scene import walk_items as _walk
 
     item = sc.sim_layer().drawn_layer().items()[20]
     texts = sorted(
@@ -410,7 +411,7 @@ def _rich(an=7, x=20, y=20, w=200, h=60, **args):
 
 def _rich_text(item):
     from PySide6 import QtWidgets
-    from ctgedit.render.sim_drawn import _walk
+    from ctgedit.render.scene import walk_items as _walk
 
     return next(it for it in _walk(item) if isinstance(it, QtWidgets.QGraphicsTextItem))
 
@@ -453,14 +454,14 @@ def test_a_rich_text_box_without_rtf_is_an_empty_box():
     box = sc.sim_layer().drawn_layer().items()[7]
     assert box.rect().getRect() == (20, 20, 200, 60)
     from PySide6 import QtWidgets
-    from ctgedit.render.sim_drawn import _walk
+    from ctgedit.render.scene import walk_items as _walk
 
     assert not [it for it in _walk(box) if isinstance(it, QtWidgets.QGraphicsTextItem)]
 
 
 def test_a_plot_draws_its_primitives_relative_to_its_an():
     from PySide6 import QtCore, QtWidgets
-    from ctgedit.render.sim_drawn import _walk
+    from ctgedit.render.scene import walk_items as _walk
 
     pen = {"style": 0, "colour": 0x000000, "width": 1}
     prims = [
@@ -868,3 +869,20 @@ def test_the_engine_source_hands_the_drawn_list_over(tmp_path, monkeypatch):
         sim.stop()
         srv.stop()
         hub.shutdown()
+
+
+def test_alarm_priority_symbols_join_the_include_chain(fx_page):
+    """The page's own almprior.DBF and Include's are joined, as the compiler joins them:
+    a priority only the included project defines still finds its genie."""
+    from ctgedit.format import dbf
+
+    page = fx_page("FxSimAlarms", "FxSim")
+    dbf.create_table(
+        os.path.join(os.path.dirname(page), "almprior.DBF"),
+        [("PRIORITY", 16), ("LIBNAME", 64), ("LIBOBJNAME", 64), ("THUMBNAIL", 64)],
+        [{"PRIORITY": "9", "LIBNAME": "fxprio", "LIBOBJNAME": "fx_p3", "THUMBNAIL": ""}],
+    )
+    sc = _fx(fx_page, "FxSimAlarms", "FxSim")
+    dl = sc.sim_layer().drawn_layer()
+    assert dl._symbol_name("9", 2) == "fxprio.fx_p3"
+    assert dl._symbol_name("1", 2) == "fxprio.fx_p1"

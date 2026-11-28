@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..names import plural
+
 import contextlib
 import math
 import time
@@ -1076,7 +1078,7 @@ class SimCanvas(QtWidgets.QGraphicsView):
             for an in self.ans_at(viewpos):
                 if an in self._errors:
                     n, text, _lv = self._errors[an]
-                    extra.append("AN %d: %d error%s. Last: %s" % (an, n, "" if n == 1 else "s", text))
+                    extra.append("AN %d: %s. Last: %s" % (an, plural(n, "error"), text))
         if self.show_numbers:
             ans = self.ans_at(viewpos)
             if ans:

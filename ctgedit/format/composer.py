@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..infra.paths import path_key
+
 import base64
 import hashlib
 import io
@@ -12,6 +14,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from . import composites as C
+from ..infra.logsetup import note_exception as _note_exc
 
 INF = float("inf")
 
@@ -179,6 +182,7 @@ def _holds(cond, values) -> bool:
     try:
         return C.evaluate(cond, values)
     except Exception:  # noqa: BLE001 -- a broken condition never hides a node
+        _note_exc("composer._holds", cond=cond)
         return True
 
 
@@ -227,7 +231,7 @@ def load_model(path: str) -> TemplateModel:
     stamp). Raises CompositionError when the template has problems -- CtDraw
     refuses such a template -- or is not a template at all."""
     st = os.stat(path)
-    key = (os.path.normcase(os.path.abspath(path)), st.st_mtime_ns, st.st_size)
+    key = (path_key(path), st.st_mtime_ns, st.st_size)
     hit = _MODEL_CACHE.get(key)
     if hit is not None:
         return hit
@@ -238,6 +242,37 @@ def load_model(path: str) -> TemplateModel:
         _MODEL_CACHE.clear()
     _MODEL_CACHE[key] = model
     return model
+
+
+#: parse_model by (path, the template's bytes): a model is only read (load_model shares its
+#: models too)
+_PARSED_MEMO: Dict[tuple, TemplateModel] = {}
+#: template_digest by the template's bytes
+_DIGEST_MEMO: Dict[bytes, str] = {}
+
+
+def parsed_model(data: bytes, path: str = "") -> TemplateModel:
+    """:func:`parse_model`, kept by the template's bytes (a template with problems raises
+    each time)."""
+    key = (path, data)
+    hit = _PARSED_MEMO.get(key)
+    if hit is None:
+        hit = parse_model(data, path)
+        if len(_PARSED_MEMO) > 64:
+            _PARSED_MEMO.clear()
+        _PARSED_MEMO[key] = hit
+    return hit
+
+
+def digest_of(data: bytes) -> str:
+    """:func:`template_digest`, kept by the template's bytes."""
+    hit = _DIGEST_MEMO.get(data)
+    if hit is None:
+        hit = template_digest(data)
+        if len(_DIGEST_MEMO) > 64:
+            _DIGEST_MEMO.clear()
+        _DIGEST_MEMO[data] = hit
+    return hit
 
 
 def parse_model(data: bytes, path: str = "") -> TemplateModel:
@@ -255,8 +290,8 @@ def parse_model(data: bytes, path: str = "") -> TemplateModel:
     def at(_node, msg):
         problems.append(msg)
 
-    _params, pmap = C._parse_params(root, at)
-    globals_ = C._parse_globals(root, pmap, at)
+    _params, pmap = C.parse_params(root, at)
+    globals_ = C.parse_globals(root, pmap, at)
     if problems:
         raise CompositionError(problems[0])
     contents: Dict[int, ContentItemDef] = {}
@@ -1352,3 +1387,5 @@ def element_version(identity: bytes) -> str:
 from ..infra import caches as _caches  # noqa: E402
 
 _caches.register("composer.models", _MODEL_CACHE, on=("refresh", "tests"))
+_caches.register("composer.parsed_models", _PARSED_MEMO, on=("refresh", "tests"))
+_caches.register("composer.digests", _DIGEST_MEMO, on=("tests",))

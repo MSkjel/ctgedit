@@ -2,8 +2,15 @@
 
 from __future__ import annotations
 
+from ...infra.paths import folder_key, path_key
+
+from ...infra.logsetup import note_exception as _note_exc
+
+
+from ..main_window_base import editor_windows, main_window_class
+
 import contextlib
-from ..main_window_base import (  # noqa: F401
+from ..main_window_base import (
     EditableDocument,
     ElementDocument,
     QtCore,
@@ -13,6 +20,7 @@ from ..main_window_base import (  # noqa: F401
     saved_message,
     ui_state,
 )
+from ..messages import warn
 
 
 class WorkspaceTools:
@@ -117,7 +125,7 @@ class WorkspaceTools:
         from ...features import page_checks as PC
         from ..expression_check import checker_for_document
 
-        fields = PC.expression_fields(doc)
+        fields = rep.fields  # (check_document's: the page as checked)
         rep.expressions = len(fields)
         if not fields:
             self._show_page_report(doc)
@@ -211,11 +219,11 @@ class WorkspaceTools:
             panel.clear("The page checks apply to pages: %s is a library element." % doc.display_name)
         elif doc is not None:
             panel.clear(
-                "%s has not been checked yet: use Tools > Check Page."
+                "%s has not been checked yet. Click Check Again to check it."
                 % os.path.splitext(os.path.basename(doc.path))[0]
             )
         else:
-            panel.clear("Use Tools > Check Page to check the open page.")
+            panel.clear("Open a page to check it.")
 
     def _show_page_checks_dock(self) -> None:
         d = self.dock_page_checks
@@ -380,6 +388,7 @@ class WorkspaceTools:
                 panes = [p for p in panes if p.index not in mine]
             return ParamPickers(os.path.dirname(os.path.abspath(self.doc.path)), panes)
         except Exception:  # noqa: BLE001 -- plain text boxes then
+            _note_exc("workspace._genie_pickers")
             return None
 
     @staticmethod
@@ -441,7 +450,7 @@ class WorkspaceTools:
             )
         return (
             "Not Saved",
-            "%s could not be saved: %s" % (name, _mw().MainWindow._error_text(exc)),
+            "%s could not be saved: %s" % (name, main_window_class()._error_text(exc)),
             "Use Save As to save your changes under another name.",
             True,
         )
@@ -470,17 +479,13 @@ class WorkspaceTools:
     def _confirm(
         self, title: str, text: str, ok_label: str, detail: str = "", icon=QtWidgets.QMessageBox.Warning
     ) -> bool:
-        """A warning with one action button and Cancel (the default and Esc).
-        True when the action was chosen."""
-        box = QtWidgets.QMessageBox(icon, title, text, QtWidgets.QMessageBox.NoButton, self)
-        if detail:
-            box.setInformativeText(detail)
-        ok = box.addButton(ok_label, QtWidgets.QMessageBox.AcceptRole)
-        cancel = box.addButton(QtWidgets.QMessageBox.Cancel)
-        box.setDefaultButton(cancel)
-        box.setEscapeButton(cancel)
-        box.exec()
-        return box.clickedButton() is ok
+        """A warning with one action button and Cancel (the default and Esc), as
+        messages.confirm asks it. True when the action was chosen."""
+        from ..messages import confirm
+
+        return confirm(
+            self, title, text, ok_label, detail=detail, warning=icon == QtWidgets.QMessageBox.Warning
+        )
 
     def _refresh_runtime_page(self) -> None:
         """A running runtime showing this page re-displays it (CtAPI
@@ -660,6 +665,7 @@ class WorkspaceTools:
         try:
             outside = not self.doc.page_record_available()
         except Exception:  # noqa: BLE001
+            _note_exc("workspace._outside_note")
             outside = False
         return (
             "The page is not in a project folder: it is not registered, and Plant SCADA does not compile it"
@@ -672,15 +678,15 @@ class WorkspaceTools:
         own page), else None."""
         from .. import main_window as _mw
 
-        want = os.path.normcase(os.path.abspath(path))
-        for win in [self] + [w for w in list(_mw.MainWindow._instances) if w is not self]:
+        want = path_key(path)
+        for win in [self] + [w for w in list(_mw.MainWindow.instances) if w is not self]:
             for e in getattr(win, "_docs", []):
                 d = e["doc"]
                 if d is self.doc or isinstance(d, ElementDocument) or getattr(d, "element", ""):
                     continue
                 if not getattr(d, "path", ""):
                     continue
-                if os.path.normcase(os.path.abspath(d.path)) == want:
+                if path_key(d.path) == want:
                     return "another tab" if win is self else "another window"
         return None
 
@@ -702,7 +708,7 @@ class WorkspaceTools:
         other = self._open_elsewhere(path)
         if other is not None:
             # (two tabs on one file: the one saved last would overwrite the other's edits)
-            QtWidgets.QMessageBox.warning(
+            warn(
                 self,
                 "Save As",
                 "%s is open in %s. Close it there first, or save under another name."
@@ -795,16 +801,17 @@ class WorkspaceTools:
 
             here = os.path.dirname(os.path.abspath(self.doc.path))
             root = compiler.root_project_for(here)
-            dirs = {os.path.normcase(os.path.abspath(d)) for d in tagscope.scope(here, root).dirs()}
+            dirs = {path_key(d) for d in tagscope.scope(here, root).dirs()}
         except Exception:  # noqa: BLE001 -- no project scope: this folder only
-            dirs = {os.path.normcase(os.path.dirname(os.path.abspath(self.doc.path)))}
+            _note_exc("workspace._unsaved_in_compile")
+            dirs = {folder_key(self.doc.path)}
         out = []
-        for win in list(_mw().MainWindow._instances):
+        for win in editor_windows():
             for e in list(win._docs):
                 d = e["doc"]
                 if d is self.doc or not getattr(d, "dirty", False):
                     continue
-                if os.path.normcase(os.path.dirname(os.path.abspath(d.path))) in dirs:
+                if folder_key(d.path) in dirs:
                     out.append(d)
         return out
 
@@ -1013,10 +1020,3 @@ class WorkspaceTools:
         if old is not None:
             self._drop_modeless(old)
         self._show_modeless(CompileResultsDialog(result, page, self), "compile", scope="window")
-
-
-def _mw():
-    """ctgedit.ui.main_window (MainWindow is defined there, after this module is imported)."""
-    from .. import main_window
-
-    return main_window

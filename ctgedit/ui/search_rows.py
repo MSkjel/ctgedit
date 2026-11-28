@@ -7,9 +7,17 @@ from typing import Iterable, List, Optional, Sequence, Tuple
 
 from PySide6 import QtCore, QtGui, QtWidgets
 from ..format.cnum import is_digits
+from ..infra import caches as _caches
 
 #: the role holding the :class:`Row` of an index
 ROW_ROLE = QtCore.Qt.UserRole + 2
+#: Qt's roles, read once (an attribute of QtCore.Qt costs about 1 us)
+_DISPLAY_ROLE = QtCore.Qt.DisplayRole
+_ACCESSIBLE_ROLE = QtCore.Qt.AccessibleTextRole
+_TOOLTIP_ROLE = QtCore.Qt.ToolTipRole
+_USER_ROLE = QtCore.Qt.UserRole
+#: the role holding a row's command id
+_CID_ROLE = QtCore.Qt.UserRole + 1
 #: the words the letters-only rule does not start at (typed whole they are found as words)
 JOINING_WORDS = frozenset(
     ("a", "an", "and", "as", "at", "by", "for", "in", "into", "of", "on", "or", "the", "to", "with")
@@ -37,6 +45,16 @@ def word_starts(text: str) -> List[int]:
             out.append(i)
         prev = ch
     return out
+
+
+@functools.lru_cache(maxsize=8192)
+def _starts_of(text: str) -> Tuple[int, ...]:
+    """:func:`word_starts` of ``text``, kept (a popup matches the same texts on every key
+    press: the Settings rows, the commands, the help sections)."""
+    return tuple(word_starts(text))
+
+
+_caches.register("search_rows.word_starts", _starts_of, on=())
 
 
 def _joining_starts(t: str, starts: Sequence[int]) -> set:
@@ -106,16 +124,17 @@ def _subsequence(
 
 
 def match(
-    query: str, text: str, substring_min: int = 1, within_word: bool = False
+    query: str, text: str, substring_min: int = 1, within_word: bool = False, loose: bool = True
 ) -> Optional[Tuple[int, List[int]]]:
-    """(rank, matched positions) of ``query`` in ``text``, or None (see the module)."""
+    """(rank, matched positions) of ``query`` in ``text``, or None (see the module).
+    ``loose`` False: None instead of a match of the letters in order (rank 100 and up)."""
     q = " ".join((query or "").lower().split())
     if not q:
         return 0, []
     t = text.lower()
     if t.startswith(q):
         return 0, list(range(len(q)))
-    starts = word_starts(text)
+    starts = _starts_of(text)
     for k, s in enumerate(starts):
         if t.startswith(q, s):
             return 10 + k, list(range(s, s + len(q)))
@@ -143,6 +162,8 @@ def match(
     if len(q) >= max(1, substring_min) and q in t:
         i = t.index(q)
         return 30 + i, list(range(i, i + len(q)))
+    if not loose:
+        return None
     sub = _subsequence(q.replace(" ", ""), text, starts, within_word)
     if sub is not None:
         return 100 + sub[0], sub[1]
@@ -323,20 +344,21 @@ class RowsModel(QtCore.QAbstractListModel):
     def rowCount(self, parent=QtCore.QModelIndex()) -> int:  # noqa: N802 -- Qt naming
         return 0 if parent.isValid() else len(self._rows)
 
-    def data(self, index, role=QtCore.Qt.DisplayRole):
+    def data(self, index, role=_DISPLAY_ROLE):
         if not index.isValid() or not 0 <= index.row() < len(self._rows):
             return None
         r = self._rows[index.row()]
-        if role in (QtCore.Qt.DisplayRole, QtCore.Qt.AccessibleTextRole):
-            return r.accessible_text()
-        if role == QtCore.Qt.ToolTipRole:
-            return r.tip or (r.reason if not r.enabled else "") or None
-        if role == QtCore.Qt.UserRole:
-            return r.data
-        if role == QtCore.Qt.UserRole + 1:
-            return r.cid
+        # (the delegate asks for the row: first)
         if role == ROW_ROLE:
             return r
+        if role == _DISPLAY_ROLE or role == _ACCESSIBLE_ROLE:
+            return r.accessible_text()
+        if role == _TOOLTIP_ROLE:
+            return r.tip or (r.reason if not r.enabled else "") or None
+        if role == _USER_ROLE:
+            return r.data
+        if role == _CID_ROLE:
+            return r.cid
         return None
 
     def flags(self, index):
@@ -501,16 +523,26 @@ class RowDelegate(QtWidgets.QStyledItemDelegate):
 
         return QtGui.QFontMetrics(font("caption")).height() + sp(2) + sp(1)
 
+    def _heights(self) -> Tuple[int, int, int]:
+        """(header, row, caption line) heights, kept while the theme is the same (Qt asks
+        every row's size on each key press of a search)."""
+        from .style.theme import font, generation
+
+        gen = generation()
+        kept = self.__dict__.get("_kept_heights")
+        if kept is None or kept[0] != gen:
+            caption = QtGui.QFontMetrics(font("caption")).height()
+            kept = self._kept_heights = (gen, (self.header_height(), self.row_height(), caption))
+        return kept[1]
+
     def sizeHint(self, option, index) -> QtCore.QSize:  # noqa: N802 -- Qt naming
         r = index.data(ROW_ROLE)
         w = option.rect.width() if option.rect.width() > 0 else 400
+        head, h, caption = self._heights()
         if r is not None and r.kind == "header":
-            return QtCore.QSize(w, self.header_height())
-        h = self.row_height()
+            return QtCore.QSize(w, head)
         if self.two_lines and r is not None and r.detail and r.kind not in ("note",):
-            from .style.theme import font
-
-            h += QtGui.QFontMetrics(font("caption")).height()
+            h += caption
         return QtCore.QSize(w, h)
 
     # -- painting ---------------------------------------------------------------------------

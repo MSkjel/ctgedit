@@ -441,8 +441,8 @@ def test_hover_never_deletes_scene_items():
         assert w.doc.page.root_of(w.view._hit_index(vp)[0]) == w.doc.page.root_of(light)
     finally:
         w.doc = None
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.close()
 
 

@@ -1,5 +1,6 @@
 """The page register."""
 
+from ctgedit.format.fileio import find_ci
 import os
 import random
 import shutil
@@ -31,10 +32,10 @@ def _norm(dbf, row):
 
 
 def _stored(project, table, page):
-    d = Dbf(PR._find_file(project, table + ".DBF"), writable=False)
-    n = PR._open_ndx(project, table)
+    d = Dbf(find_ci(project, table + ".DBF"), writable=False)
+    n = PR.open_ndx(project, table)
     try:
-        rows = [d.decode(r) for _i, r in PR._page_records(d, n, "PAGE", page) if r[:1] != b"*"]
+        rows = [d.decode(r) for _i, r in PR.page_records(d, n, "PAGE", page) if r[:1] != b"*"]
         return d, rows
     finally:
         if n is not None:
@@ -65,7 +66,7 @@ def _ctdraw_rows(project, page, table):
     rows.json applied (its rows changed in place, then the rows appended)."""
     diffs = fxinstall.oracle_json("pages", "FxMain/" + page, "rows.json")["tables"]
     diff = next((v for k, v in diffs.items() if k.lower() == "fxmain/%s.dbf" % table), None)
-    with Dbf(PR._find_file(project, table + ".DBF"), writable=False) as d:
+    with Dbf(find_ci(project, table + ".DBF"), writable=False) as d:
         base = [(d.read(i)[:1].decode("latin-1"), d.decode(d.read(i))) for i in range(d.nrec)]
     if diff:
         for c in diff["changed"]:
@@ -435,10 +436,10 @@ def test_ndx_insert_keeps_a_valid_btree(tmp_path):
 def test_ndx_find_equals_scan_on_the_project_index(SA):
     """FxMain's pgdynobj index (310 rows of 27 pages: a tree of more than one page)."""
     d = Dbf(os.path.join(SA, "pgdynobj.DBF"), writable=False)
-    n = PR._open_ndx(SA, "pgdynobj")
+    n = PR.open_ndx(SA, "pgdynobj")
     try:
         assert n.npages > 2
-        via = sorted(i for i, _r in PR._page_records(d, n, "PAGE", WTP))
+        via = sorted(i for i, _r in PR.page_records(d, n, "PAGE", WTP))
         scan = sorted(i for i, _r in d.find("PAGE", WTP))
         assert via == scan and via
     finally:
@@ -453,9 +454,9 @@ def _trim(project, dst, pages, drop_lang=()):
     pglang = its first 50 strings minus ``drop_lang``."""
     drop = {x.lower() for x in drop_lang}
     for f in ("pages.DBF", "changes.DBF", "PROJECT.CIT"):
-        shutil.copy(PR._find_file(project, f), os.path.join(dst, f))
+        shutil.copy(find_ci(project, f), os.path.join(dst, f))
     for t in list(PR.PAGE_TABLES) + ["activex", "pglang"]:
-        src = PR._find_file(project, t + ".DBF")
+        src = find_ci(project, t + ".DBF")
         if src is None:
             continue
         d = Dbf(src, writable=False)
@@ -463,8 +464,8 @@ def _trim(project, dst, pages, drop_lang=()):
             recs = [d.read(i) for i in range(min(d.nrec, 50))]
             recs = [r for r in recs if d.field(r, "NATIVE").lower() not in drop]
         else:
-            n = PR._open_ndx(project, t)
-            recs = [r for p in pages for _i, r in PR._page_records(d, n, "PAGE", p)]
+            n = PR.open_ndx(project, t)
+            recs = [r for p in pages for _i, r in PR.page_records(d, n, "PAGE", p)]
             if n is not None:
                 n.close()
         with open(src, "rb") as fh:
@@ -611,9 +612,9 @@ def test_register_keeps_blank_an_rows(SA, tmp_path):
         if o.type_code == 0x100B
         and PR._an(o) is not None
         and (o.subtype_size & 0x10)
-        and any(kk == "CMD" for kk, _v in PR._value_bag(o))
+        and any(kk == "CMD" for kk, _v in PR.value_bag(o))
     )
-    cmd = dict(PR._value_bag(k))["CMD"]
+    cmd = dict(PR.value_bag(k))["CMD"]
     assert W.set_object_property(k, "CMD", cmd + ";")
     rep = PR.register_page(dst, page, W.serialize_ctg(pc.container, pc.page, pc.attributes))
     assert rep["tables"]["pgkey"]["action"] == "updated"
@@ -651,13 +652,11 @@ def test_register_marks_project_uncompiled(SA, tmp_path):
     dst = str(tmp_path / "trim")
     os.makedirs(dst)
     _trim(SA, dst, [WTP])
-    prev = PR._set_comp_state(os.path.join(dst, "PROJECT.CIT"), b"COMPILED")
-    assert prev is not None
+    assert projectcit.patch_streams(os.path.join(dst, "PROJECT.CIT"), {"CompState": b"COMPILED"})
     rep = PR.register_page(dst, WTP, os.path.join(dst, WTP + ".ctg"))
     assert rep["compstate"] == {"previous": "COMPILED", "now": "UNCOMPILED"}
     # the compound file still reads back (every stream intact)
-    assert PR._set_comp_state(os.path.join(dst, "PROJECT.CIT"), b"UNCOMPILED") == "UNCOMPILED"
-    # (a second reader: projectcit's own walk of the compound file, not the patcher's)
+    assert PR.mark_uncompiled(dst) == "UNCOMPILED"
     streams = projectcit.read_streams(os.path.join(dst, "PROJECT.CIT"))
     assert streams["CompState"][:10] == b"UNCOMPILED"
     assert streams["Name"][:6] == b"FxMain"

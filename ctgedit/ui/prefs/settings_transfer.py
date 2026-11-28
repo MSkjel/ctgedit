@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from ..dialog_buttons import dialog_buttons
+
+from ..names import plural
+
 import os
 from typing import Iterable, List, Optional, Tuple
 
@@ -125,7 +129,7 @@ def summary(n: int, groups: List[str], verb: str = "Imported") -> str:
     """'Imported 42 settings: Options, Styles.'"""
     if not n:
         return "%s no settings." % verb
-    return "%s %d setting%s: %s." % (verb, n, "" if n == 1 else "s", ", ".join(groups))
+    return "%s %s: %s." % (verb, plural(n, "setting"), ", ".join(groups))
 
 
 class SettingsTransferDialog(QtWidgets.QDialog):
@@ -163,12 +167,7 @@ class SettingsTransferDialog(QtWidgets.QDialog):
             bl.addWidget(self.merge)
             bl.addWidget(self.replace)
             lay.addWidget(box)
-        self.bb = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
-        )
-        self.bb.button(QtWidgets.QDialogButtonBox.Ok).setText("Export" if mode == "export" else "Import")
-        self.bb.accepted.connect(self.accept)
-        self.bb.rejected.connect(self.reject)
+        self.bb = dialog_buttons(self, ok="Export" if mode == "export" else "Import")
         lay.addWidget(self.bb)
         self._ok_state()
 

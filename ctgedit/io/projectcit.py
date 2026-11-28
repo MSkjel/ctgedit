@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import os
 import struct
 from typing import Dict, List, Optional, Tuple
 
-_CFB_SIG = bytes.fromhex("d0cf11e0a1b11ae1")
+from ..format.cfb import SIGNATURE as _CFB_SIG
 
 #: the Page Defaults resolution list, index = the stored 'Res' value
 RESOLUTIONS = ("Default", "VGA", "SVGA", "XGA", "SXGA", "User", "WUXGA", "HD1080", "HD768", "UHD4K")
@@ -14,16 +13,9 @@ RESOLUTIONS = ("Default", "VGA", "SVGA", "XGA", "SXGA", "User", "WUXGA", "HD1080
 
 def find(project_dir: str) -> Optional[str]:
     """The project's PROJECT.CIT (any case), or None."""
-    p = os.path.join(project_dir, "PROJECT.CIT")
-    if os.path.exists(p):
-        return p
-    try:
-        for f in os.listdir(project_dir):
-            if f.lower() == "project.cit":
-                return os.path.join(project_dir, f)
-    except OSError:
-        pass
-    return None
+    from ..format.fileio import find_ci
+
+    return find_ci(project_dir, "PROJECT.CIT")
 
 
 def _layout(b: bytes) -> Optional[Dict[str, Tuple[int, List[int], int, int]]]:

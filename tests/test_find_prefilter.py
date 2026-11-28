@@ -74,6 +74,14 @@ def test_the_answers_equal_a_search_of_every_page(main, monkeypatch):
     assert hits >= 4  # (most needles find something: the equality is not empty)
 
 
+REGEX_NEEDLES = [
+    (r"pump\w*", ALL, "part"),
+    (r"^Tag", ("param",), "part"),
+    (r"_PV$", ALL, "whole"),
+    (r"Log(in|out)", ALL, "word"),
+]
+
+
 def test_a_page_it_skips_has_no_hits(main):
     from ctgedit.features import find_replace as FR
     from ctgedit.workers import find_worker as FW
@@ -81,8 +89,8 @@ def test_a_page_it_skips_has_no_hits(main):
 
     pages = FW.pages_of([main])[:30]
     skipped = 0
-    for text, scopes, match in NEEDLES:
-        opts = FW.options_from_json(_req(text, scopes, match, ())["options"])
+    for text, scopes, match, regex in [n + (False,) for n in NEEDLES] + [n + (True,) for n in REGEX_NEEDLES]:
+        opts = FW.options_from_json(dict(_req(text, scopes, match, ())["options"], regex=regex))
         pf = FR.PagePrefilter(opts)
         for p in pages:
             with open(p, "rb") as fh:
@@ -93,15 +101,59 @@ def test_a_page_it_skips_has_no_hits(main):
     assert skipped > 50  # (it skips most pages for most texts)
 
 
-def test_it_is_off_for_a_regex_or_a_non_ascii_text():
+def test_it_is_off_for_a_regex_without_a_known_text_or_a_non_ascii_text():
     from ctgedit.features import find_replace as FR
     from ctgedit.workers import find_worker as FW
 
-    for text, regex in (("pu.p", True), ("pømp", False), ("", False)):
+    for text, regex in ((r"\d+", True), ("(pump|valve)", True), ("[", True), ("pømp", False), ("", False)):
         opts = FW.options_from_json(dict(_req(text, ALL, "part", ())["options"], regex=regex))
         pf = FR.PagePrefilter(opts)
         assert not pf.on
         assert pf.may_match(os.path.join("FxMain", "FxShapes.ctg"), b"")
+
+
+def test_the_text_every_match_of_a_regex_holds():
+    from ctgedit.features import find_replace as FR
+
+    cases = {
+        r"Pump\w*": "pump",
+        r"^TAG_\d+_PV$": "tag_",  # (the longest run of plain characters)
+        r"(?:Valve)+_(\d)": "valve",
+        r"Valve(_1)?": "valve",  # (an optional part holds nothing for sure)
+        r"(Pump|Valve)_1": "_1",
+        r"x{2,}yz": "yz",
+        r"x*yz": "yz",
+        r"\d+": "",
+        r"[abc]+": "",
+    }
+    for pattern, want in cases.items():
+        assert FR.required_text(pattern) == want, pattern
+    # the letters a case-blind expression matches a non-ASCII letter with break the text
+    assert FR.required_text("Mixing", unicode=True) == "ng"
+    assert FR.required_text("Fill_1", unicode=True) == "ll_1"
+
+
+def test_a_regex_text_is_in_every_field_it_matches():
+    # every match of the expression in a field holds required_text, in lower case
+    import random
+    import re
+
+    from ctgedit.features import find_replace as FR
+
+    rnd = random.Random(7)
+    patterns = [r"Pump\w*", r"TAG_\d+", r"(?:ab)+c", r"x(yz)?w", r"(Mix)+ing", r"_PV\b", r"k\d", r"A.B"]
+    alphabet = "abcxyzwPUMPTAGmixingkK_0123456789 .ıſK"
+    for pattern in patterns:
+        rx = re.compile(pattern, re.IGNORECASE)
+        for unicode in (False, True):
+            need = FR.required_text(pattern, unicode=unicode)
+            for _ in range(3000):
+                s = "".join(rnd.choice(alphabet) for _ in range(rnd.randint(0, 12)))
+                for m in rx.finditer(s):
+                    if unicode:
+                        assert need in m.group(0).lower(), (pattern, s)
+                    elif m.group(0).isascii():
+                        assert need in m.group(0).lower(), (pattern, s)
 
 
 def test_a_title_in_the_page_table_alone_is_found(main):

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ...infra.logsetup import note_exception as _note_exc
+
 import math
 import time
 
@@ -401,6 +403,45 @@ class CanvasView(CanvasSelection, CanvasPainting, SmartGuides, CanvasNavigation,
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._init_view_setup()
+        self._init_draw_state()
+        self._init_guide_state()
+        self._init_drag_state()
+
+        # navigation (ui/editor/viewnav.py): the glide, the view history, the edge scroll, touch
+        self._init_navigation()
+        # a zoom box being dragged: {"origin": viewport point, "cur": viewport point,
+        # "out": Alt held}
+        self._zbox: dict | None = None
+        # Z held to arm the zoom box for a moment: {"t": when, "prev": the tool before}
+        self._zhold: dict | None = None
+        self._zhold_return: str | None = None
+        # Esc cancelled a move / resize: the coming release is not a commit
+        self._swallow_release = False
+        # the selection before a selection box began (Esc gives it back)
+        self._marquee_before: list | None = None
+        # the keyboard focus frame shows after keyboard use, not after a click
+        self._focus_visible = False
+        # the 'Page' chip shown when the page is out of view (viewport rect) or None
+        self._page_chip: QtCore.QRectF | None = None
+        # a drop handler's hint shown at the pointer while something is dragged over
+        self._drop_hint: tuple | None = None
+        # where the polygon preview's fill comes from: () -> 0x00RRGGBB, or None
+        self._fill_colour_source = None
+        #: View > Cross Hair Cursor: the position at the pointer, 'full' / 'short' lines
+        self.CROSSHAIR_READOUT = True
+        self.CROSSHAIR_STYLE = "full"
+        self._init_select_state()
+        from .overlay_scrollbars import OverlayScrollBars
+
+        self.overlay_bars = OverlayScrollBars(self)
+        # an overlay over the canvas shows or hides: the 'Page' chip finds its place again
+        self._overlay_watch = _OverlayWatch(self)
+        self.apply_nav_options()
+        canvas_hooks.attach(self)
+
+    def _init_view_setup(self) -> None:
+        """The view's painting and interaction flags and the caches of what it draws."""
         self.setRenderHints(
             QtGui.QPainter.Antialiasing
             | QtGui.QPainter.TextAntialiasing
@@ -431,8 +472,13 @@ class CanvasView(CanvasSelection, CanvasPainting, SmartGuides, CanvasNavigation,
         self._sel_box_memo = None
         self._units_gen = 0  # counts the selections set
         self._sel_set: set = set()
+        # (the transform and the viewport box of the selection's marks the last paint drew)
+        self._sel_marks_seen = None
         self.setAcceptDrops(True)  # tag drag-to-bind
 
+    def _init_draw_state(self) -> None:
+        """The tool, the selection's units and their resolvers, the grid, and the state of
+        a pan, a move, a resize, a selection box and a shape being drawn."""
         self._tool = "select"
         self._units: list[list[int]] = []  # each = one selection unit's indices
         self._selection: list[int] = []  # flat union of all units (for move)
@@ -478,6 +524,9 @@ class CanvasView(CanvasSelection, CanvasPainting, SmartGuides, CanvasNavigation,
         self._freehand = False
         self._resize_press = QtCore.QPointF()
 
+    def _init_guide_state(self) -> None:
+        """The in-place text editor, the guidelines, the hot spot drag, the cross hairs
+        and the selection modes."""
         # in-place text editor (F2 / Text tool) + Mouse Slow Speed
         self._inplace: InplaceText | None = None
         self._inplace_target: dict = {}
@@ -507,6 +556,9 @@ class CanvasView(CanvasSelection, CanvasPainting, SmartGuides, CanvasNavigation,
         self._marquee_mode = "auto"  # auto | enclose | touch
         self._marquee_touch = False  # resolved for THIS drag
 
+    def _init_drag_state(self) -> None:
+        """The smart guides, the drag readouts, the hover and highlight lists and the node
+        editing state."""
         # smart guides + drag ergonomics
         self._smart_guides = True
         self._sg_bbox = QtCore.QRectF()
@@ -543,38 +595,6 @@ class CanvasView(CanvasSelection, CanvasPainting, SmartGuides, CanvasNavigation,
         self._node_sel: set[int] = set()
         self._node_drag: dict | None = None
         self._node_editable = lambda i: True
-
-        # navigation (ui/editor/viewnav.py): the glide, the view history, the edge scroll, touch
-        self._init_navigation()
-        # a zoom box being dragged: {"origin": viewport point, "cur": viewport point,
-        # "out": Alt held}
-        self._zbox: dict | None = None
-        # Z held to arm the zoom box for a moment: {"t": when, "prev": the tool before}
-        self._zhold: dict | None = None
-        self._zhold_return: str | None = None
-        # Esc cancelled a move / resize: the coming release is not a commit
-        self._swallow_release = False
-        # the selection before a selection box began (Esc gives it back)
-        self._marquee_before: list | None = None
-        # the keyboard focus frame shows after keyboard use, not after a click
-        self._focus_visible = False
-        # the 'Page' chip shown when the page is out of view (viewport rect) or None
-        self._page_chip: QtCore.QRectF | None = None
-        # a drop handler's hint shown at the pointer while something is dragged over
-        self._drop_hint: tuple | None = None
-        # where the polygon preview's fill comes from: () -> 0x00RRGGBB, or None
-        self._fill_colour_source = None
-        #: View > Cross Hair Cursor: the position at the pointer, 'full' / 'short' lines
-        self.CROSSHAIR_READOUT = True
-        self.CROSSHAIR_STYLE = "full"
-        self._init_select_state()
-        from .overlay_scrollbars import OverlayScrollBars
-
-        self.overlay_bars = OverlayScrollBars(self)
-        # an overlay over the canvas shows or hides: the 'Page' chip finds its place again
-        self._overlay_watch = _OverlayWatch(self)
-        self.apply_nav_options()
-        canvas_hooks.attach(self)
 
     def _init_select_state(self) -> None:
         """The state of selecting and transforming."""
@@ -1197,7 +1217,7 @@ class CanvasView(CanvasSelection, CanvasPainting, SmartGuides, CanvasNavigation,
         """Programmatic selection from EXACT node indices (no signal). Each node
         highlights its own subtree, so a tree-selected nested genie is outlined
         precisely rather than via its outer group."""
-        self._set_units([self._resolve_subtree(i) for i in indices], emit=False)
+        self._set_units([self._resolve_subtree(i) for i in indices], emit=False, whole=True)
 
     def selection(self) -> list[int]:
         return list(self._selection)
@@ -1534,6 +1554,23 @@ class CanvasView(CanvasSelection, CanvasPainting, SmartGuides, CanvasNavigation,
     def paintEvent(self, e: QtGui.QPaintEvent) -> None:
         self._sync_background_cache()
         super().paintEvent(e)
+        # (where this paint drew the selection's marks: a selection change repaints there
+        # and where its new marks go, _set_units; any change of the scene or the view
+        # repaints the whole canvas, so the marks on screen are the ones of the last paint)
+        self._sel_marks_seen = (self.viewportTransform(), self._selection_marks())
+        region = e.region()
+        if region.rectCount() > 1 and not self._crosshair:
+            # (Qt's raster engine draws antialiased edges under a clip of several boxes
+            # unlike under one: two repaints that met, an overlay's and the canvas's, are
+            # painted again as one box, as a full repaint draws them; the cross hairs' strips
+            # are left as they are)
+            self.viewport().update(region.boundingRect())
+
+    def _line_span(self, rect: QtCore.QRectF) -> QtCore.QRectF:
+        """The scene rect a full-length line overlay (a guideline, a smart guide) runs
+        across: the whole view (and ``rect`` past it), so the repaint of a part of the
+        canvas draws its dashes where the repaint of all of it does."""
+        return self.mapToScene(self.viewport().rect()).boundingRect().united(rect)
 
     def smart_guide_partners(self, lines=None) -> list:
         """The objects (their extents) the active smart-guide lines come from:
@@ -1961,6 +1998,7 @@ class CanvasView(CanvasSelection, CanvasPainting, SmartGuides, CanvasNavigation,
             if not self._node_editable(idx):
                 return None, None
         except Exception:  # noqa: BLE001 -- a gate that fails refuses
+            _note_exc("canvas.reshape_target")
             return None, None
         kind = {_geom.LINE_TC: "line", _geom.PIPE_TC: "pipe"}.get(tc, "polyline")
         closed = False
@@ -2132,7 +2170,11 @@ class CanvasView(CanvasSelection, CanvasPainting, SmartGuides, CanvasNavigation,
         return [(x + dx, y + dy) if k in self._node_sel else (x, y) for k, (x, y) in enumerate(info.nodes)]
 
     # -- selection helpers ---------------------------------------------------
-    def _set_units(self, units: list[list[int]], emit: bool = True) -> None:
+    def _set_units(self, units: list[list[int]], emit: bool = True, whole: bool = False) -> None:
+        """Select ``units``. The canvas repaints where the selection's marks were and are
+        (:meth:`_selection_marks`); ``whole``: all of it (a selection set from outside the
+        canvas, whose caller may have changed more)."""
+        seen = None if whole else self._sel_marks_seen
         clean = [sorted(set(u)) for u in units if u]
         self._units = clean
         self._units_gen += 1
@@ -2148,9 +2190,44 @@ class CanvasView(CanvasSelection, CanvasPainting, SmartGuides, CanvasNavigation,
             self._node_sel = set()
             self._node_owner = None
             self._node_drag = None
-        self.viewport().update()
+        if seen is not None and seen[0] == self.viewportTransform() and not self._busy_marks():
+            box = seen[1].united(self._selection_marks())
+            if not box.isEmpty():
+                self.viewport().update(box)
+        else:
+            self.viewport().update()
         if emit:
             self.selectionChanged.emit(self.selection_roots())
+
+    def _selection_marks(self) -> QtCore.QRect:
+        """The viewport box the selection's own marks take: the outlines and the box of its
+        units, the sizing handles, the rotation grip and the nodes round them, and the count
+        chip above them."""
+        hs = handle_size()
+        m = int(math.ceil(2 * hs + GRIP_GAP_PX + max(NODE_BOX_PX, hs) + 12))
+        out = QtCore.QRect()
+        for box in (self.selection_box(), self._multi_box(), self._handle_box()[1]):
+            if box is not None:
+                r = self.mapFromScene(box).boundingRect().adjusted(-m, -m, m, m)
+                out = out.united(r)
+        multi = self._multi_box()
+        if multi is not None and len(self._units) > 1:
+            r = self.mapFromScene(multi).boundingRect()
+            chip = self._badge_box(QtCore.QPoint(r.left(), r.top() - 3), str(len(self._units)), above=True)
+            out = out.united(chip.toAlignedRect().adjusted(-2, -2, 2, 2))
+        return out
+
+    def _busy_marks(self) -> bool:
+        """A drag, a resize, a turn, a selection box or an arrow-key burst runs: their own
+        marks follow the selection (the whole canvas is repainted)."""
+        return bool(
+            self._moving
+            or self._resizing is not None
+            or self._rotating is not None
+            or self._marquee is not None
+            or self._node_drag is not None
+            or self._nudge is not None
+        )
 
     def _toggle_unit(self, unit: list[int]) -> None:
         root = min(unit)
@@ -3175,56 +3252,13 @@ class CanvasView(CanvasSelection, CanvasPainting, SmartGuides, CanvasNavigation,
         self._press_touch = from_touch_or_pen(e)
         left = e.button() == QtCore.Qt.LeftButton
         if left:
-            self._left_down = True
-            self._press_vp = QtCore.QPoint(vp)
-            self._dragged = False
-            self._swallow_release = False
-            self.hide_key_pill()
-            if self._focus_visible:
-                self._focus_visible = False  # (a click: the keyboard frame goes)
-                self.viewport().update()
-        if e.button() in (QtCore.Qt.BackButton, QtCore.Qt.ForwardButton):
-            # the mouse's back / forward buttons: Previous View / Next View, or (Settings >
-            # Canvas > "Mouse back and forward buttons") the tab before / after, or nothing
-            back = e.button() == QtCore.Qt.BackButton
-            if self.SIDE_BUTTONS == "tabs":
-                self.pageStepRequested.emit(-1 if back else 1)
-            elif self.SIDE_BUTTONS != "nothing":
-                (self.go_back if back else self.go_forward)()
-            e.accept()
-            return
-        chip = self._page_chip
-        if left and chip is not None and chip.contains(QtCore.QPointF(vp)) and self._inplace is None:
-            self.fit_page()  # the 'Page' chip: back to the page
-            e.accept()
-            return
-        both = _CTRL | QtCore.Qt.ShiftModifier
-        if left and self._tool == "pan" and (e.modifiers() & both) == both:
-            self._begin_zoom_box(vp, e.modifiers())  # Ctrl+Shift+drag: a zoom box
-            e.accept()
-            return
-        if (
-            e.button() == QtCore.Qt.MiddleButton
-            or (self._space_pan and left)
-            or (self._tool == "pan" and left)
-        ):
-            self._auto_fit = False  # panning = manual navigation
-            self._note_burst()
-            self._panning = True
-            self._pan_start = vp
-            self.viewport().setCursor(QtCore.Qt.ClosedHandCursor)
+            self._note_left_press(vp)
+        if self._press_navigates(e, vp, left):
             e.accept()
             return
 
         if self._inplace is not None:
-            if self._inplace_follow and e.button() == QtCore.Qt.LeftButton:
-                # the typed-first text is placed where it is clicked
-                self._place_followed(self.mapToScene(vp))
-                self.finish_text_edit(True)
-            elif self._inplace_contains(vp):
-                super().mousePressEvent(e)  # caret / selection in the text
-            else:
-                self.finish_text_edit(True)  # a click elsewhere commits
+            self._press_in_text_edit(e, vp)
             e.accept()
             return
 
@@ -3234,67 +3268,19 @@ class CanvasView(CanvasSelection, CanvasPainting, SmartGuides, CanvasNavigation,
             e.accept()
             return
 
+        both = _CTRL | QtCore.Qt.ShiftModifier
         if (
             left
             and self._tool == "select"
             and (e.modifiers() & both) == both
             and self._handle_at(vp)[0] is None
         ):
-            # Ctrl+Shift+drag: a zoom box, also over an object (a click without a drag
-            # still adds the object to the selection or takes it out); on a handle it
-            # resizes, keeping the proportions about the centre. Settings > Canvas >
-            # "Ctrl+Shift + drag" can make it a Touch selection box from anywhere instead
-            unit = self._topmost_unit(vp)
-            if self.CTRL_SHIFT_DRAG == "touch":
-                sp = self.mapToScene(vp)
-                self._move_start = self._move_last = sp
-                self._maybe_drag = False
-                if unit:
-                    self._pending_click = {
-                        "unit": unit,
-                        "op": "toggle",
-                        "box": True,
-                        "touch": True,
-                        "vp": QtCore.QPoint(vp),
-                    }
-                else:
-                    self._begin_marquee(sp, QtCore.Qt.NoModifier, touch=True)
-                e.accept()
-                return
-            self._begin_zoom_box(vp, e.modifiers())
-            self._zbox["click_unit"] = unit or None
-            e.accept()
-            return
-
-        if self._tool == "freehand":
-            if e.button() == QtCore.Qt.LeftButton:
-                sp = self.mapToScene(vp)
-                self._freehand = True
-                self._nodes = [QtCore.QPointF(_clamp(round(sp.x())), _clamp(round(sp.y())))]
-                self.viewport().update()
-            e.accept()
-            return
-
-        if self._tool in _NODE_TOOLS:
-            if e.button() == QtCore.Qt.LeftButton:
-                # a drag from the first vertex adds the second on release
-                self._node_press = vp if not self._nodes else None
-                self._draw_mods = e.modifiers()
-                self._nodes.append(self._node_point(self.mapToScene(vp), e.modifiers()))
-                self._draw_cur = self._nodes[-1]
-                self.viewport().update()
-            elif e.button() == QtCore.Qt.RightButton:
-                self._commit_nodes()
+            self._press_ctrl_shift(vp, e.modifiers())
             e.accept()
             return
 
         if self._tool != "select":
-            if e.button() == QtCore.Qt.LeftButton:
-                self._draw_press = self.mapToScene(vp)
-                self._draw_start = self._snap_pt(self._draw_press)
-                self._draw_cur = self._draw_start
-                self._draw_mods = e.modifiers()
-                self.viewport().update()
+            self._press_draw_tool(e, vp)
             e.accept()
             return
 
@@ -3306,32 +3292,144 @@ class CanvasView(CanvasSelection, CanvasPainting, SmartGuides, CanvasNavigation,
         if e.button() != QtCore.Qt.LeftButton:
             super().mousePressEvent(e)
             return
+        if not self._press_grab(vp, e.modifiers()):
+            self._press_select(vp, e.modifiers())
+        e.accept()
 
-        k = self._node_at(vp)
-        if k is not None and not e.modifiers() & QtCore.Qt.AltModifier:
-            # a node of the selected line / pipe / polygon (help 1172187)
-            self._begin_node_press(k, e.modifiers(), self.mapToScene(vp))
-            e.accept()
+    def _note_left_press(self, vp: QtCore.QPoint) -> None:
+        """A left press starts: where it is, no drag yet, the key pill and the keyboard
+        frame go."""
+        self._left_down = True
+        self._press_vp = QtCore.QPoint(vp)
+        self._dragged = False
+        self._swallow_release = False
+        self.hide_key_pill()
+        if self._focus_visible:
+            self._focus_visible = False  # (a click: the keyboard frame goes)
+            self.viewport().update()
+
+    def _press_navigates(self, e: QtGui.QMouseEvent, vp: QtCore.QPoint, left: bool) -> bool:
+        """A press that moves the view (the side buttons, the 'Page' chip, the Pan tool's
+        zoom box, a pan) starts it: True when it did (the caller accepts the event)."""
+        if e.button() in (QtCore.Qt.BackButton, QtCore.Qt.ForwardButton):
+            # the mouse's back / forward buttons: Previous View / Next View, or (Settings >
+            # Canvas > "Mouse back and forward buttons") the tab before / after, or nothing
+            back = e.button() == QtCore.Qt.BackButton
+            if self.SIDE_BUTTONS == "tabs":
+                self.pageStepRequested.emit(-1 if back else 1)
+            elif self.SIDE_BUTTONS != "nothing":
+                (self.go_back if back else self.go_forward)()
+            return True
+        chip = self._page_chip
+        if left and chip is not None and chip.contains(QtCore.QPointF(vp)) and self._inplace is None:
+            self.fit_page()  # the 'Page' chip: back to the page
+            return True
+        both = _CTRL | QtCore.Qt.ShiftModifier
+        if left and self._tool == "pan" and (e.modifiers() & both) == both:
+            self._begin_zoom_box(vp, e.modifiers())  # Ctrl+Shift+drag: a zoom box
+            return True
+        if (
+            e.button() == QtCore.Qt.MiddleButton
+            or (self._space_pan and left)
+            or (self._tool == "pan" and left)
+        ):
+            self._auto_fit = False  # panning = manual navigation
+            self._note_burst()
+            self._panning = True
+            self._pan_start = vp
+            self.viewport().setCursor(QtCore.Qt.ClosedHandCursor)
+            return True
+        return False
+
+    def _press_in_text_edit(self, e: QtGui.QMouseEvent, vp: QtCore.QPoint) -> None:
+        """A press while a text is edited in place: places a typed-first text, moves the
+        caret in the text, or commits the text."""
+        if self._inplace_follow and e.button() == QtCore.Qt.LeftButton:
+            # the typed-first text is placed where it is clicked
+            self._place_followed(self.mapToScene(vp))
+            self.finish_text_edit(True)
+        elif self._inplace_contains(vp):
+            super().mousePressEvent(e)  # caret / selection in the text
+        else:
+            self.finish_text_edit(True)  # a click elsewhere commits
+
+    def _press_ctrl_shift(self, vp: QtCore.QPoint, mods) -> None:
+        """A Ctrl+Shift press with the Select tool, off the handles: a zoom box, also over
+        an object (a click without a drag still adds the object to the selection or takes
+        it out). Settings > Canvas > "Ctrl+Shift + drag" can make it a Touch selection box
+        from anywhere instead. (On a handle it resizes, keeping the proportions about the
+        centre: _press_grab.)"""
+        unit = self._topmost_unit(vp)
+        if self.CTRL_SHIFT_DRAG == "touch":
+            sp = self.mapToScene(vp)
+            self._move_start = self._move_last = sp
+            self._maybe_drag = False
+            if unit:
+                self._pending_click = {
+                    "unit": unit,
+                    "op": "toggle",
+                    "box": True,
+                    "touch": True,
+                    "vp": QtCore.QPoint(vp),
+                }
+            else:
+                self._begin_marquee(sp, QtCore.Qt.NoModifier, touch=True)
             return
+        self._begin_zoom_box(vp, mods)
+        self._zbox["click_unit"] = unit or None
+
+    def _press_draw_tool(self, e: QtGui.QMouseEvent, vp: QtCore.QPoint) -> None:
+        """A press with a drawing tool: the free-hand line starts, a vertex is added (the
+        right button finishes the shape), or a box / line starts at the press."""
+        left = e.button() == QtCore.Qt.LeftButton
+        if self._tool == "freehand":
+            if left:
+                sp = self.mapToScene(vp)
+                self._freehand = True
+                self._nodes = [QtCore.QPointF(_clamp(round(sp.x())), _clamp(round(sp.y())))]
+                self.viewport().update()
+        elif self._tool in _NODE_TOOLS:
+            if left:
+                # a drag from the first vertex adds the second on release
+                self._node_press = vp if not self._nodes else None
+                self._draw_mods = e.modifiers()
+                self._nodes.append(self._node_point(self.mapToScene(vp), e.modifiers()))
+                self._draw_cur = self._nodes[-1]
+                self.viewport().update()
+            elif e.button() == QtCore.Qt.RightButton:
+                self._commit_nodes()
+        elif left:
+            self._draw_press = self.mapToScene(vp)
+            self._draw_start = self._snap_pt(self._draw_press)
+            self._draw_cur = self._draw_start
+            self._draw_mods = e.modifiers()
+            self.viewport().update()
+
+    def _press_grab(self, vp: QtCore.QPoint, mods) -> bool:
+        """A left press with the Select tool on something other than an object: a node,
+        the hot spot, the rotation grip, a sizing handle or a guideline. Its drag is armed:
+        True when it was. A press anywhere other than on a node deselects every node."""
+        alt = bool(mods & QtCore.Qt.AltModifier)
+        k = self._node_at(vp)
+        if k is not None and not alt:
+            # a node of the selected line / pipe / polygon (help 1172187)
+            self._begin_node_press(k, mods, self.mapToScene(vp))
+            return True
         # a click anywhere other than on a node deselects every node
         self.clear_node_selection()
 
-        if self._hotspot_at(vp) and not e.modifiers() & QtCore.Qt.AltModifier:
+        if self._hotspot_at(vp) and not alt:
             # the element window's hot spot marker: drag it (Alt reaches the
             # objects under it)
             self._hotspot_drag = tuple(self.scene()._element_hotspot)
             self.viewport().setCursor(QtCore.Qt.SizeAllCursor)
-            e.accept()
-            return
+            return True
 
-        mods = e.modifiers()
-        alt = bool(mods & QtCore.Qt.AltModifier)
         if not alt:
             # the rotation grip (and just outside a corner of the box): turn the selection
             if self._grip_at(vp):
                 self._begin_rotate(vp)
-                e.accept()
-                return
+                return True
             # a sizing handle (Alt skips them: it always reaches the objects)
             hid, hidx = self._handle_at(vp)
             if hid is not None:
@@ -3342,8 +3440,7 @@ class CanvasView(CanvasSelection, CanvasPainting, SmartGuides, CanvasNavigation,
                 self._resize_press = self.mapToScene(vp)
                 self._resize_origin = QtCore.QRectF(box)
                 self._resize_rect = QtCore.QRectF(box)
-                e.accept()
-                return
+                return True
 
         # a guideline under the pointer: drag it; Ctrl+drag makes a new one
         # (help 1172087). Alt reaches the objects under it, and a plain press
@@ -3351,14 +3448,18 @@ class CanvasView(CanvasSelection, CanvasPainting, SmartGuides, CanvasNavigation,
         g = self._guide_grab(vp, mods)
         if g is not None:
             self._begin_guide_drag(g[0], g[1], vp, mods)
-            e.accept()
-            return
+            return True
+        return False
 
+    def _press_select(self, vp: QtCore.QPoint, mods) -> None:
+        """A left press with the Select tool on an object or the background: what the
+        click selects (now or on the release) and whether a drag moves the selection or
+        boxes."""
         sp = self.mapToScene(vp)
         self._move_start = sp
         self._move_last = sp
         self._pending_click = None
-        if alt:
+        if mods & QtCore.Qt.AltModifier:
             # Alt: a click selects the next object under the pointer (on the release, so
             # the selection does not change under a drag); a drag on the selection moves
             # it without snapping, a drag elsewhere takes the object on top
@@ -3367,7 +3468,6 @@ class CanvasView(CanvasSelection, CanvasPainting, SmartGuides, CanvasNavigation,
             on_sel = any(min(u) in roots for u in units)
             self._alt_press = {"units": units, "vp": QtCore.QPoint(vp), "on_sel": on_sel}
             self._maybe_drag = bool(on_sel)
-            e.accept()
             return
 
         shift = bool(mods & QtCore.Qt.ShiftModifier)
@@ -3378,7 +3478,6 @@ class CanvasView(CanvasSelection, CanvasPainting, SmartGuides, CanvasNavigation,
         unit = self._topmost_unit(vp)
         if not unit:  # nothing selectable here -> background drag
             self._begin_marquee(sp, mods)
-            e.accept()
             return
         root = min(unit)
         selected = root in self.selection_roots()
@@ -3415,7 +3514,6 @@ class CanvasView(CanvasSelection, CanvasPainting, SmartGuides, CanvasNavigation,
                 self._pending_click = {"unit": unit, "op": "isolate", "box": False, "vp": QtCore.QPoint(vp)}
             # arm a move drag of the whole selection
             self._maybe_drag = True
-        e.accept()
 
     def units_under(self, vp: QtCore.QPoint) -> list:
         """The selectable units under ``vp``, topmost first, each once."""
@@ -3511,22 +3609,43 @@ class CanvasView(CanvasSelection, CanvasPainting, SmartGuides, CanvasNavigation,
             e.accept()
             return
 
-        if e.buttons() == QtCore.Qt.NoButton:
-            shape = canvas_hooks.pointer_mode(self)
-            if shape is not None:
-                # another module has the pointer (the underlay's Move with the Mouse): its
-                # pointer, no hover outline or handle; the readout and the rulers went on above
-                if self._hover_unit:
-                    old, self._hover_unit = self._hover_unit, []
-                    self._update_outlines(old, [])
-                    self.hoverChanged.emit(None)
-                if self._hover_handle is not None:
-                    self._hover_handle = None
-                    self.viewport().update()
-                self.viewport().setCursor(shape)
-                e.accept()
-                return
+        if e.buttons() == QtCore.Qt.NoButton and self._pointer_taken():
+            e.accept()
+            return
 
+        if self._tool != "select":
+            self._move_draw_tool(e, vp, sp)
+            return
+
+        if self._drag_grab_to(e, vp, sp):
+            e.accept()
+            return
+        if self._drag_press_to(e, vp, sp):
+            return
+        self._hover_select(e, vp, sp)
+        super().mouseMoveEvent(e)
+
+    def _pointer_taken(self) -> bool:
+        """Another module has the pointer (the underlay's Move with the Mouse): its
+        pointer, no hover outline or handle (the readout and the rulers follow the pointer
+        all the same). True when it has."""
+        shape = canvas_hooks.pointer_mode(self)
+        if shape is None:
+            return False
+        if self._hover_unit:
+            old, self._hover_unit = self._hover_unit, []
+            self._update_outlines(old, [])
+            self.hoverChanged.emit(None)
+        if self._hover_handle is not None:
+            self._hover_handle = None
+            self.viewport().update()
+        self.viewport().setCursor(shape)
+        return True
+
+    def _move_draw_tool(self, e: QtGui.QMouseEvent, vp: QtCore.QPoint, sp: QtCore.QPointF) -> None:
+        """The pointer moves with a drawing tool: the free-hand line grows, the next
+        vertex follows, the measurement or the box / line preview and its readout follow
+        the drag."""
         if self._tool == "freehand":
             if self._freehand and self._nodes:
                 if (sp - self._nodes[-1]).manhattanLength() >= 3.0 / max(self.zoom(), 0.01):
@@ -3551,48 +3670,50 @@ class CanvasView(CanvasSelection, CanvasPainting, SmartGuides, CanvasNavigation,
                 self.viewport().update()
             return
 
-        if self._tool != "select":
-            # a Cicode object is placed at the press (a click tool): no box
-            if self._draw_start is not None and self._tool != "cicode_object":
-                self._draw_cur = self._gear(self._draw_press, sp)
-                self._draw_mods = e.modifiers()
-                end = self._snap_pt(self._draw_cur)
-                if self._tool == "line":
-                    import math
+        # a Cicode object is placed at the press (a click tool): no box
+        if self._draw_start is not None and self._tool != "cicode_object":
+            self._draw_cur = self._gear(self._draw_press, sp)
+            self._draw_mods = e.modifiers()
+            end = self._snap_pt(self._draw_cur)
+            if self._tool == "line":
+                import math
 
-                    v = self._line_end(self._draw_start, end, self._draw_mods) - self._draw_start
-                    self._pill = "%d px  %d°" % (
-                        math.hypot(v.x(), v.y()),
-                        math.degrees(math.atan2(-v.y(), v.x())) % 360,
-                    )
-                else:
-                    r = self._box_rect(self._draw_start, end, self._draw_mods)
-                    self._pill = "%d × %d" % (r.width(), r.height())
-                self._last_vp = vp
-                self.viewport().update()
-            return
+                v = self._line_end(self._draw_start, end, self._draw_mods) - self._draw_start
+                self._pill = "%d px  %d°" % (
+                    math.hypot(v.x(), v.y()),
+                    math.degrees(math.atan2(-v.y(), v.x())) % 360,
+                )
+            else:
+                r = self._box_rect(self._draw_start, end, self._draw_mods)
+                self._pill = "%d × %d" % (r.width(), r.height())
+            self._last_vp = vp
+            self.viewport().update()
 
+    def _drag_grab_to(self, e: QtGui.QMouseEvent, vp: QtCore.QPoint, sp: QtCore.QPointF) -> bool:
+        """The pointer moves with the Select tool while a node, guideline, hot spot,
+        rotation grip, sizing handle or selection box is dragged: the drag follows. A drag
+        whose button went up outside the canvas ends. True when the move is taken (the
+        caller accepts the event)."""
+        held = e.buttons() & QtCore.Qt.LeftButton
         if self._node_drag is not None:
-            if e.buttons() & QtCore.Qt.LeftButton:
+            if held:
                 self._drag_nodes_to(sp, vp)
-                e.accept()
-                return
+                return True
             # the button went up outside the canvas: the drag is over
             self._node_drag = None
             self._pill = None
             self.viewport().update()
 
         if self._guide_drag is not None:
-            if e.buttons() & QtCore.Qt.LeftButton:
+            if held:
                 self._drag_guide_to(sp, vp, e.modifiers())
-                e.accept()
-                return
+                return True
             self._guide_drag = None  # released outside the canvas
             self._pill = None
             self.viewport().update()
 
         if getattr(self, "_hotspot_drag", None) is not None:
-            if e.buttons() & QtCore.Qt.LeftButton:
+            if held:
                 p = self._snap_pt(sp)
                 sc = self.scene()
                 sc._element_hotspot = (int(round(p.x())), int(round(p.y())))
@@ -3600,29 +3721,27 @@ class CanvasView(CanvasSelection, CanvasPainting, SmartGuides, CanvasNavigation,
                 self._pill = "hot spot %d, %d" % sc._element_hotspot
                 self._last_vp = vp
                 self.viewport().update()
-                e.accept()
-                return
+                return True
             self._end_hotspot_drag(commit=False)  # released outside the canvas
 
         if self._rotating is not None:
-            if e.buttons() & QtCore.Qt.LeftButton:
+            if held:
                 self._rotate_to(vp)
             else:
                 self._rotating = None  # released outside the canvas
                 self._pill = None
                 self.viewport().update()
-            e.accept()
-            return
+            return True
 
         if self._resizing is not None:
             self._resize_rect = self._resize_to(sp, e.modifiers())
             self._pill = self._resize_pill(self._resize_rect.normalized())
             self._last_vp = vp
             self.viewport().update()
-            e.accept()
-            return
+            return True
 
         if self._marquee is not None:
+            was = self._marquee_marks()
             self._marquee = QtCore.QRectF(self._marquee_origin, sp).normalized()
             if self._marquee_mode == "auto" and not self._marquee_force_touch:
                 # CAD convention: R-to-L drag = TOUCH (crossing)
@@ -3630,10 +3749,26 @@ class CanvasView(CanvasSelection, CanvasPainting, SmartGuides, CanvasNavigation,
             self._last_vp = vp
             if self.BOX_PREVIEW:
                 self._box_timer.start()
-            self.viewport().update()
-            e.accept()
-            return
+            # (the box and its marks where they were and are, not the whole canvas)
+            self.viewport().update(was.united(self._marquee_marks()))
+            return True
+        return False
 
+    def _marquee_marks(self) -> QtCore.QRect:
+        """The viewport box a selection box being dragged draws in: the box, the readout
+        pill and the '+' / '+/-' chip at the pointer."""
+        r = self.mapFromScene(self._marquee).boundingRect().adjusted(-3, -3, 3, 3)
+        if self._pill:
+            r = r.united(self._pill_box(self._last_vp, self._pill).toAlignedRect().adjusted(-2, -2, 2, 2))
+        if self._marquee_mods:
+            at, text = self._marquee_badge()
+            r = r.united(self._badge_box(at, text, above=True).toAlignedRect().adjusted(-2, -2, 2, 2))
+        return r
+
+    def _drag_press_to(self, e: QtGui.QMouseEvent, vp: QtCore.QPoint, sp: QtCore.QPointF) -> bool:
+        """The pointer moves with the button held after a press on an object: past the
+        drag distance the press turns into a selection box, an Alt drag or a move drag of
+        the selection. True when the move is taken."""
         held = bool(e.buttons() & QtCore.Qt.LeftButton)
         far = (vp - getattr(self, "_press_vp", vp)).manhattanLength() >= drag_start()
         pend = self._pending_click
@@ -3648,7 +3783,7 @@ class CanvasView(CanvasSelection, CanvasPainting, SmartGuides, CanvasNavigation,
                 touch=bool(pend.get("touch")),
             )
             self.mouseMoveEvent(e)
-            return
+            return True
         press = self._alt_press
         if press is not None and held and far:
             # an Alt+drag: the selection moves freely; off the selection, the object on top
@@ -3660,7 +3795,7 @@ class CanvasView(CanvasSelection, CanvasPainting, SmartGuides, CanvasNavigation,
         if self._maybe_drag and self._selection and held:
             if not self._moving:
                 if (sp - self._move_start).manhattanLength() < drag_start() / max(self.zoom(), 0.01):
-                    return
+                    return True
                 self._pending_click = None  # (a drag: the click's toggle goes)
                 self._moving = True
                 self._move_applied = QtCore.QPointF()
@@ -3670,8 +3805,13 @@ class CanvasView(CanvasSelection, CanvasPainting, SmartGuides, CanvasNavigation,
                 self._drag_items = self._items_of(self._selection)
             self._move_drag_to(sp, vp, e.modifiers())
             e.accept()
-            return
+            return True
+        return False
 
+    def _hover_select(self, e: QtGui.QMouseEvent, vp: QtCore.QPoint, sp: QtCore.QPointF) -> None:
+        """The pointer moves with the Select tool and no drag: the outline of the object
+        under it, the handle under it and the pointer shape for what a press there does."""
+        held = bool(e.buttons() & QtCore.Qt.LeftButton)
         # hover pre-selection outline (select tool only, idle)
         locked = None
         if self._tool == "select" and not self._marquee:
@@ -3708,7 +3848,6 @@ class CanvasView(CanvasSelection, CanvasPainting, SmartGuides, CanvasNavigation,
             self.viewport().setCursor(_locked_cursor())
         elif not self._moving:
             self.viewport().setCursor(self._idle_cursor())
-        super().mouseMoveEvent(e)
 
     def _move_drag_to(self, sp: QtCore.QPointF, vp: QtCore.QPoint, mods) -> None:
         """A move drag with the pointer at ``sp``: the items follow the snapped
@@ -3877,7 +4016,8 @@ class CanvasView(CanvasSelection, CanvasPainting, SmartGuides, CanvasNavigation,
 
     def mouseReleaseEvent(self, e: QtGui.QMouseEvent) -> None:
         vp = e.position().toPoint()
-        if e.button() == QtCore.Qt.LeftButton:
+        left = e.button() == QtCore.Qt.LeftButton
+        if left:
             self._left_down = False
             self._edge_timer.stop()
             if self._swallow_release:
@@ -3894,7 +4034,7 @@ class CanvasView(CanvasSelection, CanvasPainting, SmartGuides, CanvasNavigation,
             e.accept()
             return
 
-        if self._zbox is not None and e.button() == QtCore.Qt.LeftButton:
+        if self._zbox is not None and left:
             self._end_zoom_box(vp, e.modifiers())
             e.accept()
             return
@@ -3905,38 +4045,57 @@ class CanvasView(CanvasSelection, CanvasPainting, SmartGuides, CanvasNavigation,
             e.accept()
             return
 
+        if self._release_draw_tool(e, vp):
+            e.accept()
+            return
+
+        if left and self._release_drag(vp, e.modifiers()):
+            e.accept()
+            return
+
+        if left:
+            if self._alt_press is not None:
+                self._alt_cycle(vp)  # an Alt+click: the next one down
+            pend, self._pending_click = self._pending_click, None
+            if pend is not None:
+                self._finish_click(pend)
+        self._maybe_drag = False
+        super().mouseReleaseEvent(e)
+
+    def _release_draw_tool(self, e: QtGui.QMouseEvent, vp: QtCore.QPoint) -> bool:
+        """A release with a drawing tool that draws with a drag: the free-hand line, the
+        measurement, the box or line or the first segment of a shape drawn point by point
+        is done. True for those tools (the caller accepts the event)."""
+        left = e.button() == QtCore.Qt.LeftButton
         if self._tool == "freehand":
-            if e.button() == QtCore.Qt.LeftButton and self._freehand:
+            if left and self._freehand:
                 self._freehand = False
                 pts = [(int(p.x()), int(p.y())) for p in self._nodes]
                 self._cancel_draw()
                 if len(pts) >= 2:
                     # a free-hand line is an open polyline record
                     self.drawCommitted.emit("polyline", {"nodes": pts})
-            e.accept()
-            return
+            return True
 
         if self._tool == "measure":
-            if e.button() == QtCore.Qt.LeftButton and self._draw_start is not None:
+            if left and self._draw_start is not None:
                 sp = self._gear(self._draw_press, self.mapToScene(vp))
                 self._draw_cur = self._snap_pt(sp)
                 self._pill = self._measure_pill()
                 self._last_vp = vp
                 self.viewport().update()
-            e.accept()
-            return
+            return True
 
         if self._tool in _BOX_TOOLS | {"line"}:
-            if e.button() == QtCore.Qt.LeftButton and self._draw_start is not None:
+            if left and self._draw_start is not None:
                 end = self._gear(self._draw_press, self.mapToScene(vp))
                 self._commit_box_or_line(self._snap_pt(end), e.modifiers())
-            e.accept()
-            return
+            return True
 
         if self._tool in _NODE_TOOLS:
             press, self._node_press = self._node_press, None
             if (
-                e.button() == QtCore.Qt.LeftButton
+                left
                 and press is not None
                 and len(self._nodes) == 1
                 and (vp - press).manhattanLength() >= drag_start()
@@ -3948,128 +4107,120 @@ class CanvasView(CanvasSelection, CanvasPainting, SmartGuides, CanvasNavigation,
                     self._nodes.append(p)
                     self._draw_cur = p
                     self.viewport().update()
-            e.accept()
-            return
+            return True
+        return False
 
-        if self._node_drag is not None and e.button() == QtCore.Qt.LeftButton:
+    def _release_drag(self, vp: QtCore.QPoint, mods) -> bool:
+        """A left release that ends a drag (a node, guideline, hot spot, rotation, resize,
+        selection box or move drag): it commits. True when one was running."""
+        if self._node_drag is not None:
             self._end_node_drag()
-            e.accept()
-            return
-
-        if self._guide_drag is not None and e.button() == QtCore.Qt.LeftButton:
-            self._end_guide_drag(vp, e.modifiers())
-            e.accept()
-            return
-
-        if getattr(self, "_hotspot_drag", None) is not None and e.button() == QtCore.Qt.LeftButton:
+        elif self._guide_drag is not None:
+            self._end_guide_drag(vp, mods)
+        elif getattr(self, "_hotspot_drag", None) is not None:
             self._end_hotspot_drag(commit=True)
-            e.accept()
-            return
-
-        if self._rotating is not None and e.button() == QtCore.Qt.LeftButton:
+        elif self._rotating is not None:
             self._end_rotate()
-            e.accept()
-            return
+        elif self._resizing is not None:
+            self._end_resize()
+        elif self._marquee is not None:
+            self._end_marquee()
+        elif self._moving:
+            self._end_move(mods)
+        else:
+            return False
+        return True
 
-        if self._resizing is not None and e.button() == QtCore.Qt.LeftButton:
-            r = self._resize_rect.normalized()
-            idx = self._resize_index
-            multi, self._resize_multi = self._resize_multi, False
-            self._resizing = None
-            self._resize_index = None
-            self._pill = None
-            self.viewport().update()
-            o = self._resize_origin
-            if multi:
-                if r != o and r.width() >= 1 and r.height() >= 1:
-                    # the whole selection scales about where its box is fixed: Adjust
-                    # Position and Size's move-then-scale (one undo step in the window)
-                    sx = r.width() / o.width() if o.width() > 0 else 1.0
-                    sy = r.height() / o.height() if o.height() > 0 else 1.0
-                    self.selectionScaled.emit(int(round(r.left())), int(round(r.top())), float(sx), float(sy))
-            elif r != o and (r.width() >= 1 or o.width() < 1) and (r.height() >= 1 or o.height() < 1):
-                # the box the handles were drawn on (a unit's may differ from
-                # its root record's extent -- the window maps between them)
-                self.last_resize_origin = QtCore.QRectF(self._resize_origin)
-                self.objectResized.emit(idx, (int(r.left()), int(r.top()), int(r.right()), int(r.bottom())))
-            e.accept()
-            return
+    def _end_resize(self) -> None:
+        """A sizing handle let go: the object takes the new box (objectResized), or the
+        whole selection scales (selectionScaled)."""
+        r = self._resize_rect.normalized()
+        idx = self._resize_index
+        multi, self._resize_multi = self._resize_multi, False
+        self._resizing = None
+        self._resize_index = None
+        self._pill = None
+        self.viewport().update()
+        o = self._resize_origin
+        if multi:
+            if r != o and r.width() >= 1 and r.height() >= 1:
+                # the whole selection scales about where its box is fixed: Adjust
+                # Position and Size's move-then-scale (one undo step in the window)
+                sx = r.width() / o.width() if o.width() > 0 else 1.0
+                sy = r.height() / o.height() if o.height() > 0 else 1.0
+                self.selectionScaled.emit(int(round(r.left())), int(round(r.top())), float(sx), float(sy))
+        elif r != o and (r.width() >= 1 or o.width() < 1) and (r.height() >= 1 or o.height() < 1):
+            # the box the handles were drawn on (a unit's may differ from
+            # its root record's extent -- the window maps between them)
+            self.last_resize_origin = QtCore.QRectF(self._resize_origin)
+            self.objectResized.emit(idx, (int(r.left()), int(r.top()), int(r.right()), int(r.bottom())))
 
-        if self._marquee is not None and e.button() == QtCore.Qt.LeftButton:
-            rect = self._marquee
-            self._marquee = None
-            self._marquee_before = None
-            self._box_eligible = None
-            self._box_timer.stop()
-            self._box_preview = []
-            self._pill = None
-            self.viewport().update()
-            lim = drag_page_px(2, self.zoom())  # (a smaller box is a click)
-            if rect.width() > lim or rect.height() > lim:
-                boxed = self._box_units(rect, self._marquee_touch)
-                mods = self._marquee_mods
-                if mods & QtCore.Qt.ControlModifier:
-                    # Ctrl: each boxed unit in or out
-                    units = [list(u) for u in self._units]
-                    have = {min(u) for u in units}
-                    for u in boxed:
-                        if min(u) in have:
-                            units = [x for x in units if min(x) != min(u)]
-                        else:
-                            units.append(u)
-                    self._set_units(units)
-                elif mods & QtCore.Qt.ShiftModifier:
-                    # Shift: added after what was selected, in its order
-                    have = {min(u) for u in self._units}
-                    self._set_units([list(u) for u in self._units] + [u for u in boxed if min(u) not in have])
-                else:
-                    self._set_units(boxed)
-                if boxed:
-                    self._key_root = min(boxed[-1])
-            self._marquee_mods = QtCore.Qt.NoModifier
-            e.accept()
-            return
-
-        if self._moving and e.button() == QtCore.Qt.LeftButton:
-            # the displacement the preview showed: already on the grid /
-            # guideline / smart guide (_move_snap); Alt dragged it free
-            total = self._move_applied
-            self._moving = False
-            self._maybe_drag = False
-            self._mv_box = None
-            self._constrain = None
-            self._pending_click = None
-            self._drop_copy_ghost()
-            # the moved items are re-synced (a rebuild) or put back: measure again
-            self._drop_unit_rects()
-            self._sg_active = []
-            self._pill = None
-            self.viewport().setCursor(self._idle_cursor())
-            dx, dy = int(round(total.x())), int(round(total.y()))
-            items, self._drag_items = self._drag_items, []
-            # the preview goes back first: the scene moves the items by what the
-            # document commits (MainWindow._shift_scene) or builds them again; with
-            # nothing to commit they are where the model has them again (the scene
-            # only rebuilds what the document changed)
-            self._move_items(items, -total.x(), -total.y())
-            copy = "copy" in modifier_roles(e.modifiers(), moving=True)
-            if dx or dy:
-                # the copy key held when the button goes up: the original stays and a
-                # copy lands there (decided now, like a guideline's Ctrl+drag)
-                (self.objectsCopied if copy else self.objectsMoved).emit(list(self._selection), dx, dy)
+    def _end_marquee(self) -> None:
+        """The selection box let go: what it takes replaces the selection, is added to it
+        (Shift) or toggled in it (Ctrl). A box smaller than the drag distance is a click."""
+        rect = self._marquee
+        self._marquee = None
+        self._marquee_before = None
+        self._box_eligible = None
+        self._box_timer.stop()
+        self._box_preview = []
+        self._pill = None
+        self.viewport().update()
+        lim = drag_page_px(2, self.zoom())  # (a smaller box is a click)
+        if rect.width() > lim or rect.height() > lim:
+            boxed = self._box_units(rect, self._marquee_touch)
+            mods = self._marquee_mods
+            if mods & QtCore.Qt.ControlModifier:
+                # Ctrl: each boxed unit in or out
+                units = [list(u) for u in self._units]
+                have = {min(u) for u in units}
+                for u in boxed:
+                    if min(u) in have:
+                        units = [x for x in units if min(x) != min(u)]
+                    else:
+                        units.append(u)
+                self._set_units(units)
+            elif mods & QtCore.Qt.ShiftModifier:
+                # Shift: added after what was selected, in its order
+                have = {min(u) for u in self._units}
+                self._set_units([list(u) for u in self._units] + [u for u in boxed if min(u) not in have])
             else:
-                self.viewport().update()
-            e.accept()
-            return
+                self._set_units(boxed)
+            if boxed:
+                self._key_root = min(boxed[-1])
+        self._marquee_mods = QtCore.Qt.NoModifier
 
-        if e.button() == QtCore.Qt.LeftButton:
-            if self._alt_press is not None:
-                self._alt_cycle(vp)  # an Alt+click: the next one down
-            pend, self._pending_click = self._pending_click, None
-            if pend is not None:
-                self._finish_click(pend)
+    def _end_move(self, mods) -> None:
+        """A move drag let go: the selection moves by the displacement the preview showed
+        (objectsMoved), or a copy lands there with the copy key held (objectsCopied)."""
+        # the displacement the preview showed: already on the grid /
+        # guideline / smart guide (_move_snap); Alt dragged it free
+        total = self._move_applied
+        self._moving = False
         self._maybe_drag = False
-        super().mouseReleaseEvent(e)
+        self._mv_box = None
+        self._constrain = None
+        self._pending_click = None
+        self._drop_copy_ghost()
+        # the moved items are re-synced (a rebuild) or put back: measure again
+        self._drop_unit_rects()
+        self._sg_active = []
+        self._pill = None
+        self.viewport().setCursor(self._idle_cursor())
+        dx, dy = int(round(total.x())), int(round(total.y()))
+        items, self._drag_items = self._drag_items, []
+        # the preview goes back first: the scene moves the items by what the
+        # document commits (MainWindow._shift_scene) or builds them again; with
+        # nothing to commit they are where the model has them again (the scene
+        # only rebuilds what the document changed)
+        self._move_items(items, -total.x(), -total.y())
+        copy = "copy" in modifier_roles(mods, moving=True)
+        if dx or dy:
+            # the copy key held when the button goes up: the original stays and a
+            # copy lands there (decided now, like a guideline's Ctrl+drag)
+            (self.objectsCopied if copy else self.objectsMoved).emit(list(self._selection), dx, dy)
+        else:
+            self.viewport().update()
 
     def _finish_click(self, pend: dict) -> None:
         """A click (no drag) whose meaning waited for the release."""

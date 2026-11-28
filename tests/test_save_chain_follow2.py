@@ -32,8 +32,8 @@ def _drop_win(w):
         if hasattr(d, "dirty"):
             d.dirty = False
     w.doc = None
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.close()
 
 
@@ -67,9 +67,8 @@ def _quiet_chain():
     ):
         st.setValue(k, v)
     yield
-    from ctgedit.ui.window.library import LibraryCommands
 
-    LibraryCommands._chain_progress = ""
+    UpdatePagesRun.chain_progress = ""
     UpdatePagesRun.users_busy = ""
     UpdatePagesRun.chain_busy = False
     UpdatePagesRun.tabs_following = False
@@ -305,11 +304,11 @@ def test_simulate_waits_while_the_chain_runs_and_reloads_once_after_it(tmp_path,
     win, sp, sim, doc = _sim_window(tmp_path, monkeypatch, lib)
     try:
         UpdatePagesRun.users_busy = "fxnest.n0"
-        gen = editing._LIBRARY_GENERATION[0]
+        gen = editing.LIBRARY_GENERATION[0]
         with open(lib, "w") as fh:  # (the helper's write)
             fh.write("bbb")
         win._libraries_changed([lib])  # (the watch)
-        assert editing._LIBRARY_GENERATION[0] == gen
+        assert editing.LIBRARY_GENERATION[0] == gen
         wait_for(lambda: (win.tick(), False)[1], timeout=1.5)
         assert sim.reloads == [] and sp.reload_due is None
         # the chain ends: its libraries are the editor's own, the editor's generation moves
@@ -317,7 +316,7 @@ def test_simulate_waits_while_the_chain_runs_and_reloads_once_after_it(tmp_path,
         UpdatePagesRun.users_busy = ""
         note_written(lib)
         pending["on"] = True
-        editing._LIBRARY_GENERATION[0] += 1
+        editing.LIBRARY_GENERATION[0] += 1
         wait_for(lambda: (win.tick(), False)[1], timeout=1.5)
         assert sim.reloads == [] and sp.lib_wait
         pending["on"] = False
@@ -341,9 +340,9 @@ def test_simulate_leaves_the_editors_own_library_writes_to_its_generation(tmp_pa
     win, sp, sim, _doc = _sim_window(tmp_path, monkeypatch, lib)
     try:
         fileio.write_atomic(lib, b"bbbb")  # (an editor save)
-        gen = editing._LIBRARY_GENERATION[0]
+        gen = editing.LIBRARY_GENERATION[0]
         win._libraries_changed([lib])
-        assert editing._LIBRARY_GENERATION[0] == gen and sp.reload_due is None
+        assert editing.LIBRARY_GENERATION[0] == gen and sp.reload_due is None
     finally:
         win.close()
         win.deleteLater()
@@ -385,7 +384,7 @@ def test_simulate_lets_the_editors_library_watch_look_first(tmp_path, monkeypatc
         told.append(list(paths)),
         editor._lib_pending.update(paths),
     )
-    monkeypatch.setattr(MainWindow, "_instances", [editor])
+    monkeypatch.setattr(MainWindow, "instances", [editor])
     try:
         with open(lib, "w") as fh:
             fh.write("bbb")
@@ -396,7 +395,7 @@ def test_simulate_lets_the_editors_library_watch_look_first(tmp_path, monkeypatc
         # the editor's watch looks: the library changed, its genie update is queued
         editor._lib_pending.clear()
         pending["on"] = True
-        editing._LIBRARY_GENERATION[0] += 1
+        editing.LIBRARY_GENERATION[0] += 1
         wait_for(lambda: (win.tick(), False)[1], timeout=1.3)
         assert sim.reloads == []
         pending["on"] = False
@@ -429,7 +428,7 @@ def test_simulate_waits_while_a_run_in_the_editor_brings_its_tabs_up_to_date(tmp
         UpdatePagesRun.tabs_following = True
         with open(lib, "w") as fh:  # (a save of the run)
             fh.write("bbb")
-        editing._LIBRARY_GENERATION[0] += 1
+        editing.LIBRARY_GENERATION[0] += 1
         wait_for(lambda: (win.tick(), False)[1], timeout=1.5)
         assert sim.reloads == [] and sp.reload_due is None and not sp.lib_wait
         # the run's end: the element tabs' updates are queued
@@ -451,7 +450,7 @@ def _run_steps(cls, monkeypatch, seen):
     """The steps of a run after its saves, each with whether Simulate's library changes
     wait (live_reload.library_run_going)."""
     from ctgedit.ui.simulate.live_reload import library_run_going
-    from ctgedit.ui.window.library import OpenTabsUpdate
+    from ctgedit.ui.window.open_tabs import OpenTabsUpdate
 
     monkeypatch.setattr(
         cls,
@@ -566,7 +565,7 @@ def test_update_users_gives_open_tabs_the_template_page_properties_as_set(fx_ins
     """[Animator] TemplateUpdate decides the template's page properties for the open tabs of
     Update Users as for its closed pages (update_template(page_properties=None))."""
     from ctgedit.io import genieusage as GU
-    from ctgedit.ui.window.library import OpenTabsUpdate
+    from ctgedit.ui.window.open_tabs import OpenTabsUpdate
 
     users = [
         types.SimpleNamespace(
@@ -632,7 +631,7 @@ def test_the_editor_follows_the_partial_answer_of_a_failed_helper(fx_install, wi
     from ctgedit.ui import notify
 
     def died(lib_path, element, skip, builder_open, backup, progress_file, *a, **k):
-        GW._write_json(
+        GW.write_json(
             progress_file + GW.GENIES_SUFFIX,
             {
                 "format": GW.FORMAT,

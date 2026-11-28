@@ -17,7 +17,6 @@ from ...format import codes as _codes
 SCAN_MS = 250
 #: tag qualities the Inputs panel offers
 QUALITIES = ("Good", "Uncertain", "Bad")
-CLOCK_MODES = ("run", "pause", "step", "speed")
 #: input event kinds
 INPUT_KINDS = ("down", "up", "double", "drag", "key")
 
@@ -715,12 +714,6 @@ class FakeSimulation:
 
     def not_simulated(self) -> Dict[str, int]:
         return dict(self._not_sim)
-
-
-#: the demo under the name of each interface it implements
-FakeStateSource = FakeSimulation
-FakeTagSource = FakeSimulation
-FakeLogSource = FakeSimulation
 
 
 def default_simulation(engine_path: Optional[str] = None):

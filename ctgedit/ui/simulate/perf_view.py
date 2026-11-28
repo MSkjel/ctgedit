@@ -1,6 +1,8 @@
 """The Inspector's Performance tab."""
 
 from __future__ import annotations
+
+from ..names import plural
 from ..style.theme import sp as _sp
 
 import os
@@ -489,6 +491,16 @@ class PerformanceView(QtWidgets.QWidget):
         lay = QtWidgets.QVBoxLayout(self)
         lay.setContentsMargins(0, _sp(1), 0, 0)
         lay.setSpacing(_sp(1))
+        self._build_controls(lay)
+        self._build_functions_view()
+        self._build_call_tree_view()
+        self._build_flame_view()
+        self._build_expressions_view()
+        self._build_scans_view()
+
+    def _build_controls(self, lay: QtWidgets.QVBoxLayout) -> None:
+        """Start, Stop and Reset with the note, the views' switch, the bar of the function
+        in focus and the views' stack."""
         # Start / Stop / Reset, what was timed, the views
         bar = QtWidgets.QHBoxLayout()
         self.start = QtWidgets.QPushButton("Start")
@@ -530,6 +542,8 @@ class PerformanceView(QtWidgets.QWidget):
         lay.addWidget(self.stack, 1)
         self.switch.currentChanged.connect(self.stack.setCurrentIndex)
 
+    def _build_functions_view(self) -> None:
+        """The Functions view: a row per function, the longest own time first."""
         # Functions
         self.f_headers = (
             "Function",
@@ -560,6 +574,8 @@ class PerformanceView(QtWidgets.QWidget):
         self.funcs.customContextMenuRequested.connect(lambda pos: self._row_menu(self.funcs, pos))
         self.stack.addWidget(self.funcs)
 
+    def _build_call_tree_view(self) -> None:
+        """The Call tree view."""
         # Call tree
         self.t_headers = ("Function", "Total ms", "Total %", "Own ms", "Calls")
         self.tree = _view("Call tree", tree=True)
@@ -570,6 +586,8 @@ class PerformanceView(QtWidgets.QWidget):
         self.tree.customContextMenuRequested.connect(lambda pos: self._row_menu(self.tree, pos))
         self.stack.addWidget(self.tree)
 
+    def _build_flame_view(self) -> None:
+        """The Flame graph view with its notes."""
         # Flame graph
         self.flame = FlameGraph()
         self.flame.focusRequested.connect(self.set_focus)
@@ -593,6 +611,9 @@ class PerformanceView(QtWidgets.QWidget):
         )
         self.stack.addWidget(fw)
 
+    def _build_expressions_view(self) -> None:
+        """The Expressions view: a row per animation expression, the longest total time
+        first."""
         # Expressions
         self.e_headers = (
             "AN",
@@ -623,6 +644,8 @@ class PerformanceView(QtWidgets.QWidget):
         self.exprs.customContextMenuRequested.connect(self._expr_menu)
         self.stack.addWidget(self.exprs)
 
+    def _build_scans_view(self) -> None:
+        """The Scans and tasks view: the page scans over the tasks."""
         # Scans and tasks
         self.s_headers = ("Page", "Window", "Scans", "Total ms", "Average ms", "Longest ms")
         self.scans = _view("Scans")
@@ -975,36 +998,14 @@ class PerformanceView(QtWidgets.QWidget):
         v = self._current_view()
         if v is None:
             n = len(self.flame._boxes)
-            return "%d bar%s" % (n, "" if n == 1 else "s")
+            return plural(n, "bar")
         return "%d" % v.model().rowCount()
 
     def copy_rows(self) -> int:
         """The selected rows (all shown ones when none is selected) of the view shown, tab
         separated with the column names first; the Flame graph copies the Functions list."""
-        v = self._current_view() or self.funcs
-        model = v.model()
-        heads = [model.headerData(c, QtCore.Qt.Horizontal) for c in range(model.columnCount())]
-        out = ["\t".join(str(h) for h in heads)]
-        sel = v.selectionModel().selectedRows() if v.selectionModel() else []
-        if sel:
-            idxs = sel
-        else:
-            idxs = []
+        from ..tables import selected_rows_text
 
-            def walk(parent):
-                for k in range(model.rowCount(parent)):
-                    ix = model.index(k, 0, parent)
-                    idxs.append(ix)
-                    if v is self.tree and self.tree.isExpanded(ix):
-                        walk(ix)
-
-            walk(QtCore.QModelIndex())
-        for ix in idxs:
-            out.append(
-                "\t".join(
-                    str(model.index(ix.row(), c, ix.parent()).data() or "")
-                    for c in range(model.columnCount())
-                )
-            )
-        QtGui.QGuiApplication.clipboard().setText("\n".join(out))
-        return len(out) - 1
+        text = selected_rows_text(self._current_view() or self.funcs, headers=True, all_if_none=True)
+        QtGui.QGuiApplication.clipboard().setText(text)
+        return text.count("\n")

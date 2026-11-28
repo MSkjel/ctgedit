@@ -887,8 +887,8 @@ def win(comp_page):
     yield w
     for d in list(w._dialogs.values()):
         d.reject()
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     for e in w._docs:
         e["doc"].dirty = False
     w.close()

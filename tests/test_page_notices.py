@@ -40,15 +40,15 @@ def win(monkeypatch):
     w.show()
     _pump()
     yield w
-    for x in list(MainWindow._instances):
+    for x in list(MainWindow.instances):
         with_watch = getattr(x, "_watcher", None)
         if with_watch is not None and with_watch.files():
             with_watch.removePaths(with_watch.files())
         x._disk_timer.stop()
         for e in getattr(x, "_docs", []):
             e["doc"].dirty = False
-        if x in MainWindow._instances:
-            MainWindow._instances.remove(x)
+        if x in MainWindow.instances:
+            MainWindow.instances.remove(x)
         x.hide()
 
 
@@ -423,27 +423,12 @@ def test_the_message_rules_find_plurals_and_missing_full_stops(tmp_path):
     ], got
 
 
-def test_the_tree_passes_with_its_baseline():
+def test_no_message_breaks_the_message_rules():
     sys.path.insert(0, os.path.join(REPO, "tools"))
     import check_ui_text as C
 
     problems = [p for p in C.check() if "message" in p[2]]
     assert not problems, "\n".join("%s:%d: %s" % p for p in problems)
-    base = C.load_baseline()
-    assert base, "the baseline lists the older offenders"
-    # the files of this package have none left
-    for line in base:
-        assert not any(
-            line.startswith(f)
-            for f in (
-                "ctgedit/ui/window/tabs.py",
-                "ctgedit/ui/window/files.py",
-                "ctgedit/ui/window/workspace.py",
-                "ctgedit/ui/panels/diag_ui.py",
-                "ctgedit/ui/notify.py",
-                "ctgedit/ui/main_window.py",
-            )
-        ), line
 
 
 # ======================================================================= the Settings rows

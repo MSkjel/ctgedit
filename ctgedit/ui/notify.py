@@ -14,8 +14,6 @@ LEVELS = ("info", "success", "warning", "error")
 LEVEL_ROLE = {"info": "accent", "success": "tip", "warning": "warn", "error": "danger"}
 #: words for screen readers and tool tips
 LEVEL_NAME = {"info": "Information", "success": "Done", "warning": "Warning", "error": "Error"}
-#: Settings > Appearance 'Messages stay:' (ui/message_time) and its factor of the reading time
-MESSAGE_TIMES = (("short", "Short"), ("normal", "Normal"), ("long", "Long"))
 TIME_FACTOR = {"short": 0.7, "normal": 1.0, "long": 1.6}
 #: the messages a window keeps
 HISTORY_MAX = 200

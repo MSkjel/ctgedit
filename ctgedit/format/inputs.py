@@ -96,7 +96,7 @@ def _decode(po: PageObject):
 
     try:
         r = GP.decode(po)
-    except Exception:  # noqa: BLE001 -- a record the strict walk cannot read
+    except Exception:  # noqa: BLE001 -- swallow-ok: a record the strict walk cannot read
         return None
     if not r.entries or len(r.entries[0]) < 2:
         return None

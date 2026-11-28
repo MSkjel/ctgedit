@@ -6,6 +6,8 @@ from typing import Optional
 
 from PySide6 import QtCore, QtWidgets
 
+from ...infra.logsetup import note_exception as _note_exc
+
 #: the factory kinds that are ActiveX controls (kind -> what the list calls it)
 BUILT_IN = (
     ("activex", "Plant SCADA Meter"),
@@ -24,6 +26,7 @@ def _kind_clsid(kind: str) -> str:
         po = factory.create_object(kind, (0, 0, 100, 100))
         return ole_clsid(po.body_raw)
     except Exception:  # noqa: BLE001
+        _note_exc("activex_insert._kind_clsid", kind=kind)
         return ""
 
 
@@ -69,8 +72,9 @@ class InsertActiveXDialog(QtWidgets.QDialog):
         self._choice = None
         have = set(factory.available_kinds())
         seen = set()
-        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
-        try:
+        from ..busy import wait_cursor
+
+        with wait_cursor():
             for kind, label in BUILT_IN:
                 if kind not in have:
                     continue
@@ -87,6 +91,7 @@ class InsertActiveXDialog(QtWidgets.QDialog):
             try:
                 donors = AX.project_controls(project_dir) if project_dir else ()
             except Exception:  # noqa: BLE001 -- the list is an aid
+                _note_exc("activex_insert.project_controls", project=project_dir)
                 donors = ()
             for d in donors:
                 if d.clsid in seen:
@@ -95,8 +100,6 @@ class InsertActiveXDialog(QtWidgets.QDialog):
                 info = AX.control_info(d.clsid)
                 name = info.name if info is not None else (d.name or d.clsid)
                 self._add(name, info, "page %s" % d.page, ("donor", d), d.clsid)
-        finally:
-            QtWidgets.QApplication.restoreOverrideCursor()
         from ..tables import make_resizable
 
         make_resizable(self.tree, "InsertActiveXDialog/controls")

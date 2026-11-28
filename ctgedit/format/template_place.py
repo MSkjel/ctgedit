@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..infra.paths import path_key
+
 import collections
 import copy
 import hashlib
@@ -98,7 +100,7 @@ def load_template(lib_path: str, element: str) -> Template:
     busy = getattr(_LOADING, "keys", None)
     if busy is None:
         busy = _LOADING.keys = set()
-    me = (os.path.normcase(os.path.abspath(lib_path)), element.lower())
+    me = (path_key(lib_path), element.lower())
     if me not in busy:
         busy.add(me)
         try:
@@ -402,31 +404,12 @@ def _marker_box(slots, fresh: bool = False):
     return None
 
 
-def compose_prefix(
-    tpl: Template,
-    *,
-    link_text: str,
-    local=(0, P.IDENT),
-    root_values: Optional[List[Tuple[str, str]]] = None,
-    root_values_ov: Optional[int] = None,
-    root_an: Optional[str] = None,
-    root_handle: Optional[int] = None,
-    old_prefix: Optional[Sequence[PageObject]] = None,
-    used_outside: Optional[set] = None,
-    page_name: str = "",
-    fresh: bool = False,
-    measure_texts: bool = False,
-) -> List[PageObject]:
-    """The template prefix records for ``tpl``."""
-    el = tpl.el
-    E = el.records
+def _prefix_handles(
+    E, recs: List[GP.Rec], parents, used: set, root_handle: Optional[int], old_prefix
+) -> List[int]:
+    """The handles of the prefix records: the root's, a kept one by identity, then the
+    twin's when free, else a fresh one; an input record shares its owner's."""
     n = len(E)
-    parents = P.forest_parents(E)
-    recs = [GP.decode(po) for po in E]
-    used = set(used_outside or ())
-    mL, L = local
-
-    # -- handles
     old_by_an = {}
     if old_prefix:
         op = P.forest_parents(old_prefix)
@@ -459,7 +442,16 @@ def compose_prefix(
         if new_h[k] is None:
             new_h[k] = new_h[parents[k]]
 
-    # -- bags
+    return new_h
+
+
+def _prefix_bags(
+    el, E, recs: List[GP.Rec], parents, new_h, link_text: str, local, root_values, page_name: str, fresh: bool
+) -> tuple:
+    """The property bags of the prefix records: (the root's levels, each record's
+    entries (None: as stored), the e0 values before their left trim)."""
+    n = len(E)
+    mL, L = local
     N0 = _levels(recs[0])
     sub_ents: List[Optional[list]] = [None] * n
     untrimmed: Dict[int, Dict[str, str]] = {}  # {k: {key: e0 value before its left trim}}
@@ -491,7 +483,13 @@ def compose_prefix(
             if r.entries is not None and len(r.entries) >= 2:
                 sub_ents[k] = _rederive_levels(r.entries, untrimmed.setdefault(k, {}))
 
-    # -- records
+    return N0, sub_ents, untrimmed
+
+
+def _prefix_records(
+    E, recs: List[GP.Rec], new_h, sub_ents, untrimmed: dict, N0: int, link_text: str, root_an, root_values_ov
+) -> None:
+    """Each prefix record's handle, flags, link, AN, entries and class section."""
     for k, r in enumerate(recs):
         e_po = E[k]
         r.handle = new_h[k]
@@ -537,10 +535,14 @@ def compose_prefix(
                 and r.entries[0][2].pairs
                 and r.entries[0][1].get("TEXT") is not None
             ):
-                r.s80 = GP._enc_lp(r.entries[0][1].get("TEXT"))
+                r.s80 = GP.enc_lp(r.entries[0][1].get("TEXT"))
             r.style = None
 
-    # -- slots
+
+def _prefix_slots(recs: List[GP.Rec], parents, mL: int, L, el) -> None:
+    """The prefix records' transform slots under the copy's Local (``mL``, ``L``) of
+    element ``el``."""
+    n = len(recs)
     s2r, m2r = P.slot2_for_linked(tuple(L), mL, el.e)
     recs[0].slots = [(mL, tuple(L)), (m2r, s2r), (m2r, s2r)]
     for k in range(1, n):
@@ -562,7 +564,10 @@ def compose_prefix(
             s3, m3 = P.apply_parent(s2, m2, chain)
             recs[k].slots[2] = (m3, s3)
 
-    # -- geometry (bottom-up)
+
+def _prefix_geometry(E, recs: List[GP.Rec], parents, fresh: bool) -> None:
+    """The prefix records' anchors and boxes, bottom-up."""
+    n = len(recs)
     rootT = recs[0].slots[2][1] if recs[0].slots[2][0] else P.IDENT
     mp = _mapper(rootT)
     children = [[] for _ in range(n)]
@@ -597,6 +602,37 @@ def compose_prefix(
             if ext is not None and tuple(ext[0]) != tuple(r1):
                 r1, r2 = ext
         r.anchor, r.rect1, r.rect2 = anchor, r1, r2
+
+
+def compose_prefix(
+    tpl: Template,
+    *,
+    link_text: str,
+    local=(0, P.IDENT),
+    root_values: Optional[List[Tuple[str, str]]] = None,
+    root_values_ov: Optional[int] = None,
+    root_an: Optional[str] = None,
+    root_handle: Optional[int] = None,
+    old_prefix: Optional[Sequence[PageObject]] = None,
+    used_outside: Optional[set] = None,
+    page_name: str = "",
+    fresh: bool = False,
+    measure_texts: bool = False,
+) -> List[PageObject]:
+    """The template prefix records for ``tpl``."""
+    el = tpl.el
+    E = el.records
+    parents = P.forest_parents(E)
+    recs = [GP.decode(po) for po in E]
+    used = set(used_outside or ())
+    mL, L = local
+    new_h = _prefix_handles(E, recs, parents, used, root_handle, old_prefix)
+    N0, sub_ents, untrimmed = _prefix_bags(
+        el, E, recs, parents, new_h, link_text, local, root_values, page_name, fresh
+    )
+    _prefix_records(E, recs, new_h, sub_ents, untrimmed, N0, link_text, root_an, root_values_ov)
+    _prefix_slots(recs, parents, mL, L, el)
+    _prefix_geometry(E, recs, parents, fresh)
     return [GP.to_po(GP.encode(r)) for r in recs]
 
 
@@ -718,7 +754,7 @@ def merge_onto(
         ro = GP.decode(old[j])
         if ro.entries and rn.entries and len(ro.entries) == len(rn.entries):
             rn.entries = [
-                [GP._merge_bag(bo, bn) for bo, bn in zip(eo, en)] for eo, en in zip(ro.entries, rn.entries)
+                [GP.merge_bag(bo, bn) for bo, bn in zip(eo, en)] for eo, en in zip(ro.entries, rn.entries)
             ]
         if keep_text_extent and rn.tc == TEXT_TC and (rn.rect1, rn.rect2) != (ro.rect1, ro.rect2):
             ko, kn = _text_key(ro), _text_key(rn)
@@ -964,7 +1000,7 @@ def nested_template_keys(recs: Sequence[PageObject]) -> frozenset:
 
 
 def _key_of(path: str, element: str) -> tuple:
-    return os.path.normcase(os.path.abspath(path)), (element or "").lower()
+    return path_key(path), (element or "").lower()
 
 
 def _label_of(path: str, element: str) -> str:
@@ -1438,7 +1474,7 @@ def new_page_bytes(
     from .attributes import NO_COLOUR
     from .container import Block, Container
     from .element import ctdraw_timestamp
-    from .element_session import _attributes_block
+    from .element_session import attributes_block
     from .page import PAGE_HEAD_SIZE, PageBlock
 
     w, h = max(1, int(width)), max(1, int(height))
@@ -1451,7 +1487,7 @@ def new_page_bytes(
     )
     page_data = writer.serialize_page_block(pb, bytes(PAGE_HEAD_SIZE))
     bg = tuple(background) if background is not None else (NO_COLOUR, NO_COLOUR)
-    attr_data = _attributes_block(ident, w, h, bg, list(page_properties), list(associations))
+    attr_data = attributes_block(ident, w, h, bg, list(page_properties), list(associations))
     cont = Container(
         9,
         0x0C,
@@ -1464,7 +1500,7 @@ def new_page_bytes(
     return cont.to_bytes()
 
 
-def _add_entries(ents: List[Tuple[bytes, str]], new, at: Optional[int] = None, current=None) -> None:
+def add_entries(ents: List[Tuple[bytes, str]], new, at: Optional[int] = None, current=None) -> None:
     """Insert link entries not listed yet."""
     have_ref = {links.strip_stamp(n).lower() for _g, n in ents if not n.startswith("\\")}
     have_lab = {n for _g, n in ents if n.startswith("\\")}
@@ -1507,14 +1543,14 @@ def new_page(
     recs = compose_prefix(tpl, link_text=link_text, page_name=page_name, fresh=True)
     if linked:
         entries = [link_entry(tpl, link_text)]
-        _add_entries(entries, GP.label_entries(recs))
+        add_entries(entries, GP.label_entries(recs))
     else:
         # (the root's children are complete subtrees: they become the page's roots)
         recs = unlinked_copy(recs, tpl, resolver)[1:]
         entries = []
         # (the copies are the template's stored records: what they nest is at the version
         # the template's own import table quotes)
-        _add_entries(
+        add_entries(
             entries,
             GP.page_link_entries(recs, resolver, carried=template_entries(tpl))
             if resolver is not None
@@ -1825,7 +1861,7 @@ def cut_link(
         keep.append((g, n))
     # (an element the page lists already, placed on it at its current version, keeps the
     # page out of date when the cut copies hold an older one)
-    _add_entries(
+    add_entries(
         keep,
         new,
         pos if pos is not None else 0,

@@ -360,7 +360,7 @@ def _full_model(doc):
         parse_ctg_bytes(doc.serialize()),
         doc.path,
         records_fresh=True,
-        generation=editing._LIBRARY_GENERATION[0],
+        generation=editing.LIBRARY_GENERATION[0],
     )
     return page
 

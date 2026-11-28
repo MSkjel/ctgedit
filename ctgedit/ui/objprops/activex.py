@@ -8,6 +8,8 @@ from PySide6 import QtCore, QtWidgets
 
 from .expression import ExpressionField
 from ..style.theme import set_note_role
+from ..messages import inform, warn
+from ...infra.logsetup import note_exception as _note_exc
 
 HELP_CONTROL = "properties#activex-control"
 HELP_TAGS = "properties#tag-association"
@@ -20,6 +22,7 @@ def _clsid(doc, index: int) -> str:
 
         return ole_clsid(doc.parsed.page.objects[index].body_raw)
     except Exception:  # noqa: BLE001
+        _note_exc("objprops.activex._clsid")
         return ""
 
 
@@ -67,7 +70,7 @@ def build_general(sheet, page):
         from ..help import set_help
 
         set_help(w, HELP_CONTROL)
-    except Exception:  # noqa: BLE001
+    except RuntimeError:
         pass
     sheet.activex_info = info
     return w
@@ -83,9 +86,7 @@ def edit_control(sheet, button=None) -> bool:
     doc, i = sheet._doc, sheet._index
     found = doc.control_state(i)
     if found is None:
-        QtWidgets.QMessageBox.warning(
-            sheet, "Control Properties", "This control has no saved settings to edit."
-        )
+        warn(sheet, "Control Properties", "This control has no saved settings to edit.")
         return False
     clsid, state, (w, h) = found
     owner = int(sheet.window().winId())
@@ -95,6 +96,7 @@ def edit_control(sheet, button=None) -> bool:
         try:
             result["state"] = controlhost.edit(clsid, state, w, h, owner)
         except Exception as e:  # noqa: BLE001 -- told to the user below
+            _note_exc("objprops.activex.edit_control")
             result["error"] = e
 
     if button is not None:
@@ -110,9 +112,7 @@ def edit_control(sheet, button=None) -> bool:
     if button is not None:
         button.setEnabled(True)
     if "error" in result:
-        QtWidgets.QMessageBox.warning(
-            sheet, "Control Properties", "The control could not be shown: %s" % result["error"]
-        )
+        warn(sheet, "Control Properties", "The control could not be shown: %s" % result["error"])
         return False
     new = result.get("state")
     if new is None:
@@ -120,7 +120,7 @@ def edit_control(sheet, button=None) -> bool:
     try:
         changed = doc.set_control_state(i, new)
     except ValueError as e:
-        QtWidgets.QMessageBox.warning(sheet, "Control Properties", str(e))
+        warn(sheet, "Control Properties", str(e))
         return False
     if changed:
         sheet.changed = True
@@ -156,7 +156,7 @@ class TagAssociationEditor:
             from ..help import set_help
 
             set_help(self.widget, HELP_TAGS)
-        except Exception:  # noqa: BLE001
+        except RuntimeError:
             pass
         self.reload()
 
@@ -380,7 +380,7 @@ class TagAssociationEditor:
             text = "No Plant SCADA types are compatible with this property."
         else:
             text = "Plant SCADA types compatible with this property:\n\n%s" % types
-        QtWidgets.QMessageBox.information(self.sheet, "Compatible Types", text)
+        inform(self.sheet, "Compatible Types", text)
 
     def set_association(self, prop: str, tag: str, event: str = "") -> None:
         """Associate ``prop`` as the user does (tests / scripting)."""
@@ -449,6 +449,7 @@ class TagAssociationEditor:
         try:
             stored = s._doc.activex_associations(s._index)
         except Exception:  # noqa: BLE001
+            _note_exc("objprops.activex.reload")
             stored = []
         self._rows = {}
         self._order = []

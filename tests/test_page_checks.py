@@ -138,8 +138,8 @@ def win(fx_page, tmp_path):
     w = MainWindow()
     w.open_document(str(dst))
     yield w
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.hide()
 
 

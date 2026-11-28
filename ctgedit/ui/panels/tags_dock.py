@@ -1,10 +1,13 @@
 """The Tags panel: tags in the page's scope."""
 
 from __future__ import annotations
+
+from ...infra.logsetup import note_exception as _note_exc
+
+from ...infra.paths import path_key
 from ..style.theme import sp as _sp  # (the spacing scale)
 
 import json
-import os
 import threading
 from collections import OrderedDict
 from typing import Optional, Sequence
@@ -27,6 +30,11 @@ KIND_LABELS = {"variable": "Variable tag", "local": "Local variable", "equipment
 _COL_INDEX = {"name": 0, "kind": 1, "type": 2, "equip": 3, "project": 4, "comment": 5}
 #: (the scope is the page's: its project, the projects it includes and those including it)
 ALL_PROJECTS = "All projects of the page"
+#: Qt's roles and flags, read once (an attribute of QtCore.Qt costs about 1 us)
+_DISPLAY_ROLE = QtCore.Qt.DisplayRole
+_TOOLTIP_ROLE = QtCore.Qt.ToolTipRole
+_FOREGROUND_ROLE = QtCore.Qt.ForegroundRole
+_DRAG_ENABLED = QtCore.Qt.ItemIsDragEnabled
 
 
 def _dim() -> QtGui.QColor:
@@ -34,7 +42,7 @@ def _dim() -> QtGui.QColor:
         from ..style.theme import COLORS
 
         return QtGui.QColor(COLORS.get("text_dim", "#969ca5"))
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # swallow-ok: the theme's colour is optional
         return QtGui.QColor("#969ca5")
 
 
@@ -55,7 +63,7 @@ def restore_root_choices() -> None:
                     TS.choose_root(project, root)
         finally:
             st.endGroup()
-    except Exception:  # noqa: BLE001 -- a remembered choice is a convenience
+    except Exception:  # noqa: BLE001  # swallow-ok: a remembered choice is a convenience
         pass
 
 
@@ -63,7 +71,7 @@ def _tag_key(path: str) -> tuple:
     """What a panel's list is for: the page folder and the compiled project chosen."""
     from ...io import tagscope as TS
 
-    d = os.path.normcase(os.path.abspath(path)) if path else ""
+    d = path_key(path) if path else ""
     return (d, (TS.chosen_root(path) or "").lower() if path else "")
 
 
@@ -271,16 +279,19 @@ class TagTableModel(QtCore.QAbstractTableModel):
     def columnCount(self, parent=QtCore.QModelIndex()) -> int:  # noqa: N802
         return len(self.columns)
 
-    def data(self, index, role=QtCore.Qt.DisplayRole):
+    def data(self, index, role=_DISPLAY_ROLE):
+        # (a paint asks every cell shown for every role: the others answer at once)
+        if role != _DISPLAY_ROLE and role != _TOOLTIP_ROLE and role != _FOREGROUND_ROLE:
+            return None
         if not index.isValid():
             return None
         col = self.columns[index.column()]
-        if role in (QtCore.Qt.DisplayRole, QtCore.Qt.ToolTipRole):
+        if role != _FOREGROUND_ROLE:
             cells = self.index_.cells(self._rows[index.row()])
             v = cells[_COL_INDEX[col]]
             if col == "kind":
                 v = KIND_LABELS.get(v, v)
-            if role == QtCore.Qt.ToolTipRole and col == "project":
+            if role == _TOOLTIP_ROLE and col == "project":
                 sc = getattr(self.index_, "scope", None)
                 p = sc.by_name(v) if sc is not None else None
                 if p is not None:
@@ -288,7 +299,7 @@ class TagTableModel(QtCore.QAbstractTableModel):
 
                     return "%s (%s)" % (v, relation_label(p.relation))
             return v
-        if role == QtCore.Qt.ForegroundRole and col == "project":
+        if col == "project":
             return _dim()
         return None
 
@@ -299,7 +310,7 @@ class TagTableModel(QtCore.QAbstractTableModel):
 
     def flags(self, index):
         f = super().flags(index)
-        return f | QtCore.Qt.ItemIsDragEnabled if index.isValid() else f
+        return f | _DRAG_ENABLED if index.isValid() else f
 
     def mimeTypes(self):  # noqa: N802
         return [TAG_MIME, TAG_INFO_MIME, "text/plain"]
@@ -380,7 +391,7 @@ class _Loader(QtCore.QObject):
                 idx = PR.tag_index(pdir, progress=report)
                 self._emit(self.done, gen, (idx, idx.order(kinds)))
                 idx.prepare_search()  # (the first key's text indexes, after the list shows)
-            except Exception as exc:  # noqa: BLE001 -- shown in the panel
+            except Exception as exc:  # noqa: BLE001  # swallow-ok: shown in the panel
                 self._emit(self.done, gen, exc)
 
         from ...infra import gcguard
@@ -441,6 +452,12 @@ class TagsDock(QtWidgets.QWidget):
     ASYNC_ROWS = 100_000
     #: (params, result) of a search the worker finished
     _filtered = QtCore.Signal(object)
+    #: the tag chosen in the list ('' none): the window lists and marks its uses on the page
+    currentTagChanged = QtCore.Signal(str)
+    #: select these objects (a use double-clicked)
+    usesChosen = QtCore.Signal(list)
+    #: Mark on Page ticked or not
+    marksToggled = QtCore.Signal(bool)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -505,6 +522,9 @@ class TagsDock(QtWidgets.QWidget):
         self._count = QtWidgets.QLabel("")
         self._count.setStyleSheet("color:%s;" % _dim().name())
         lay.addWidget(self._count)
+        lay.addWidget(self._build_uses())
+        self._table.selectionModel().currentRowChanged.connect(lambda cur, _prev: self._tag_chosen(cur))
+        self._model.modelReset.connect(lambda: self._tag_chosen(self._table.currentIndex()))
         self._filter.attach(self._table, self)
         self._filter_busy = False
         self._filter_want = None
@@ -569,7 +589,7 @@ class TagsDock(QtWidgets.QWidget):
             from ..prefs.settings import app_settings
 
             saved = app_settings().value("tags/scope/%s" % name.lower(), "", type=str)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001  # swallow-ok: a garbled setting reads as empty
             saved = ""
         if saved and not TS.chosen_root(self._dir):
             TS.choose_root(self._dir, saved)
@@ -597,6 +617,7 @@ class TagsDock(QtWidgets.QWidget):
             idx = PR.tag_index(self._dir)
             self._show_index(key, idx, idx.order(("variable",)), final=True)
         except Exception:  # noqa: BLE001 -- the panel is an aid
+            _note_exc("tags_dock.ensure_loaded")
             self._show_index(key, None, (), final=True)
 
     def _load_if_shown(self) -> None:
@@ -784,7 +805,7 @@ class TagsDock(QtWidgets.QWidget):
             from ..prefs.settings import app_settings
 
             app_settings().setValue("tags/scope/%s" % TS.project_name(self._dir).lower(), root)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001  # swallow-ok: a remembered choice is a convenience
             pass
         self._loaded_key = None
         # (hidden: nothing is read now; the list follows when the panel is shown)
@@ -876,7 +897,7 @@ class TagsDock(QtWidgets.QWidget):
             return
         n, total = self._model.rowCount(), self._model.total()
         if not total:
-            text = "" if self._dir is None else "No tags for this page"
+            text = "Open a page to see its tags." if self._dir is None else "This page uses no tags."
         elif not n:
             text = "No tags"
         else:
@@ -905,6 +926,90 @@ class TagsDock(QtWidgets.QWidget):
         m.addAction("Copy Name").triggered.connect(lambda: self._copy(idx))
         m.exec(self._table.viewport().mapToGlobal(pos))
         m.deleteLater()
+
+    # -- On This Page: the uses of the tag chosen ----------------------------------------------
+    def _build_uses(self) -> QtWidgets.QWidget:
+        box = QtWidgets.QWidget(self)
+        v = QtWidgets.QVBoxLayout(box)
+        v.setContentsMargins(0, _sp(1), 0, 0)
+        v.setSpacing(_sp(1))
+        head = QtWidgets.QHBoxLayout()
+        head.setContentsMargins(0, 0, 0, 0)
+        self._uses_title = QtWidgets.QLabel("<b>On this page</b>")
+        self._uses_title.setTextFormat(QtCore.Qt.RichText)
+        head.addWidget(self._uses_title, 1)
+        self._marks = QtWidgets.QCheckBox("Mark on page")
+        self._marks.setChecked(True)
+        self._marks.setToolTip(
+            "Outline the objects that use the tag on the page: blue reads it, amber writes it"
+        )
+        self._marks.toggled.connect(self.marksToggled.emit)
+        head.addWidget(self._marks)
+        v.addLayout(head)
+        self._uses = QtWidgets.QTreeWidget(box)
+        self._uses.setObjectName("tagUses")
+        self._uses.setAccessibleName("Uses on this page")
+        self._uses.setRootIsDecorated(False)
+        self._uses.setUniformRowHeights(True)
+        self._uses.setColumnCount(2)
+        self._uses.setHeaderLabels(["Use", "Field"])
+        self._uses.setTextElideMode(QtCore.Qt.ElideRight)
+        from ..tables import make_resizable
+
+        make_resizable(self._uses, "TagsDock/uses", stretch=1)
+        self._uses.setMaximumHeight(self.fontMetrics().height() * 8 + 12)
+        self._uses.itemActivated.connect(self._use_chosen)
+        v.addWidget(self._uses)
+        self._uses_note = QtWidgets.QLabel("")
+        self._uses_note.setWordWrap(True)
+        self._uses_note.setStyleSheet("color:%s;" % _dim().name())
+        v.addWidget(self._uses_note)
+        self.show_uses("", [])
+        return box
+
+    def current_tag(self) -> str:
+        idx = self._table.currentIndex()
+        return (self._model.name(idx.row()) or "") if idx.isValid() else ""
+
+    def marks_wanted(self) -> bool:
+        return self._marks.isChecked()
+
+    def _tag_chosen(self, idx) -> None:
+        name = (self._model.name(idx.row()) or "") if idx is not None and idx.isValid() else ""
+        if name != self.__dict__.get("_chosen_tag"):
+            self._chosen_tag = name
+            self.currentTagChanged.emit(name)
+
+    def show_uses(self, tag: str, uses, summary: str = "") -> None:
+        """The uses of ``tag`` on the page (features/tag_uses.TagUse), or the hint."""
+        tree = self._uses
+        tree.clear()
+        if not tag:
+            tree.hide()
+            self._uses_note.setText("Choose a tag to see where this page reads and writes it.")
+            return
+        self._uses_title.setText("<b>On this page</b>: %s" % (summary or "not used"))
+        if not uses:
+            tree.hide()
+            self._uses_note.setText("This page does not use %s." % tag)
+            return
+        tree.show()
+        self._uses_note.setText("Double-click a use to select its object.")
+        from ...features.tag_uses import WRITES, BOTH
+
+        for u in uses:
+            access = "Writes" if u.access == WRITES else "Reads, writes" if u.access == BOTH else "Reads"
+            it = QtWidgets.QTreeWidgetItem([access, u.label])
+            it.setData(0, QtCore.Qt.UserRole, u.index)
+            one = " ".join(u.text.split())
+            shown = one if len(one) <= 300 else one[:299] + "…"
+            it.setToolTip(1, "%s\n%s\n\nDouble-click to select it." % (u.label, shown))
+            tree.addTopLevelItem(it)
+
+    def _use_chosen(self, it, _col) -> None:
+        i = it.data(0, QtCore.Qt.UserRole) if it is not None else None
+        if isinstance(i, int):
+            self.usesChosen.emit([i])
 
     # -- for the window ------------------------------------------------------------------------
     def tag_names(self) -> list:

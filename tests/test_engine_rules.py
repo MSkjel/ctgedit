@@ -116,7 +116,7 @@ def _static_text_extents(pages, project_dir):
     from ctgedit.io.reader import tag_format_lookup
 
     fm = tag_format_lookup(os.path.join(project_dir, "FxTextKinds.ctg")) or {}
-    before = TM._tag_format
+    before = TM.installed_tag_format()
     TM.use_tag_formats(lambda name: fm.get(name.strip().lower()))
     try:
         hit, tot, bad, done = 0, 0, [], set()

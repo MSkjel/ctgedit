@@ -6,6 +6,7 @@ import re
 import struct
 from typing import List, Optional, Tuple
 from .textcodec import CODEC
+from ..infra.logsetup import note_exception as _note_exc
 
 LINK_ENTRY_SIZE = 0x60
 
@@ -121,6 +122,7 @@ def set_super_genie_attachments(
             try:
                 hit = resolve(name)
             except Exception:  # noqa: BLE001
+                _note_exc("links.set_super_genie_attachments", name=name)
                 hit = None
         if hit is not None:
             stamp = hit[1]

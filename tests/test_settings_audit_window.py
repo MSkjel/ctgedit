@@ -46,13 +46,13 @@ def _delete_now():
 def _close_all(keep=None):
     from ctgedit.ui.main_window import MainWindow
 
-    for x in list(MainWindow._instances):
+    for x in list(MainWindow.instances):
         if x is keep:
             continue
         for e in getattr(x, "_docs", []):
             e["doc"].dirty = False
-        if x in MainWindow._instances:
-            MainWindow._instances.remove(x)
+        if x in MainWindow.instances:
+            MainWindow.instances.remove(x)
         x.hide()
         x.deleteLater()
     _delete_now()

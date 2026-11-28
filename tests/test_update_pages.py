@@ -12,7 +12,7 @@ def test_unchanged_libraries_leave_pages_alone(fx_page):
     from ctgedit.io import updatepages
 
     page = fx_page("FxGenies")
-    cur = updatepages._Current(SymbolResolver.for_page(page))
+    cur = updatepages.Current(SymbolResolver.for_page(page))
     assert updatepages.stale_elements(page, cur) == set()
 
 
@@ -34,7 +34,7 @@ def test_a_changed_element_stamp_marks_its_instances_stale(fx_page, fx_project):
     page = os.path.join(fx_project("FxMain"), "FxGeniesBumped.ctg")
     with open(page, "wb") as fh:
         fh.write(raw.replace(target.encode("cp1252"), bumped.encode("cp1252"), 1))
-    cur = updatepages._Current(SymbolResolver.for_page(page))
+    cur = updatepages.Current(SymbolResolver.for_page(page))
     lib, _, rest = links.strip_stamp(target).partition(".")
     elem = rest.rpartition(".")[0]
     assert updatepages.stale_elements(page, cur) == {(lib.lower(), elem.lower())}
@@ -95,7 +95,7 @@ def _current(page):
     from ctgedit.format.symbols import SymbolResolver
     from ctgedit.io import updatepages
 
-    return updatepages._Current(SymbolResolver.for_page(page))
+    return updatepages.Current(SymbolResolver.for_page(page))
 
 
 @pytest.fixture

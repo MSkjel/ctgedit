@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+from ...infra.paths import folder_key, path_key
+
+
 import contextlib
 import json
 import os
 import tempfile
 from typing import Callable, List, Optional
 
-from PySide6 import QtCore
+from PySide6 import QtCore, QtWidgets
+
+from ...workers.batchjob import read_records
 
 #: ms between looks at a helper's progress (Settings > Pages and libraries > Long jobs,
 #: ui/prefs/job_options)
@@ -254,6 +259,11 @@ class HelperJobs(QtCore.QObject):
         for j in self._jobs:
             j.wait(seconds)
 
+    def finish_now(self, seconds: float = 60) -> None:
+        """Wait for every part to end, then give the answer (``finished``) now."""
+        for j in self._jobs:
+            j.finish_now(seconds)
+
     def _part_progress(self, k: int, i: int, name: str) -> None:
         self._seen[k] = i + 1
         done = sum(self._seen.values())
@@ -291,9 +301,9 @@ def open_documents(dirs, elements: bool = False) -> list:
     from .. import main_window as MW
     from ...editing import ElementDocument
 
-    want = {os.path.normcase(os.path.abspath(d)) for d in dirs}
+    want = {path_key(d) for d in dirs}
     out = []
-    for w in list(MW.MainWindow._instances):
+    for w in list(MW.MainWindow.instances):
         for e in getattr(w, "_docs", ()):
             d = e.get("doc")
             path = getattr(d, "path", "") or ""
@@ -304,28 +314,8 @@ def open_documents(dirs, elements: bool = False) -> list:
                 or isinstance(d, ElementDocument) != elements
             ):
                 continue
-            if os.path.normcase(os.path.dirname(os.path.abspath(path))) in want:
+            if folder_key(path) in want:
                 out.append((w, d))
-    return out
-
-
-def read_records(path: str) -> List[dict]:
-    """The complete JSON lines of a helper's records file (a line cut short by a helper
-    that died, or one that is not JSON, is left out)."""
-    out: List[dict] = []
-    try:
-        with open(path, encoding="utf-8") as fh:
-            for line in fh:
-                if not line.endswith("\n"):
-                    break  # (cut short: the helper died writing it)
-                try:
-                    rec = json.loads(line)
-                except ValueError:
-                    continue
-                if isinstance(rec, dict):
-                    out.append(rec)
-    except OSError:
-        return out
     return out
 
 
@@ -387,6 +377,95 @@ def end_task(token: Optional[int], label: str, res: dict, stopped: bool, tell: b
         else summary_of(label, res or {}, stopped),
         tell=tell,
     )
+
+
+class DialogJob:
+    """A dialog's helper run (HelperJob / HelperJobs): its progress on the dialog's status line,
+    a Stop button shown while it runs, an Open Log button shown when it failed, the answer of
+    the run it holds only (one a newer run replaced is dropped), and a stop when the dialog
+    closes (:meth:`close`)."""
+
+    def __init__(self, status, stop_tip: str = "Stop"):
+        """``status``: the dialog's status line; its Stop button (``stop_tip``: what Stop
+        leaves) and Open Log button are :attr:`stop_button` and :attr:`log_button`, hidden
+        until they apply: the dialog puts them beside the status line."""
+        from ..messages import open_log_button
+
+        self.status = status
+        # (no parent yet: the dialog's layout takes them)
+        self.stop_button = QtWidgets.QToolButton()
+        self.stop_button.setText("Stop")
+        self.stop_button.setToolTip(stop_tip)
+        self.stop_button.setVisible(False)
+        self.stop_button.clicked.connect(self.stop)
+        self.log_button = open_log_button()
+        #: the run going on (None: none)
+        self.job = None
+
+    def running(self) -> bool:
+        return self.job is not None
+
+    def say(self, text: str, failed: bool = False, log: Optional[bool] = None) -> None:
+        """The status line: ``text``, red when it says something ``failed``, with Open Log
+        when the log says more (``log``; by default when it failed)."""
+        from ..style.theme import set_note_role
+
+        self.status.setText(text)
+        set_note_role(self.status, "danger" if failed else "text_dim")
+        self.show_log(failed if log is None else log)
+
+    def run(self, job, *, finished: Callable[[dict], None], failed: str, progress=None) -> bool:
+        """Start ``job``; ``progress(i, n, name)`` -> the status line's text (None: as it is),
+        ``finished(answer)`` once it ends. False, with ``failed`` said, when it did not start."""
+        if progress is not None:
+            job.progress.connect(lambda i, n, name: self._progress(job, progress, i, n, name))
+        job.finished.connect(lambda res: self._finished(job, finished, res))
+        if not job.start():
+            self.say("%s The helper process did not start." % failed, failed=True)
+            return False
+        self.say(self.status.text())
+        self.job = job
+        self.stop_button.setVisible(True)
+        return True
+
+    def _progress(self, job, progress, i: int, n: int, name: str) -> None:
+        if job is self.job and not job.stopping:
+            text = progress(i, n, name)
+            if text is not None:
+                self.status.setText(text)
+
+    def _finished(self, job, finished, res: dict) -> None:
+        if job is not self.job:
+            return
+        self.job = None
+        self.stop_button.setVisible(False)
+        failed = bool(res.get("error") or res.get("failed"))
+        if not failed:
+            self.say(self.status.text())
+        self.show_log(failed)
+        finished(res)
+
+    def show_log(self, on: bool) -> None:
+        """Open Log beside the status line (a failure the log says more about)."""
+        self.log_button.setVisible(on)
+
+    def stop(self) -> None:
+        """Ask the run to stop (Stop)."""
+        if self.job is not None:
+            self.job.stop()
+            self.say("Stopping…")
+
+    def close(self, wait: bool = False) -> None:
+        """The dialog closes: stop the run; ``wait``: take its answer now (work it did that
+        the window must follow)."""
+        if self.job is None:
+            return
+        self.job.stop()
+        if wait:
+            self.job.finish_now()
+        else:
+            self.job = None
+            self.stop_button.setVisible(False)
 
 
 def summary_of(label: str, res: dict, stopped: bool = False) -> Optional[str]:

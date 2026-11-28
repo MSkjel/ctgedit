@@ -6,9 +6,10 @@ from typing import List, Optional, Tuple
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from .colour_field import ColourPairField, _qcolor
+from .colour_field import ColourPairField, qcolor
 from .expression import ExpressionField, wizard_button
 from ..style.theme import color, set_note_role
+from ...infra.logsetup import note_exception as _note_exc
 
 HELP_TOPIC = "properties#trend"
 PEN_COUNT = 8
@@ -39,6 +40,7 @@ def _trend_tag_advice(text, field_kind, context):
     try:
         tags = {t.name.lower() for t in context.trend_tags()}
     except Exception:  # noqa: BLE001
+        _note_exc("objprops.trend._trend_tag_advice")
         return []
     base = text.strip()
     for suf in SPC_SUFFIXES:
@@ -66,7 +68,7 @@ def _swatch_icon(pair) -> QtGui.QIcon:
     try:
         on, off = pair if pair is not None else (0xFF000000, 0xFF000000)
         for k, c in enumerate((on, off)):
-            q = _qcolor(c)
+            q = qcolor(c)
             r = QtCore.QRect(1 + 13 * k, 1, 12, 12)
             if q is None:
                 p.setPen(QtGui.QPen(color("text_dim"), 1))
@@ -100,7 +102,7 @@ class TrendEditor:
             from ..help import set_help
 
             set_help(self.widget, HELP_TOPIC)
-        except Exception:  # noqa: BLE001
+        except RuntimeError:
             pass
         self.reload()
 
@@ -131,7 +133,7 @@ class TrendEditor:
             for row in clusters(ctx.project_dir) if ctx.project_dir else ():
                 self.cluster.addItem(row.get("NAME", ""))
         except Exception:  # noqa: BLE001 -- the list is an aid only
-            pass
+            _note_exc("objprops.trend._build/clusters")
         self.cluster.currentTextChanged.connect(lambda _t: self._changed())
         form.addRow("Cluster name:", self.cluster)
         lay.addLayout(form)
@@ -174,7 +176,7 @@ class TrendEditor:
             names = [t.name for t in trend_tags(ctx.project_dir)] if ctx.project_dir else []
             self.pen_tag.set_names(names)
         except Exception:  # noqa: BLE001
-            pass
+            _note_exc("objprops.trend._build/trend_tags")
         self.pen_tag.textChanged.connect(self._tag_typed)
         row.addWidget(self.pen_tag, 1)
         self.btn_edit = QtWidgets.QPushButton("&Edit")
@@ -346,6 +348,7 @@ class TrendEditor:
         try:
             info = s._doc.trend_properties(s._index)
         except Exception:  # noqa: BLE001
+            _note_exc("objprops.trend.reload")
             info = {
                 "pens": [("", None)] * PEN_COUNT,
                 "cluster": "",

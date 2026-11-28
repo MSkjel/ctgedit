@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from ..dialog_buttons import dialog_buttons
+
+from ...infra.paths import path_key
+
 import base64
 import contextlib
 import glob
@@ -13,6 +17,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 from ..style import theme
 from .picture_import import size_text
+from ..messages import warn
 
 #: a library element name (Cicode-safe, the Graphics Builder's 31 characters)
 _ELEMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,30}$")
@@ -56,12 +61,7 @@ class _SymbolNameDialog(QtWidgets.QDialog):
         self.problem = theme.note_label("", "danger", self)
         self.problem.setVisible(False)
         lay.addWidget(self.problem)
-        self.buttons = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
-        )
-        self.buttons.button(QtWidgets.QDialogButtonBox.Ok).setText("Make Symbol")
-        self.buttons.accepted.connect(self.accept)
-        self.buttons.rejected.connect(self.reject)
+        self.buttons = dialog_buttons(self, ok="Make Symbol")
         lay.addWidget(self.buttons)
         self.library.currentTextChanged.connect(lambda _t: self._check())
         self.element.textChanged.connect(lambda _t: self._check())
@@ -131,7 +131,6 @@ class DuplicatePicturesDialog(QtWidgets.QDialog):
         self.project = os.path.basename(project_dir)
         self.setWindowTitle("Find Duplicate Pictures - %s" % self.project)
         self._groups: List[dict] = []
-        self._job = None
         lay = QtWidgets.QVBoxLayout(self)
         lay.addWidget(QtWidgets.QLabel("The pictures the pages of %s store more than once." % self.project))
         split = QtWidgets.QSplitter(QtCore.Qt.Vertical)
@@ -154,19 +153,17 @@ class DuplicatePicturesDialog(QtWidgets.QDialog):
         make_resizable(self.groups, "DuplicatePicturesDialog/groups", stretch=0)
         make_resizable(self.uses, "DuplicatePicturesDialog/uses", stretch=0)
         row = QtWidgets.QHBoxLayout()
-        self.status = QtWidgets.QLabel()
-        self.status.setWordWrap(True)
+        from ..style.theme import note_label
+
+        self.status = note_label("", "text_dim", self)
         row.addWidget(self.status, 1)
         # (a failure's status line has Open Log beside it, never 'see the log')
-        from ..messages import open_log_button
+        from ..jobs.helper_job import DialogJob
 
-        self.b_log = open_log_button(self)
-        row.addWidget(self.b_log)
-        self.cancel_job = QtWidgets.QToolButton()
-        self.cancel_job.setText("Stop")
-        self.cancel_job.setToolTip("Stop after the page being read or changed now")
-        self.cancel_job.setVisible(False)
-        row.addWidget(self.cancel_job)
+        self._helper = DialogJob(self.status, "Stop after the page being read or changed now")
+        row.addWidget(self._helper.log_button)
+        row.addWidget(self._helper.stop_button)
+
         lay.addLayout(row)
         acts = QtWidgets.QHBoxLayout()
         # (its scope in its name, as Replace Everywhere's: it changes every page with a copy)
@@ -193,7 +190,6 @@ class DuplicatePicturesDialog(QtWidgets.QDialog):
         self.b_scan.clicked.connect(self.scan)
         self.b_symbol.clicked.connect(self._make_symbol)
         self.b_replace.clicked.connect(self._replace_everywhere)
-        self.cancel_job.clicked.connect(self._stop)
         self._sync_buttons()
         self.resize(760, 560)
         QtCore.QTimer.singleShot(0, self, self.scan)
@@ -219,49 +215,30 @@ class DuplicatePicturesDialog(QtWidgets.QDialog):
         stats.begin_phase("pictures", 0)
 
         def progress(i, n, name):
-            if not job.stopping:
-                stats.update(int(i), int(n))
-                figures = stats.time_text()
-                text = "%s: page %d of %d (%s)" % (label, i + 1, n, name)
-                if figures:
-                    text += ". %s%s." % (figures[:1].upper(), figures[1:])
-                self.status.setText(text)
+            stats.update(int(i), int(n))
+            figures = stats.time_text()
+            text = "%s: page %d of %d (%s)" % (label, i + 1, n, name)
+            return text + (". %s%s." % (figures[:1].upper(), figures[1:]) if figures else "")
 
         def finished(res):
-            self._job = None
-            self.cancel_job.setVisible(False)
             if res.get("error"):
-                self.status.setText("%s failed: %s" % (label, res["error"]))
+                self._helper.say("%s failed: %s" % (label, res["error"]), failed=True)
             else:
                 done(res)
             self._sync_buttons()
 
-        job.progress.connect(progress)
-        job.finished.connect(finished)
-        if not job.start():
-            self.status.setText("The pictures could not be read.")
-            self.b_log.setVisible(True)
+        if not self._helper.run(
+            job, finished=finished, failed="The pictures could not be read.", progress=progress
+        ):
             return
-        self._job = job
-        self.cancel_job.setVisible(True)
-        self.cancel_job.setEnabled(True)
-        self.b_log.setVisible(False)
-        self.status.setText(label + "…")
+        self._helper.say(label + "…")
         self._sync_buttons()
 
-    def _stop(self) -> None:
-        if self._job is not None:
-            self._job.stop()
-            self.cancel_job.setEnabled(False)
-            self.status.setText("Stopping after the page being read or changed now…")
-
     def busy(self) -> bool:
-        return self._job is not None
+        return self._helper.running()
 
     def reject(self) -> None:
-        if self._job is not None:
-            self._job.stop()
-            self._job.wait(30)
+        self._helper.close(wait=True)  # (the page being changed is saved first)
         super().reject()
 
     def _open_docs(self) -> list:
@@ -275,7 +252,7 @@ class DuplicatePicturesDialog(QtWidgets.QDialog):
 
     # -- the scan ----------------------------------------------------------------------
     def scan(self) -> None:
-        if self._job is not None:
+        if self._helper.running():
             return
         self.groups.clear()
         self.uses.clear()
@@ -317,7 +294,7 @@ class DuplicatePicturesDialog(QtWidgets.QDialog):
             )
         if res.get("stopped"):
             text = "Stopped. " + text
-        self.status.setText(text)
+        self._helper.say(text)
         if n:
             self.groups.setCurrentItem(self.groups.topLevelItem(0))
 
@@ -341,7 +318,7 @@ class DuplicatePicturesDialog(QtWidgets.QDialog):
 
     def _sync_buttons(self) -> None:
         g = self._current()
-        idle = self._job is None
+        idle = not self._helper.running()
         for b in (self.b_symbol, self.b_replace):
             b.setEnabled(idle and g is not None)
         self.b_show.setEnabled(g is not None)
@@ -360,16 +337,15 @@ class DuplicatePicturesDialog(QtWidgets.QDialog):
         u = g["uses"][min(k, len(g["uses"]) - 1)]
         w = self._w
         try:
-            w.open_document(u["page"])
+            doc = w.open_shown(u["page"])
         except Exception as e:  # noqa: BLE001 -- swallow-ok: said in the status line
-            self.status.setText("%s could not be opened: %s" % (u["name"], e))
+            self._helper.say("%s could not be opened: %s" % (u["name"], e), failed=True)
             return
-        if w.doc is None:
-            return
-        i = locate_use(w.doc.parsed.page.objects, g["digest"], u)
+        w = next((x for x in w._windows() if x.doc is doc), w)
+        i = locate_use(doc.parsed.page.objects, g["digest"], u)
         if i is None:
             # (the scan read the saved page; the open one has changed since)
-            self.status.setText(
+            self._helper.say(
                 "This copy is no longer where the scan found it on %s (the page changed "
                 "since). Click Scan Again to update the list." % u["name"]
             )
@@ -379,30 +355,29 @@ class DuplicatePicturesDialog(QtWidgets.QDialog):
             w.act_zoom_sel.trigger()
 
     # -- the changes -------------------------------------------------------------------
-    def _confirm(self, g: dict, what: str) -> bool:
+    def _confirm(self, g: dict, what: str, action: str) -> bool:
+        from ..messages import confirm
+
         pages = sorted({u["name"] for u in g["uses"]})
-        ans = QtWidgets.QMessageBox.question(
+        return confirm(
             self,
             self.windowTitle().split(" - ")[0],
             "%s %d copies on %d page%s. The pages are backed up first (Tools > Restore "
             "Backup puts them back)." % (what, len(g["uses"]), len(pages), "" if len(pages) == 1 else "s"),
-            QtWidgets.QMessageBox.Ok | QtWidgets.QMessageBox.Cancel,
-            QtWidgets.QMessageBox.Ok,
+            action,
+            safe_default=False,
         )
-        return ans == QtWidgets.QMessageBox.Ok
 
     def _base_request(self, g: dict, mode: str) -> dict:
         from ...infra import backups
         from ..jobs.helper_job import builder_open_pages
 
         in_builder = builder_open_pages()
-        open_n = {os.path.normcase(os.path.abspath(p)) for p in self._open_paths()}
+        open_n = {path_key(p) for p in self._open_paths()}
         return {
             "mode": mode,
             "digest": g["digest"],
-            "pages": sorted(
-                {u["page"] for u in g["uses"] if os.path.normcase(os.path.abspath(u["page"])) not in open_n}
-            ),
+            "pages": sorted({u["page"] for u in g["uses"] if path_key(u["page"]) not in open_n}),
             "skip": sorted(open_n),
             "builder_open": in_builder,
             "backup": backups.new_folder("pictures"),
@@ -410,7 +385,7 @@ class DuplicatePicturesDialog(QtWidgets.QDialog):
 
     def _make_symbol(self) -> None:
         g = self._current()
-        if g is None or self._job is not None:
+        if g is None or self._helper.running():
             return
         libs = sorted(
             os.path.splitext(os.path.basename(p))[0]
@@ -431,7 +406,9 @@ class DuplicatePicturesDialog(QtWidgets.QDialog):
                 "Replace",
             ):
                 return
-        if not self._confirm(g, "The picture becomes the symbol %s.%s, linked from its" % (lib, el)):
+        if not self._confirm(
+            g, "The picture becomes the symbol %s.%s, linked from its" % (lib, el), "Make Symbol and Link"
+        ):
             return
         req = self._base_request(g, "symbol")
         first = g["uses"][0]
@@ -446,7 +423,7 @@ class DuplicatePicturesDialog(QtWidgets.QDialog):
 
     def _replace_everywhere(self) -> None:
         g = self._current()
-        if g is None or self._job is not None:
+        if g is None or self._helper.running():
             return
         from .bitmap_import import PictureError, build, import_filter, open_source
         from .picture_import import PictureImportDialog
@@ -460,7 +437,7 @@ class DuplicatePicturesDialog(QtWidgets.QDialog):
         try:
             src = open_source(path)
         except PictureError as e:
-            QtWidgets.QMessageBox.warning(self, "Replace Everywhere", str(e))
+            warn(self, "Replace Everywhere", str(e))
             return
         l, t, r, b = g["uses"][0]["rect"]
         dlg = PictureImportDialog(
@@ -468,7 +445,7 @@ class DuplicatePicturesDialog(QtWidgets.QDialog):
         )
         if dlg.exec() != QtWidgets.QDialog.Accepted:
             return
-        if not self._confirm(g, "%s replaces the picture in" % src.name):
+        if not self._confirm(g, "%s replaces the picture in" % src.name, "Replace Everywhere"):
             return
         opts = dlg.options_for(src)
         sizes = {(u["rect"][2] - u["rect"][0], u["rect"][3] - u["rect"][1]) for u in g["uses"]}
@@ -487,7 +464,7 @@ class DuplicatePicturesDialog(QtWidgets.QDialog):
                     fh.write(pic.data)
                 pixels["%dx%d" % (w, h)] = {"file": f, "w": pic.width, "h": pic.height}
         except (PictureError, OSError) as e:
-            QtWidgets.QMessageBox.warning(self, "Replace Everywhere", str(e))
+            warn(self, "Replace Everywhere", str(e))
             return
         req["pixels"] = pixels
         self._job_files = [p["file"] for p in pixels.values()]
@@ -550,7 +527,7 @@ class DuplicatePicturesDialog(QtWidgets.QDialog):
             text += " Left (open in the Graphics Builder): %s." % ", ".join(res["open_in_builder"])
         if res.get("stopped"):
             text = "Stopped. " + text
-        self.status.setText(text)
+        self._helper.say(text)
         from ...infra import logsetup
 
         logsetup.get("pictures").info(

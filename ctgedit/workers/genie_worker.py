@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-import contextlib
+from ..infra.paths import path_key
+
+from .batchjob import read_records, write_json
+
 import difflib
 import hashlib
 import json
@@ -446,7 +449,7 @@ def update_closed_pages(
             # (after each element: a helper that dies later still tells the editor what it
             # saved, its tabs to read again and the backup)
             if progress_file:
-                _write_json(progress_file + GENIES_SUFFIX, _genies_answer(out, rep, backup))
+                write_json(progress_file + GENIES_SUFFIX, _genies_answer(out, rep, backup))
 
         # (a super genie page a genie's save creates gets its thumbnail rendered here, as the
         # editor's own saves render it)
@@ -462,7 +465,7 @@ def update_closed_pages(
         _genies_answer(out, erep, backup)
         if progress_file:
             # (the editor reads it when this helper gives no answer: the genies it saved)
-            _write_json(progress_file + GENIES_SUFFIX, out)
+            write_json(progress_file + GENIES_SUFFIX, out)
         if erep.stopped or stopped:
             out["stopped"] = True
             return out
@@ -576,21 +579,8 @@ def chain_answer_so_far(progress_file: str) -> dict:
 
 
 def _streamed_records(path: str) -> list:
-    """The complete JSON lines of a records file (:data:`RECORDS_SUFFIX`; a line cut short
-    by a helper that died is left out)."""
-    out: list = []
-    try:
-        with open(path, encoding="utf-8") as fh:
-            for line in fh:
-                if not line.endswith("\n"):
-                    break
-                with contextlib.suppress(ValueError):
-                    rec = json.loads(line)
-                    if isinstance(rec, dict) and "i" in rec:
-                        out.append(rec)
-    except OSError:  # swallow-ok: no page was done (no file)
-        return out
-    return out
+    """The page records of a records file (:data:`RECORDS_SUFFIX`), complete lines only."""
+    return [r for r in read_records(path) if "i" in r]
 
 
 def chain_partial_answer(res: dict, progress_file: str, backup: Optional[str] = None) -> dict:
@@ -620,18 +610,6 @@ def chain_partial_answer(res: dict, progress_file: str, backup: Optional[str] = 
     return out
 
 
-def _write_json(path: str, obj) -> None:
-    """``obj`` as JSON into ``path``, atomically (tmp + replace); never raises."""
-    tmp = path + ".tmp"
-    try:
-        with open(tmp, "w", encoding="utf-8") as fh:
-            json.dump(obj, fh)
-        os.replace(tmp, path)
-    except OSError:  # swallow-ok: an extra the editor can do without
-        with contextlib.suppress(OSError):
-            os.remove(tmp)
-
-
 def _closed_pages_phase(
     out: dict,
     usage,
@@ -648,14 +626,12 @@ def _closed_pages_phase(
     from ..io import genieusage as GU
     from ..render import headless_thumb
 
-    skip_n = {os.path.normcase(os.path.abspath(p)) for p in skip}
+    skip_n = {path_key(p) for p in skip}
     want = [u.ref.path for u in usage.users if u.ref.kind == "page" and u.needs_update]
-    pages = [p for p in want if os.path.normcase(os.path.abspath(p)) not in skip_n]
+    pages = [p for p in want if path_key(p) not in skip_n]
     # (open in an editor when the run started: updated in their tabs; one closed before the
     # run ended is named by the editor, as Update Pages names it)
-    out["open_at_start"] = [
-        os.path.abspath(p) for p in want if os.path.normcase(os.path.abspath(p)) in skip_n
-    ]
+    out["open_at_start"] = [os.path.abspath(p) for p in want if path_key(p) in skip_n]
     # (and those whose tab a save during the run cannot have made current: they use a
     # library genie saved again above, which the open tabs take only at the end)
     out["after_saves"] = GU.pages_using_saved(
@@ -668,7 +644,7 @@ def _closed_pages_phase(
     progress, skip_now = _progress_and_skip(progress_file, skip_file, cancel_file, stopped, phase="pages")
     out["pages"] = list(pages)
     if progress_file:
-        _write_json(progress_file + GENIES_SUFFIX, out)
+        write_json(progress_file + GENIES_SUFFIX, out)
     # (two pages of one name in two projects are named with their project: also when one of
     # them is open in a tab, which the editor names when it was closed meanwhile)
     label = updatepages.same_name_label(want)
@@ -697,7 +673,7 @@ def _closed_pages_phase(
         # update_closed_pages adds the error)
         _pages_answer(out, so_far, pages, bool(stopped), backup, partial=True, label=label)
         if progress_file:
-            _write_json(progress_file + GENIES_SUFFIX, out)
+            write_json(progress_file + GENIES_SUFFIX, out)
         raise
     return _pages_answer(out, updatepages.relabelled(rep, want), pages, bool(stopped), backup, label=label)
 
@@ -708,7 +684,7 @@ def _editor_state(editor_file: str):
         return None
 
     def state(ref):
-        want = (os.path.normcase(os.path.abspath(ref.path)), ref.element.lower())
+        want = (path_key(ref.path), ref.element.lower())
         try:
             with open(editor_file, encoding="utf-8") as fh:
                 rows = [ln.rstrip("\r\n").split("\t") for ln in fh if ln.strip()]
@@ -716,7 +692,7 @@ def _editor_state(editor_file: str):
             return None
         found = None
         for row in rows:
-            if len(row) == 3 and (os.path.normcase(os.path.abspath(row[1])), row[2].lower()) == want:
+            if len(row) == 3 and (path_key(row[1]), row[2].lower()) == want:
                 if row[0] == "dirty":
                     return "dirty"
                 found = "clean"
@@ -740,13 +716,9 @@ def _progress_and_skip(progress_file: str, skip_file: str, cancel_file: str, sto
             stopped.append(True)
             return False
         if progress_file:
-            tmp = progress_file + ".tmp"
-            try:
-                with open(tmp, "w", encoding="utf-8") as fh:
-                    json.dump(dict({"i": i, "n": n, "name": name}, **({"phase": phase} if phase else {})), fh)
-                os.replace(tmp, progress_file)
-            except OSError:
-                pass
+            write_json(
+                progress_file, dict({"i": i, "n": n, "name": name}, **({"phase": phase} if phase else {}))
+            )
         return True
 
     def skip_now(path):
@@ -754,10 +726,10 @@ def _progress_and_skip(progress_file: str, skip_file: str, cancel_file: str, sto
             return False
         try:
             with open(skip_file, encoding="utf-8") as fh:
-                opened = {os.path.normcase(os.path.abspath(x.strip())) for x in fh if x.strip()}
+                opened = {path_key(x.strip()) for x in fh if x.strip()}
         except OSError:
             return False
-        return os.path.normcase(os.path.abspath(path)) in opened
+        return path_key(path) in opened
 
     return progress, skip_now
 
@@ -905,102 +877,53 @@ def users_command(request: str, answer: str) -> List[str]:
 
 def users_main(argv=None) -> int:
     """``ctgedit --update-closed-pages <request.json> <answer.json>``."""
-    args = list(sys.argv[1:] if argv is None else argv)
-    if args[:1] == ["--update-closed-pages"]:
-        args = args[1:]
-    if len(args) != 2:
-        return 2
-    from ..doc import history as _history
-    from ..render import headless_thumb
+    from .batchjob import helper_main
 
-    _history.SAVE_THUMBNAIL = headless_thumb.page_thumbnail  # (fresh thumbnails)
-    helper_waits()
-    req_path, ans_path = args
-    try:
-        with open(req_path, encoding="utf-8") as fh:
-            req = json.load(fh)
-        if req.get("format") != FORMAT:
-            raise ValueError("request format %r" % req.get("format"))
+    def dispatch(req, _progress, _skip_now):
         if req.get("mode") == "pages":
-            ans = update_pages_job(req)
-        else:
-            ans = update_closed_pages(
-                req["library"],
-                req["element"],
-                req.get("skip") or (),
-                req.get("builder_open") or (),
-                req.get("backup"),
-                req.get("progress_file") or "",
-                req.get("skip_file") or "",
-                req.get("cancel_file") or "",
-                req.get("editor_file") or "",
-                elements=bool(req.get("elements", True)),
-            )
-    except Exception as e:  # noqa: BLE001
-        import traceback
+            return update_pages_job(req)
+        return update_closed_pages(
+            req["library"],
+            req["element"],
+            req.get("skip") or (),
+            req.get("builder_open") or (),
+            req.get("backup"),
+            req.get("progress_file") or "",
+            req.get("skip_file") or "",
+            req.get("cancel_file") or "",
+            req.get("editor_file") or "",
+            elements=bool(req.get("elements", True)),
+        )
 
-        ans = {
-            "format": FORMAT,
-            "error": "%s: %s" % (type(e).__name__, e),
-            "trace": traceback.format_exc()[-4000:],
-        }
-    tmp = ans_path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as fh:
-        json.dump(ans, fh)
-    os.replace(tmp, ans_path)
-    return 0
+    return helper_main(argv, "--update-closed-pages", FORMAT, dispatch)
 
 
 def main(argv=None) -> int:
-    """``ctgedit --genie-update <request.json> <answer.json>``."""
-    args = list(sys.argv[1:] if argv is None else argv)
-    if args[:1] == ["--genie-update"]:
-        args = args[1:]
-    if len(args) != 2:
-        return 2
-    from ..doc import history as _history
-    from ..render import headless_thumb
+    """``ctgedit --genie-update <request.json> <answer.json>`` (the page's bytes in
+    ``<request.json>.page``)."""
+    from .batchjob import helper_main
 
-    _history.SAVE_THUMBNAIL = headless_thumb.page_thumbnail  # (fresh thumbnails)
-    helper_waits()
-    req_path, ans_path = args
-    try:
-        with open(req_path, encoding="utf-8") as fh:
-            req = json.load(fh)
-        with open(req_path + ".page", "rb") as fh:
+    def dispatch(req, _progress, _skip_now):
+        with open(req["request_path"] + ".page", "rb") as fh:
             data = fh.read()
-        if req.get("format") != FORMAT:
-            raise ValueError("request format %r" % req.get("format"))
         from ..format.fileio import adopt_changes
 
         adopt_changes(req.get("file_changes"))
         if req.get("element") and (req["element"].get("save") is not None):
-            ans = compute_save(req["element"], data)
-        elif req.get("element"):
-            ans = compute_element(req["element"], data)
-        else:
-            ans = compute(
-                req["page"],
-                data,
-                changes_from_json(req.get("changes") or []),
-                req.get("bindings"),
-                template=bool(req.get("template")),
-                page_sha1=req.get("page_sha1"),
-                previous=previous_from_json(req.get("previous")),
-            )
-    except Exception as e:  # noqa: BLE001 -- the editor reports it and leaves the page
-        import traceback
+            return compute_save(req["element"], data)
+        if req.get("element"):
+            return compute_element(req["element"], data)
+        return compute(
+            req["page"],
+            data,
+            changes_from_json(req.get("changes") or []),
+            req.get("bindings"),
+            template=bool(req.get("template")),
+            page_sha1=req.get("page_sha1"),
+            previous=previous_from_json(req.get("previous")),
+        )
 
-        ans = {
-            "format": FORMAT,
-            "error": "%s: %s" % (type(e).__name__, e),
-            "trace": traceback.format_exc()[-4000:],
-        }
-    tmp = ans_path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as fh:
-        json.dump(ans, fh)
-    os.replace(tmp, ans_path)
-    return 0
+    return helper_main(argv, "--genie-update", FORMAT, dispatch)
 
 
 def serve_main(argv=None) -> int:

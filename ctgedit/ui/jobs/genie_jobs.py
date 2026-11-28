@@ -14,6 +14,9 @@ from PySide6 import QtCore
 from ...workers import genie_worker as GW
 from ...infra import logsetup
 
+#: (a worker started with another one is out of date)
+from ...infra.workers import environment_signature
+
 log = logsetup.get("genies")
 
 
@@ -47,14 +50,6 @@ def helpers_count() -> int:
     except TypeError, ValueError:  # swallow-ok: a garbled setting reads as its default
         n = 3
     return max(1, min(8, n))
-
-
-def environment_signature() -> tuple:
-    """What of this process's environment a genie worker composes with: the ctgedit
-    switches (CTG_* and GP_*: Settings > Pages and libraries sets the nested-copies mode,
-    the extra library folders, the sibling libraries and the text replacement there,
-    ui/prefs/settings.apply_library_folders). A worker started with another one is out of date."""
-    return tuple(sorted((k, v) for k, v in os.environ.items() if k.upper().startswith(("CTG_", "GP_"))))
 
 
 class WarmWorker:

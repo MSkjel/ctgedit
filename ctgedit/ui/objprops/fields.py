@@ -10,17 +10,16 @@ from PySide6 import QtCore, QtWidgets
 from ..number_field import NumberField
 
 # field length limits (CtDraw's 'Expression is too long' sizes / DBF widths)
-_L_EXPR = 253  # movement / scaling / rotation / level / commands
-_L_COND = 254  # hidden when, disable when, ON colour when
-_L_STATE = 128  # multi-state conditions
-_L_SLIDER = 79  # slider tag
-_L_TOOLTIP = 48  # COMMENT (pgdynobj 48)
-_L_LOG = 32  # MSG_LOG (pgdynobj 32)
-_L_NAME = 32  # __AN_NAME__ (CtDraw copies 0x21 bytes)
-_L_DESC = 128  # DESC (pgdynobj 128)
-_L_SHORT = 16  # AREA / PRIV / DEVICE (pgdynobj 16)
-_L_AX_NAME = 64  # ACTIVEXEXT_*NAME (CtDraw's field takes 64)
-_L_AX_CLASS = 16  # ACTIVEXEXT_*EVENTCLASS (CtDraw's field takes 16)
+L_EXPR = 253  # movement / scaling / rotation / level / commands
+L_COND = 254  # hidden when, disable when, ON colour when
+L_SLIDER = 79  # slider tag
+L_TOOLTIP = 48  # COMMENT (pgdynobj 48)
+L_LOG = 32  # MSG_LOG (pgdynobj 32)
+L_NAME = 32  # __AN_NAME__ (CtDraw copies 0x21 bytes)
+L_DESC = 128  # DESC (pgdynobj 128)
+L_SHORT = 16  # AREA / PRIV / DEVICE (pgdynobj 16)
+L_AX_NAME = 64  # ACTIVEXEXT_*NAME (CtDraw's field takes 64)
+L_AX_CLASS = 16  # ACTIVEXEXT_*EVENTCLASS (CtDraw's field takes 16)
 
 #: the number fields the object sheet and the Properties panel share, one table: kind ->
 #: (lowest, highest, unit). CtDraw's own limits: the 'At minimum / maximum' spins of the
@@ -61,7 +60,7 @@ def number_range(key: str):
 #: CtDraw's disable styles: the Disable page's four radios 4011..4014 and
 #: the value table (load / apply):
 #: Embossed / Grayed / Hidden / Unchanged (ctgedit says 'Greyed')
-_GREY_STYLES = (
+GREY_STYLES = (
     ("Embossed", "GRAY_SUNK"),
     ("Greyed", "GRAY_PART"),
     ("Hidden", "GRAY_HIDE"),
@@ -70,15 +69,15 @@ _GREY_STYLES = (
 #: a slider's *SLMODE: bit 0x1 = the slider is on,
 #: 0x1000 = continuous update ('4097' continuous, '1' on release -- the
 #: automation strings)
-_SL_ON, _SL_CONTINUOUS = 0x1, 0x1000
+SL_ON, SL_CONTINUOUS = 0x1, 0x1000
 
-_LINE_STYLES = ["Solid", "Dash", "Dot", "Dash Dot", "Dash Dot Dot"]
+LINE_STYLES = ["Solid", "Dash", "Dot", "Dash Dot", "Dash Dot Dot"]
 
 #: the Wizard menu entries an expression field offers by default
 WIZARD_DEFAULT = ("tag", "function")
 
 
-class _Field:
+class Field:
     """One sheet field bound to a bag key."""
 
     __slots__ = (
@@ -127,7 +126,7 @@ class _Field:
         self.loose = loose
 
 
-class _Sub:
+class Sub:
     """A sub-tab: its fields, the WHOLE key family Clear Property removes
     (keys without a field too; 'NAME_*' = NAME_<n>), and the key that switches
     the property on (a key two properties share -- a slider's offsets are the
@@ -140,11 +139,11 @@ class _Sub:
         self.primary, self.note = primary, note
 
 
-def _i(label, key, default, suffix="", lo=-32768, hi=32767):
-    return _Field(label, key, "int", default=default, suffix=suffix, lo=lo, hi=hi)
+def i(label, key, default, suffix="", lo=-32768, hi=32767):
+    return Field(label, key, "int", default=default, suffix=suffix, lo=lo, hi=hi)
 
 
-class _OptionalSpin(NumberField):
+class OptionalSpin(NumberField):
     """An integer field whose key may also be absent: the value below the
     range reads '(not set)'; stepping up from it starts at ``default``. It takes
     a sum ('100+20', '*2': ui/number_field)."""
@@ -187,7 +186,7 @@ class _OptionalSpin(NumberField):
         self.load(int(text) if ok and text is not None else self._unset)
 
 
-class _RadioChoice(QtWidgets.QWidget):
+class RadioChoice(QtWidgets.QWidget):
     """A choice shown as radio buttons."""
 
     currentIndexChanged = QtCore.Signal(int)

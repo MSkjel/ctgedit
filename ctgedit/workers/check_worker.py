@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+#: the registered pages of the projects (folders), in project then name order
+from .batchjob import project_pages as pages_of
+
 import os
 from typing import List
 
@@ -15,13 +18,6 @@ TABLE_CICODE = {
     "pagemenu.dbf": ("COMMAND",),
     "keyboard.dbf": ("CMD",),
 }
-
-
-def pages_of(projects) -> List[str]:
-    """The registered pages of ``projects`` (folders), in project then name order."""
-    from .batchjob import project_pages
-
-    return project_pages(projects)
 
 
 def _row(path: str, doc, f) -> dict:
@@ -65,11 +61,11 @@ def table_fields(project_dir: str) -> List[dict]:
     """The Cicode in ``project_dir``'s tables (TABLE_CICODE), one dict per value: table, record,
     field, text, name, object, label."""
     from ..format.dbf import Dbf
-    from ..io.pgregister import find_file
+    from ..format.fileio import find_ci
 
     out = []
     for table, cols in TABLE_CICODE.items():
-        path = find_file(project_dir, table)
+        path = find_ci(project_dir, table)
         if path is None:
             continue
         with Dbf(path, writable=False) as d:
@@ -208,7 +204,7 @@ def check(req: dict, progress=None, skip_now=None) -> dict:
             findings = list(rep.findings)
             d = os.path.dirname(os.path.abspath(path))
             s = session(d)
-            for f in PC.expression_fields(doc) if s is not None else ():
+            for f in rep.fields if s is not None else ():
                 try:
                     result = check_field(s, f.text, f.kind)
                 except Exception as e:  # noqa: BLE001  # swallow-ok: the answer says it
@@ -379,12 +375,7 @@ def replace_in_files(edits, backup: str) -> tuple:
                 if not n:
                     continue
                 out = text.encode("cp1252")
-                project = os.path.basename(os.path.dirname(os.path.abspath(path)))
-                os.makedirs(os.path.join(backup, project), exist_ok=True)
-                write_atomic(os.path.join(backup, project, name), data)
-                backups.add_entry(
-                    backup, "references", {"library": os.path.abspath(path), "folder": project, "file": name}
-                )
+                backups.backup_file(backup, "references", path, data)
                 write_atomic(path, out)
                 replaced += n
         except (OSError, UnicodeError) as e:

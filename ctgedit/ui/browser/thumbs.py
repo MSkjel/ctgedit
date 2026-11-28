@@ -8,6 +8,7 @@ from typing import Dict, Optional, Tuple
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from ...format import pagesummary
+from ...infra.logsetup import note_exception as _note_exc
 
 #: the thumbnail sizes of every picker and list (use these, not own sizes):
 #: grid cards, list rows, preview panes
@@ -53,6 +54,7 @@ def load_summary(entry, want_thumbnail: bool = True):
         )
         return s
     except Exception:  # noqa: BLE001 -- a bad file must never kill a worker
+        _note_exc("thumbs.load_summary", path=entry.path, name=entry.name)
         return None
 
 

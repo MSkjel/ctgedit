@@ -5,6 +5,23 @@ from __future__ import annotations
 import os
 
 
+def path_key(path: str) -> str:
+    """``path`` as paths compare on Windows: absolute, in normal case."""
+    return os.path.normcase(os.path.abspath(path))
+
+
+def folder_key(path: str) -> str:
+    """The folder of ``path`` as paths compare on Windows (:func:`path_key` of its folder):
+    a page's project, a library's project."""
+    return os.path.normcase(os.path.dirname(os.path.abspath(path)))
+
+
+def lib_path_dirs() -> list:
+    """The extra library folders searched after a page's project and its include chain
+    (CTG_LIB_PATH: a page copied outside its project names its project there)."""
+    return [p for p in os.environ.get("CTG_LIB_PATH", "").split(os.pathsep) if p]
+
+
 def data_dir(*sub: str) -> str:
     """``<data folder>\\<sub...>`` (not created)."""
     base = os.environ.get("CTG_DATA_DIR")

@@ -119,7 +119,7 @@ def test_update_pages_re_derives_a_doubled_symbol(proj, chain):
     local0 = P.read_slots(before.objects[k].body_raw)[0][0][1]
     assert before.symbol_status() == ("current", [])
     _double_pointer(lib)
-    cur = U._Current(SymbolResolver.for_page(page, [chain]))
+    cur = U.Current(SymbolResolver.for_page(page, [chain]))
     assert U.stale_symbols(page, cur) == {(LIB, POINTER.lower())}
     rep = U.update_pages(str(proj))
     assert rep.updated == [PAGE] and rep.symbols == 1
@@ -131,7 +131,7 @@ def test_update_pages_re_derives_a_doubled_symbol(proj, chain):
     assert P.read_slots(po.body_raw)[0][0][1] == local0  # Local = stored truth
     assert after.symbol_status() == ("current", [])
     names = [n for _g, n in links.parse_link_table(after.parsed.page.link_table_raw)[1]]
-    assert U._stale_ctl(names, U._Current(SymbolResolver.for_page(page, [chain]))) == set()
+    assert U._stale_ctl(names, U.Current(SymbolResolver.for_page(page, [chain]))) == set()
     # a second run finds nothing to do
     assert U.update_pages(str(proj)).updated == []
 
@@ -343,8 +343,8 @@ def test_window_updates_symbols_when_a_page_opens_and_after_a_symbol_save(proj):
     finally:
         for e in w._docs:
             e["doc"].dirty = False
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
 
 
 # ----------------------------------------------------------------- Cut Link
@@ -661,8 +661,8 @@ def test_hotspot_drag_on_the_canvas(proj):
         for e in w._docs:
             e["doc"].dirty = False
         w.hide()
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
 
 
 # -------------------------------------------------------- paste linked / not
@@ -686,8 +686,8 @@ def test_paste_unlinked_follows_the_linked_setting(proj):
         assert w.doc.objects[w._sel[0]].subtype_size & 0x1
     finally:
         set_paste_linked(True)
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
 
 
 def test_library_panel_linked_toggle_used_by_and_flashing_badge():
@@ -834,5 +834,5 @@ def test_saving_into_a_supplied_symbol_library_warns(proj, fx_install, monkeypat
         assert not w._confirm_shipped_template(Doc(), fx_install.file("Include", "thumbs.ctl"), True)
         assert w._confirm_shipped_template(Doc(), _lib(proj), True)
     finally:
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)

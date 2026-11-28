@@ -42,8 +42,8 @@ def win(monkeypatch, fx_install):
     yield w
     for e in getattr(w, "_docs", []):
         e["doc"].dirty = False
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
 
 
 def _pages(tmp_path, names):
@@ -138,7 +138,7 @@ def test_one_unsaved_page_keeps_the_one_page_question(win, tmp_path, monkeypatch
     ev = QtGui.QCloseEvent()
     win.closeEvent(ev)
     assert ev.isAccepted() and not ans.rows
-    assert len(asked) == 1 and "B.ctg" in asked[0]
+    assert asked == ["Save changes to B before closing?"]
 
 
 def test_cancel_closes_nothing_and_dont_save_closes_all(win, tmp_path, monkeypatch):

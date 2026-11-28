@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..dialog_buttons import dialog_buttons
+
 import os
 from typing import List, NamedTuple, Optional
 
@@ -492,9 +494,7 @@ class TransparentPasteDialog(QtWidgets.QDialog):
         self.enabled.toggled.connect(self.colour.setEnabled)
         row.addWidget(self.colour)
         lay.addLayout(row)
-        bb = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
-        bb.accepted.connect(self.accept)
-        bb.rejected.connect(self.reject)
+        bb = dialog_buttons(self)
         lay.addWidget(bb)
 
     def value(self) -> Optional[int]:

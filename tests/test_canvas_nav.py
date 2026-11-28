@@ -86,8 +86,8 @@ def _close(win):
 
     for e in getattr(win, "_docs", []):
         e["doc"].dirty = False
-    if win in MainWindow._instances:
-        MainWindow._instances.remove(win)
+    if win in MainWindow.instances:
+        MainWindow.instances.remove(win)
     win.hide()
 
 

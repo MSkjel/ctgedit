@@ -816,7 +816,7 @@ class HelpWindow(QtWidgets.QMainWindow):
 
     def reload(self) -> None:
         """Re-read the pages (after they changed on disk)."""
-        H._toc_raw.cache_clear()
+        H.toc_raw.cache_clear()
         self._fill_tree()
         if self._current[0]:
             self.show_topic(*self._current, record=False)

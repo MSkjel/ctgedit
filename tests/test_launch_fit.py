@@ -6,8 +6,8 @@ from qtkit import app as _app
 def _drop(w):
     from ctgedit.ui.main_window import MainWindow
 
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
 
 
 def test_fit_deferred_until_shown(fx_page):

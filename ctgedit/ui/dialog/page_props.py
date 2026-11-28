@@ -8,6 +8,7 @@ from typing import Dict, List, Optional
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
+from ...infra.logsetup import note_exception as _note_exc
 from ...format.cnum import is_digits
 from ..style import theme as _theme
 from ..objprops.input import CommandEdit, KeySequenceDialog, command_argument_warnings, key_sequence_warnings
@@ -15,6 +16,7 @@ from ..objprops.scroll import FitTabWidget, scroll_page, unwrap_page
 
 from ...format import codes as _codes
 from ..pick_fields import NONE_TEXT, PageField, TemplatePicker, library_stem
+from ..messages import warn
 
 #: CtDraw's text the General / Keyboard pages show for no area
 ALL_AREAS_TEXT = "<All areas>"
@@ -91,16 +93,6 @@ _ACTIVEX_USE = re.compile(
     r"_Object\w+|ActiveX\w*)\b",
     re.IGNORECASE,
 )
-
-
-def _split_template_element(element: str):
-    """'pagecontent@-HD1080' -> ('pagecontent', 'HD1080', titlebar=False);
-    an undecorated element -> (element, '', True)."""
-    name, sep, deco = element.partition("@")
-    if not sep:
-        return element, "", True
-    titlebar = not deco.startswith("-")
-    return name, deco.lstrip("-"), titlebar
 
 
 def event_warnings(column: str, command: str) -> List[str]:
@@ -773,6 +765,7 @@ class _AssociationNameDelegate(QtWidgets.QStyledItemDelegate):
         try:
             names = self._dialog.unlisted_associations(keep=cur)
         except Exception:  # noqa: BLE001
+            _note_exc("page_props.unlisted_associations")
             names = []
         cb.addItems(names)
         cb.lineEdit().setMaxLength(253)
@@ -835,6 +828,7 @@ class PagePropertiesDialog(QtWidgets.QDialog):
 
             self._context = ExpressionContext.for_document(doc)
         except Exception:  # noqa: BLE001 -- the Wizard is an aid
+            _note_exc("page_props.expression_context")
             self._context = None
 
         layout = QtWidgets.QVBoxLayout(self)
@@ -906,6 +900,7 @@ class PagePropertiesDialog(QtWidgets.QDialog):
         try:
             return fn(pdir)
         except Exception:  # noqa: BLE001 -- the menus are aids
+            _note_exc("page_props._chain", project=pdir)
             return ()
 
     def _width(self, col: str) -> int:
@@ -935,13 +930,29 @@ class PagePropertiesDialog(QtWidgets.QDialog):
         return cb
 
     def _build_general(self) -> None:
-        from ...io import project as P
-
+        """The General tab: the page's fields and its Security, Page scan time, Logging and
+        Cluster context groups."""
         w = QtWidgets.QWidget()
         outer = QtWidgets.QVBoxLayout(w)
         form = QtWidgets.QFormLayout()
         outer.addLayout(form)
 
+        self._build_general_fields(form)
+
+        grid = QtWidgets.QGridLayout()
+        outer.addLayout(grid)
+        self._build_security(grid)
+        self._build_scan_time(grid)
+        self._build_logging(grid)
+        self._build_cluster(grid)
+        self._note_general_store(outer)
+        self._watch_general_edits()
+        self._general_page = w
+        self._tabs.addTab(scroll_page(w), "General")
+
+    def _build_general_fields(self, form: QtWidgets.QFormLayout) -> None:
+        """The page's fields: the window title, the description, the previous, next and
+        parent pages and the content type."""
         self._title = QtWidgets.QLineEdit(self._dbf_value("TITLE"))
         # (no length cap: a longer title shows the counter in the danger colour, frames
         # the field and keeps OK / Apply off, as every input problem does)
@@ -986,8 +997,8 @@ class PagePropertiesDialog(QtWidgets.QDialog):
         form.addRow("Content type:", self._cb_contype)
         self._dbf_edits["CON_TYPE"] = self._cb_contype
 
-        grid = QtWidgets.QGridLayout()
-        outer.addLayout(grid)
+    def _build_security(self, grid: QtWidgets.QGridLayout) -> None:
+        """The Security group: all areas or the page's area."""
         # Security
         sec = QtWidgets.QGroupBox("Security")
         sf = QtWidgets.QGridLayout(sec)
@@ -1009,6 +1020,11 @@ class PagePropertiesDialog(QtWidgets.QDialog):
         self._chk_all_areas.toggled.connect(self._on_all_areas)
         self._dbf_edits["AREA"] = self._cb_area
         grid.addWidget(sec, 0, 0)
+
+    def _build_scan_time(self, grid: QtWidgets.QGridLayout) -> None:
+        """The Page scan time group: the project's default or the page's own."""
+        from ...io import project as P
+
         # Page scan time
         sc = QtWidgets.QGroupBox("Page scan time")
         scf = QtWidgets.QHBoxLayout(sc)
@@ -1036,6 +1052,11 @@ class PagePropertiesDialog(QtWidgets.QDialog):
         scf.addWidget(self._sp_scan)
         scf.addStretch(1)
         grid.addWidget(sc, 0, 1)
+
+    def _build_logging(self, grid: QtWidgets.QGridLayout) -> None:
+        """The Logging group: the log device of the page's keyboard commands."""
+        from ...io import project as P
+
         # Logging
         lg = QtWidgets.QGroupBox("Logging")
         lgf = QtWidgets.QFormLayout(lg)
@@ -1053,6 +1074,11 @@ class PagePropertiesDialog(QtWidgets.QDialog):
         self._check_logdevice()
         self._dbf_edits["LOGDEVICE"] = self._cb_logdevice
         grid.addWidget(lg, 1, 0)
+
+    def _build_cluster(self, grid: QtWidgets.QGridLayout) -> None:
+        """The Cluster context group: inherit from the caller or the page's cluster."""
+        from ...io import project as P
+
         # Cluster context
         cl = QtWidgets.QGroupBox("Cluster context")
         clf = QtWidgets.QGridLayout(cl)
@@ -1074,6 +1100,9 @@ class PagePropertiesDialog(QtWidgets.QDialog):
         self._dbf_edits["CLUSTER"] = self._cb_cluster
         grid.addWidget(cl, 1, 1)
 
+    def _note_general_store(self, outer: QtWidgets.QVBoxLayout) -> None:
+        """Where these properties are stored, and the fields off where they cannot be (no
+        project, or a project table without the column)."""
         if not self._db:
             outer.addWidget(
                 _theme.note_label(
@@ -1114,6 +1143,9 @@ class PagePropertiesDialog(QtWidgets.QDialog):
                     "properties." % os.path.basename(self._project_dir() or "")
                 )
             )
+
+    def _watch_general_edits(self) -> None:
+        """An edit of any field checks the page's values after a pause."""
         # (no stretch below: the description takes the extra height)
         for wdg in (
             self._title,
@@ -1131,8 +1163,6 @@ class PagePropertiesDialog(QtWidgets.QDialog):
         self._sp_scan.valueChanged.connect(self._schedule_check)
         for chk in (self._chk_all_areas, self._chk_scan_default, self._chk_inherit):
             chk.toggled.connect(self._schedule_check)
-        self._general_page = w
-        self._tabs.addTab(scroll_page(w), "General")
 
     def _on_all_areas(self, on: bool) -> None:
         """As in CtDraw: ticked shows '<All areas>' in the disabled menu;
@@ -1577,6 +1607,7 @@ class PagePropertiesDialog(QtWidgets.QDialog):
         try:
             self._assoc_used = dict(self._doc.associations_in_use())
         except Exception:  # noqa: BLE001 -- a hint column only
+            _note_exc("page_props._build_associations")
             self._assoc_used = {}
         t = self._assoc_table = self._edit_table(_ASSOC_COLUMNS + ["In Use"], _ASSOC_TIPS)
         t.horizontalHeaderItem(_ASSOC_IN_USE).setToolTip(
@@ -1871,7 +1902,7 @@ class PagePropertiesDialog(QtWidgets.QDialog):
     def _write_failed(self, message: str) -> bool:
         """apply() could not write: a message box (nothing was changed)."""
         self.apply_error = message
-        QtWidgets.QMessageBox.warning(self, "Page Properties", message)
+        warn(self, "Page Properties", message)
         return False
 
     def _new_template_ref(self) -> Optional[str]:
@@ -1896,7 +1927,7 @@ class PagePropertiesDialog(QtWidgets.QDialog):
         return int(app.width or 0), int(app.height or 0)
 
     def _template_key(self):
-        _i, ref = self._doc.template_reference()
+        i, ref = self._doc.template_reference()
         return (ref.library.lower(), ref.element.lower()) if ref is not None else None
 
     def _stored_associations(self) -> list:
@@ -1991,6 +2022,7 @@ class PagePropertiesDialog(QtWidgets.QDialog):
                 try:
                     self._assoc_used = dict(doc.associations_in_use())
                 except Exception:  # noqa: BLE001 -- a hint column only
+                    _note_exc("page_props.reload/associations")
                     self._assoc_used = {}
                 self._fill_associations()
                 self._assoc0 = self._stored_associations()
@@ -2094,6 +2126,7 @@ class PagePropertiesDialog(QtWidgets.QDialog):
                 try:
                     doc.change_template(new_tpl)
                 except Exception as e:  # noqa: BLE001
+                    _note_exc("page_props.apply/change_template", template=new_tpl)
                     return self._write_failed(
                         "The page could not be linked to template %s: %s\n\nNothing was "
                         "changed." % (new_tpl, e)

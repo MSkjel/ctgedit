@@ -3,12 +3,19 @@ templates."""
 
 from __future__ import annotations
 
+from ..infra.paths import folder_key, lib_path_dirs, path_key
+
+
+from ..format.projects import PAGE_NAME_LEN, registered_names
+
 import contextlib
 import glob
 import os
 from dataclasses import dataclass, field
 from typing import Callable, Dict, Iterable, List, Optional, Set, Tuple
 from ..format.cnum import is_digits
+from ..infra.logsetup import note_exception as _note_exc
+from ..infra import runmemo
 
 
 @dataclass
@@ -242,7 +249,7 @@ def include_tree(root_dir: str, user_dir: Optional[str] = None) -> ProjectNode:
     implicit = {n.lower() for n in PR.IMPLICIT_INCLUDE_PROJECTS}
 
     def key(d):
-        return os.path.normcase(os.path.abspath(d))
+        return path_key(d)
 
     def node(d: str, name: str) -> ProjectNode:
         try:
@@ -278,21 +285,21 @@ def run_page_list(dirs: Iterable[str], skip: Iterable[str] = ()) -> Tuple[List[s
     pages sorted by name (case-insensitive), each page once; and the names of the .ctg
     files with no pages.DBF row (left alone, reported once). ``skip`` = pages open in an
     editor (updated there). Reads pages.DBF only, never a page's records."""
-    skip_n = {os.path.normcase(os.path.abspath(p)) for p in skip}
+    skip_n = {path_key(p) for p in skip}
     pages: List[str] = []
     unregistered: List[str] = []
     seen: Set[str] = set()
     for d in dirs:
         reg = registered_names(d)
         for p in project_pages(d, registered_only=False):
-            k = os.path.normcase(os.path.abspath(p))
+            k = path_key(p)
             if k in seen:
                 continue
             seen.add(k)
             if k in skip_n:
                 continue
             name = os.path.splitext(os.path.basename(p))[0]
-            if reg is not None and name.lower()[:64] not in reg:
+            if reg is not None and name.lower()[:PAGE_NAME_LEN] not in reg:
                 unregistered.append(name)
                 continue
             pages.append(p)
@@ -309,30 +316,11 @@ def project_pages(project_dir: str, registered_only: bool = True) -> List[str]:
     proj = Project(project_dir)
     if proj._pages_path() is None:
         return paths
-    names = {n.lower()[: Project.NAME_LEN] for n in proj.page_names()}
-    return [p for p in paths if os.path.splitext(os.path.basename(p))[0].lower()[: Project.NAME_LEN] in names]
+    names = {n.lower()[:PAGE_NAME_LEN] for n in proj.page_names()}
+    return [p for p in paths if os.path.splitext(os.path.basename(p))[0].lower()[:PAGE_NAME_LEN] in names]
 
 
-def registered_names(project_dir: str) -> Optional[Set[str]]:
-    """Lower-case names of the pages registered in the project's pages.DBF
-    (NAME is C(64): longer file names are compared truncated), or None when
-    the folder has no pages.DBF (not a project: every page counts)."""
-    from ..format.projects import read_dbf_rows
-
-    path = None
-    for n in ("pages.DBF", "pages.dbf"):
-        p = os.path.join(project_dir, n)
-        if os.path.exists(p):
-            path = p
-            break
-    if path is None:
-        return None
-    return {
-        (r.get("NAME") or "").strip().lower() for r in read_dbf_rows(path) if (r.get("NAME") or "").strip()
-    }
-
-
-class _Current:
+class Current:
     """Current link table entries of library elements, cached."""
 
     def __init__(self, resolver):
@@ -340,8 +328,8 @@ class _Current:
         self.cache: Dict[str, Optional[str]] = {}
         self._fast: Dict[str, tuple] = {}
         self.nested: Dict[str, frozenset] = {}  # nested_changes, per element entry
-        #: library folder -> the _Current of its own search path (:meth:`for_library`)
-        self.subs: Dict[str, "_Current"] = {}
+        #: library folder -> the Current of its own search path (:meth:`for_library`)
+        self.subs: Dict[str, "Current"] = {}
 
     def clear(self) -> None:
         """Read every element's entry afresh (its library changed)."""
@@ -350,14 +338,14 @@ class _Current:
         self.nested.clear()
         self.subs.clear()
 
-    def for_library(self, lib_path: str) -> "_Current":
+    def for_library(self, lib_path: str) -> "Current":
         """The entries as resolved from a library file's own search path."""
         from ..format.symbols import SymbolResolver
 
-        key = os.path.normcase(os.path.dirname(os.path.abspath(lib_path)))
+        key = folder_key(lib_path)
         sub = self.subs.get(key)
         if sub is None:
-            sub = _Current(SymbolResolver.for_page(lib_path))
+            sub = Current(SymbolResolver.for_page(lib_path))
             sub.subs = self.subs  # (one folder map for the whole walk)
             self.subs[key] = sub
         return sub
@@ -383,6 +371,7 @@ class _Current:
 
             out = GP.current_link_entry(rs.library_path, lib, elem)[1]
         except Exception:  # noqa: BLE001
+            _note_exc("updatepages._Current.name", lib=lib, element=elem)
             out = None
         self.cache[key] = out
         return out
@@ -456,6 +445,7 @@ class _Current:
             )
             return (GP.link_table_entry(el)[1], rs, lib, elem)
         except Exception:  # noqa: BLE001
+            _note_exc("updatepages._Current._resolved_entry", lib=lib, element=elem)
             return (None, None, lib, elem)
 
 
@@ -481,7 +471,7 @@ def _parse_page(ctg_path: str):
     return pc
 
 
-def stale_elements(ctg_path: str, current: "_Current") -> Set[Tuple[str, str]]:
+def stale_elements(ctg_path: str, current: "Current") -> Set[Tuple[str, str]]:
     """(library, element) of the page's genie (.ctm) elements whose identity
     stamp changed since the page was saved, that a record of the page still uses
     (:func:`stale_genie_links`: an entry no record uses is not a stale genie). The
@@ -489,7 +479,7 @@ def stale_elements(ctg_path: str, current: "_Current") -> Set[Tuple[str, str]]:
     return stale_genie_links(ctg_path, current)[0]
 
 
-def stale_genie_links(ctg_path: str, current: "_Current") -> Tuple[Set[Tuple[str, str]], List[str]]:
+def stale_genie_links(ctg_path: str, current: "Current") -> Tuple[Set[Tuple[str, str]], List[str]]:
     """The page's out-of-date genie entries, split into used and unused."""
     from ..format import genie_place as GP
     from ..format import links
@@ -522,14 +512,14 @@ def _split_dead(records, entries) -> Tuple[Set[tuple], List[str]]:
 
 
 def stale_genie_entries(
-    link_table_raw: bytes, current: "_Current", own=(), nested: bool = True
+    link_table_raw: bytes, current: "Current", own=(), nested: bool = True
 ) -> Set[Tuple[str, str]]:
     """(library, element) of the page's out-of-date genie entries."""
     return set(genie_changes(link_table_raw, current, own, nested))
 
 
 def genie_changes(
-    link_table_raw: bytes, current: "_Current", own=(), nested: bool = True
+    link_table_raw: bytes, current: "Current", own=(), nested: bool = True
 ) -> Dict[Tuple[str, str], Optional[frozenset]]:
     """What changed in the page's genies since it was saved."""
     out: Dict[Tuple[str, str], Optional[frozenset]] = {}
@@ -542,7 +532,7 @@ def genie_changes(
 
 
 def _genie_entry_changes(
-    link_table_raw: bytes, current: "_Current", own=(), nested: bool = True
+    link_table_raw: bytes, current: "Current", own=(), nested: bool = True
 ) -> List[tuple]:
     """:func:`genie_changes` entry by entry: [(guid, entry name, (library, element), None
     (the element changed) or the nested genies that changed)], in table order."""
@@ -586,10 +576,10 @@ def _genie_entry_changes(
 
 def changed_genies(link_table_raw: bytes, resolver) -> Dict[Tuple[str, str], Optional[frozenset]]:
     """:func:`genie_changes` of a link table against the libraries ``resolver`` finds now."""
-    return genie_changes(link_table_raw, _Current(resolver))
+    return genie_changes(link_table_raw, Current(resolver))
 
 
-def genie_sources(entry_base: str, current: "_Current", tags: bool = True) -> frozenset:
+def genie_sources(entry_base: str, current: "Current", tags: bool = True) -> frozenset:
     """The library files a placed genie is composed from."""
     from ..format import links
     from ..format.fileio import content_tag
@@ -639,7 +629,7 @@ def library_files(link_table_raw: bytes, resolver, tags: bool = True) -> frozens
     from ..format import links
 
     t = links.parse_link_table(link_table_raw) if link_table_raw else None
-    cur = _Current(resolver)
+    cur = Current(resolver)
     out = set()
     for _g, name in t[1] if t else []:
         base = links.strip_stamp(name)
@@ -649,7 +639,7 @@ def library_files(link_table_raw: bytes, resolver, tags: bool = True) -> frozens
     return frozenset(out)
 
 
-def nested_changes(entry_base: str, current: "_Current", _seen=None, _depth: int = 0) -> frozenset:
+def nested_changes(entry_base: str, current: "Current", _seen=None, _depth: int = 0) -> frozenset:
     """(library, element) of nested genies and symbols whose stamp changed."""
     from ..format import links
     from ..format.template_place import shipped_project
@@ -698,7 +688,7 @@ def nested_changes(entry_base: str, current: "_Current", _seen=None, _depth: int
     return res
 
 
-def stale_symbol_entries(link_table_raw: bytes, current: "_Current") -> Set[Tuple[str, str]]:
+def stale_symbol_entries(link_table_raw: bytes, current: "Current") -> Set[Tuple[str, str]]:
     """(library, element) of the page's out-of-date symbol entries."""
     from ..format import links
 
@@ -706,7 +696,7 @@ def stale_symbol_entries(link_table_raw: bytes, current: "_Current") -> Set[Tupl
     return _stale_ctl([name for _guid, name in (t[1] if t else [])], current)
 
 
-def stale_template_entries(link_table_raw: bytes, current: "_Current") -> Set[Tuple[str, str]]:
+def stale_template_entries(link_table_raw: bytes, current: "Current") -> Set[Tuple[str, str]]:
     """(library, element) of out-of-date template entries in an element's import table."""
     from ..format import links
 
@@ -730,14 +720,14 @@ def stale_template_entries(link_table_raw: bytes, current: "_Current") -> Set[Tu
 def changed_templates(link_table_raw: bytes, resolver) -> Set[Tuple[str, str]]:
     """:func:`stale_template_entries` of a link table against the libraries ``resolver``
     finds now."""
-    return stale_template_entries(link_table_raw, _Current(resolver))
+    return stale_template_entries(link_table_raw, Current(resolver))
 
 
-def _stale_ctl(names, current: "_Current") -> Set[Tuple[str, str]]:
+def _stale_ctl(names, current: "Current") -> Set[Tuple[str, str]]:
     return {key for _name, key in _stale_ctl_names(names, current)}
 
 
-def _stale_ctl_names(names, current: "_Current") -> List[Tuple[str, Tuple[str, str]]]:
+def _stale_ctl_names(names, current: "Current") -> List[Tuple[str, Tuple[str, str]]]:
     """[(entry name, (library, element))] of the out-of-date symbol (.ctl) entries of
     ``names``."""
     from ..format import links
@@ -760,13 +750,13 @@ def _stale_ctl_names(names, current: "_Current") -> List[Tuple[str, Tuple[str, s
     return out
 
 
-def stale_symbols(ctg_path: str, current: "_Current") -> Set[Tuple[str, str]]:
+def stale_symbols(ctg_path: str, current: "Current") -> Set[Tuple[str, str]]:
     """:func:`stale_symbol_entries` of a page file that a record of the page still uses
     (:func:`stale_symbol_links`)."""
     return stale_symbol_links(ctg_path, current)[0]
 
 
-def stale_symbol_links(ctg_path: str, current: "_Current") -> Tuple[Set[Tuple[str, str]], List[str]]:
+def stale_symbol_links(ctg_path: str, current: "Current") -> Tuple[Set[Tuple[str, str]], List[str]]:
     """The page's out-of-date symbol entries, split into used and unused."""
     from ..format.pagesummary import read_link_names
 
@@ -785,7 +775,7 @@ def page_needs_update(ctg_path: str) -> bool:
     from ..format.symbols import SymbolResolver
 
     try:
-        cur = _Current(SymbolResolver.for_page(ctg_path))
+        cur = Current(SymbolResolver.for_page(ctg_path))
         shared = _SHARE_PARSE[0]
         _SHARE_PARSE[0] = True
         try:
@@ -810,7 +800,7 @@ def page_needs_update(ctg_path: str) -> bool:
         return True
 
 
-def stale_template(ctg_path: str, current: "_Current") -> bool:
+def stale_template(ctg_path: str, current: "Current") -> bool:
     """Has the page's template changed since the page was saved?"""
     pair = _template_entry_pair(ctg_path)
     if pair is None:
@@ -828,7 +818,7 @@ def stale_template(ctg_path: str, current: "_Current") -> bool:
     ) and not _shows_composition(ctg_path, current)
 
 
-def _shows_composition(ctg_path: str, current: "_Current") -> bool:
+def _shows_composition(ctg_path: str, current: "Current") -> bool:
     """The page's template placement holds the records its template, as the template's
     load holds it, gives it (template_place.shows_composition): an update changes none."""
     from ..format import genie_place as GP
@@ -878,7 +868,7 @@ def _template_entry_pair(ctg_path: str) -> Optional[Tuple[bytes, str]]:
     return None
 
 
-def template_copies(ctg_path: str, current: "_Current") -> Set[Tuple[str, str]]:
+def template_copies(ctg_path: str, current: "Current") -> Set[Tuple[str, str]]:
     """Templates whose copies in the page's template are out of date."""
     from .genieusage import library_tables
 
@@ -910,7 +900,7 @@ def template_copies(ctg_path: str, current: "_Current") -> Set[Tuple[str, str]]:
     return out
 
 
-def _template_element(ctg_path: str, current: "_Current") -> Optional[Tuple[str, str]]:
+def _template_element(ctg_path: str, current: "Current") -> Optional[Tuple[str, str]]:
     """(library file, element name) of the template the page's template entry names, as
     ``current`` resolves it; None when the page has no template entry or it does not
     resolve."""
@@ -926,7 +916,7 @@ def _template_element(ctg_path: str, current: "_Current") -> Optional[Tuple[str,
     return hit[1].library_path, hit[3]
 
 
-def copy_placeholders(ctg_path: str, current: "_Current") -> Set[Tuple[str, str]]:
+def copy_placeholders(ctg_path: str, current: "Current") -> Set[Tuple[str, str]]:
     """Placeholder genies in the page's template copy whose library opens now."""
     from ..format import genie_place as GP
     from ..format import template_place as TP
@@ -950,7 +940,7 @@ def copy_placeholders(ctg_path: str, current: "_Current") -> Set[Tuple[str, str]
     }
 
 
-def template_placeholders(ctg_path: str, current: "_Current") -> Set[Tuple[str, str]]:
+def template_placeholders(ctg_path: str, current: "Current") -> Set[Tuple[str, str]]:
     """Placeholder genies in the page's template whose library opens now."""
     from .genieusage import library_tables
     from ..format import links
@@ -976,7 +966,7 @@ def template_placeholders(ctg_path: str, current: "_Current") -> Set[Tuple[str, 
     return out
 
 
-def stale_supergenie(ctg_path: str, current: "_Current") -> bool:
+def stale_supergenie(ctg_path: str, current: "Current") -> bool:
     """The page was created from a super genie whose element changed since
     the page was saved: the link entry of the element its locked root links
     carries a stamp that differs from the element's current one."""
@@ -1020,7 +1010,7 @@ def composites_current(ctg_path: str, ctx, memo: dict) -> bool:
             found = CS.links_in(fh.read())
     except OSError:
         return False
-    pdir = os.path.normcase(os.path.dirname(os.path.abspath(ctg_path)))
+    pdir = folder_key(ctg_path)
     tkey = ("templates", pdir)
     if tkey not in memo:
         memo[tkey] = C.load_templates(ctg_path)
@@ -1045,6 +1035,7 @@ def composites_current(ctg_path: str, ctx, memo: dict) -> bool:
                         ctx=ctx,
                     )
             except Exception:  # noqa: BLE001 -- open the page and let it decide
+                _note_exc("updatepages.composites_current", page=ctg_path)
                 state = "unknown"
             memo[key] = state
         if memo[key] != "current":
@@ -1084,13 +1075,14 @@ def _backup_page(path: str, dest_root: str, kind: str = "update-pages") -> None:
     except projectlock.LockCancelled, projectlock.ProjectBusyError, journal.JournalRecoveryError:
         raise
     except Exception as e:  # noqa: BLE001 -- the page files are the backup that matters
+        _note_exc("updatepages._backup_page", project=pdir, page=name)
         rows = {"_error": "the project database rows could not be read: %s" % e}
     os.makedirs(d, exist_ok=True)
     files = []
     seen = set()
     for ext in (".ctg", ".ctF", ".ctf"):
         src = stem + ext
-        key = os.path.normcase(os.path.abspath(src))
+        key = path_key(src)
         if os.path.exists(src) and key not in seen:
             seen.add(key)
             shutil.copy2(src, d)
@@ -1108,7 +1100,7 @@ def _backup_page(path: str, dest_root: str, kind: str = "update-pages") -> None:
             # the pages.DBF row (a restore of a DELETED page registers it again)
             entry["record"] = {k: v for k, v in rec.items() if not str(k).startswith("_")}
     except Exception:  # noqa: BLE001 -- the page files are the backup that matters
-        pass
+        _note_exc("updatepages._backup_page", project=pdir, page=name)
     backups.add_entry(dest_root, kind, entry)
 
 
@@ -1148,24 +1140,22 @@ def restore_backup(
     libraries: bool = True,
 ) -> RestoreReport:
     """Tools > Restore Backup: put pages back as they were before an Update Pages run."""
-    from ..format.fileio import write_atomic
     from ..infra import backups
 
     rep = RestoreReport()
     want = {p.lower() for p in pages} if pages is not None else None
     in_builder = {(str(p).strip().lower(), str(n).strip().lower()) for p, n in builder_open}
     for e in backups.read_manifest(folder).get("entries") or []:
-        if e.get("library"):
-            # a library file an update of an element's users saved (genieusage.run_update)
-            lib = e["library"]
+        if e.get("original"):
+            # a library file a run saved (genieusage.run_update, the chain, Replace Genie)
+            lib = e["original"]
             if libraries:
                 try:
-                    src = os.path.join(folder, e.get("folder") or "", e.get("file") or os.path.basename(lib))
-                    with open(src, "rb") as fh:
-                        write_atomic(lib, fh.read())
+                    backups.restore_file(folder, e)
                     rep.libraries.append(lib)
                     rep.restored.append(os.path.basename(lib))
                 except Exception as ex:  # noqa: BLE001
+                    _note_exc("updatepages.restore_backup", lib=lib)
                     rep.failed.append("%s: %s" % (os.path.basename(lib), getattr(ex, "strerror", None) or ex))
             continue
         name, pdir = e.get("page", ""), e.get("project", "")
@@ -1187,6 +1177,7 @@ def restore_backup(
                 _restore_page(src, pdir, name, names, e, rep)
             rep.restored.append(name)
         except Exception as ex:  # noqa: BLE001 -- one page never stops the rest
+            _note_exc("updatepages.restore_backup", project=pdir, page=name)
             rep.failed.append("%s: %s" % (name, getattr(ex, "strerror", None) or ex))
     return rep
 
@@ -1273,30 +1264,28 @@ def update_pages(
         symbols = genies
     if composites is None:
         composites = genies
-    only_n = None if only is None else {os.path.normcase(os.path.abspath(p)) for p in only}
+    only_n = None if only is None else {path_key(p) for p in only}
     if pages is None:
         dirs = [project_dir] if isinstance(project_dir, str) else list(project_dir or ())
-        skip_n = {os.path.normcase(os.path.abspath(p)) for p in skip}
+        skip_n = {path_key(p) for p in skip}
         pages = []
         for d in dirs:
             reg = registered_names(d)
             # every .ctg: the unregistered ones are REPORTED, not silently dropped
             for p in project_pages(d, registered_only=False):
-                if os.path.normcase(os.path.abspath(p)) in skip_n:
+                if path_key(p) in skip_n:
                     continue
-                if only_n is not None and os.path.normcase(os.path.abspath(p)) not in only_n:
+                if only_n is not None and path_key(p) not in only_n:
                     continue
                 name = os.path.splitext(os.path.basename(p))[0]
-                if reg is not None and name.lower()[:64] not in reg:
+                if reg is not None and name.lower()[:PAGE_NAME_LEN] not in reg:
                     rep.unregistered.append(name)
                     rep.unregistered_paths.append(os.path.abspath(p))
                     continue
                 pages.append(p)
     else:
         pages = list(pages)
-    want = [
-        i for i, p in enumerate(pages) if only_n is None or os.path.normcase(os.path.abspath(p)) in only_n
-    ]
+    want = [i for i, p in enumerate(pages) if only_n is None or path_key(p) in only_n]
     run = _Run(
         templates=templates,
         genies=genies,
@@ -1309,30 +1298,30 @@ def update_pages(
         skip_now=skip_now,
         defer=defer_composites,
         force=force,
-        resolver_for=lambda path: SymbolResolver.for_page(
-            path, [d for d in os.environ.get("CTG_LIB_PATH", "").split(os.pathsep) if d]
-        ),
+        resolver_for=lambda path: SymbolResolver.for_page(path, lib_path_dirs()),
     )
     out = open(records, "a", encoding="utf-8") if records else None
     try:
-        taken = 0
-        for i in want:
-            path = pages[i]
-            if claims is not None and not claim(claims, i):
-                continue  # (another part has it)
-            from ..infra.paths import kill_point
+        # (the run memos: each project's include chain is read once in the run, infra/runmemo)
+        with runmemo.kept():
+            taken = 0
+            for i in want:
+                path = pages[i]
+                if claims is not None and not claim(claims, i):
+                    continue  # (another part has it)
+                from ..infra.paths import kill_point
 
-            kill_point("after_records:%d:%d" % (len(rep.records), part))
-            taken += 1
-            name = os.path.splitext(os.path.basename(path))[0]
-            if progress is not None and progress(taken - 1, len(want), name) is False:
-                if claims is not None:
-                    _emit(rep, page_record(i, path, "not_checked"), out, part, on_record)
-                break
-            rec = run.page(i, path)
-            _emit(rep, rec, out, part, on_record)
-            if rec["outcome"] == "not_checked":
-                break  # (a cancelled wait: the run stops)
+                kill_point("after_records:%d:%d" % (len(rep.records), part))
+                taken += 1
+                name = os.path.splitext(os.path.basename(path))[0]
+                if progress is not None and progress(taken - 1, len(want), name) is False:
+                    if claims is not None:
+                        _emit(rep, page_record(i, path, "not_checked"), out, part, on_record)
+                    break
+                rec = run.page(i, path)
+                _emit(rep, rec, out, part, on_record)
+                if rec["outcome"] == "not_checked":
+                    break  # (a cancelled wait: the run stops)
     finally:
         if out is not None:
             out.close()
@@ -1387,9 +1376,73 @@ def _emit(rep: UpdateReport, rec: dict, out, part: int, on_record=None) -> None:
             logsetup.note_exception("updatepages.emit/on_record")
 
 
+def _finish_pending_rows(path: str) -> dict:
+    """Write the project database rows an earlier save of ``path`` left behind the page
+    file; what became of them, as page record fields."""
+    from ..format.projectlock import LockCancelled
+    from . import pendingrows
+
+    extra: dict = {}
+    if pendingrows.marked(path) is not None:
+        # an earlier save left the rows behind the page file: write them now
+        try:
+            if pendingrows.finish(path) == "written":
+                extra["rows_written"] = 1
+        except LockCancelled:
+            raise
+        except OSError as e:
+            extra["rows_pending"] = 1
+            extra["warning"] = "the project database rows of an earlier save could not be written: %s" % e
+    return extra
+
+
+def _note_genies_left(doc, extra: dict) -> None:
+    """Add to ``extra``'s warning the genies ``doc``'s update left as stored."""
+    # (a genie left as stored: a nested genie's library could not be read then, or its
+    # composition failed. The page keeps that genie's old stamp, so the next run tries
+    # again; the result says so instead of a plain 'updated')
+    left = sorted("%s.%s" % k for k in (getattr(doc, "genie_update_left", None) or ()))
+    if left or getattr(doc, "genie_update_unfinished", False):
+        extra["warning"] = "; ".join(
+            filter(
+                None,
+                (
+                    extra.get("warning", ""),
+                    (
+                        "not every genie could be updated (%s); the log says why. The next run "
+                        "tries again" % ", ".join(left)
+                    )
+                    if left
+                    else "not every genie could be updated; the log says why. The next run tries again",
+                ),
+            )
+        )
+
+
+def _pruned_links_detail(doc) -> Tuple[List[str], List[str], str]:
+    """The link-table entries ``doc``'s save left out: (the library links, the language
+    labels, the detail that names them)."""
+    # (the save left out every entry no record uses: the dead ones found above, and any
+    # other the page carried)
+    dropped = list(getattr(doc, "_pruned_links", None) or ())
+    # (a language label entry ('\label') no text uses any more is no link to a library
+    # element: named in the detail, counted apart)
+    labels = [n for _g, n in dropped if str(n).startswith("\\")]
+    links_gone = [n for _g, n in dropped if not str(n).startswith("\\")]
+    detail = "; ".join(
+        x
+        for x in (
+            "links removed: %s" % ", ".join(links_gone) if links_gone else "",
+            "labels removed: %s" % ", ".join(labels) if labels else "",
+        )
+        if x
+    )
+    return links_gone, labels, detail
+
+
 class _Run:
     """One update_pages run's options and what its pages share: the element stamps
-    (_Current) and composer per project, the composite states, the projects whose
+    (Current) and composer per project, the composite states, the projects whose
     database was in use."""
 
     #: a page another save changed meanwhile is read and checked again this many times
@@ -1418,7 +1471,7 @@ class _Run:
         self.in_builder = {(str(p).strip().lower(), str(n).strip().lower()) for p, n in builder_open}
         self.skip_now, self.defer = skip_now, defer
         self.resolver_for = resolver_for
-        self.currents: Dict[str, _Current] = {}
+        self.currents: Dict[str, Current] = {}
         self.composers: Dict[str, object] = {}  # project dir -> shared ComposeContext
         self.comp_memo: Dict[tuple, object] = {}  # composites_current's instance states
         self.db_busy: Set[str] = set()  # projects whose database was in use
@@ -1438,6 +1491,7 @@ class _Run:
             except LockCancelled:
                 return page_record(i, path, "not_checked")
             except Exception as e:  # noqa: BLE001 -- one bad page never stops the pass
+                _note_exc("updatepages._Run.page", page=path)
                 return page_record(i, path, "failed", checked=1, detail=str(e))
         return page_record(
             i,
@@ -1448,35 +1502,9 @@ class _Run:
             detail="another save changed it while it was being updated",
         )
 
-    def _page(self, i: int, path: str) -> dict:
-        from ..editing import (
-            EditableDocument,
-            PageBusyError,
-            PageChangedOnDisk,
-            ProjectBusyError,
-            ProjectDatabaseInUse,
-        )
-        from ..format.projectlock import LockCancelled
-        from . import pendingrows
-
-        name = os.path.splitext(os.path.basename(path))[0]
-        extra: dict = {}
-        if pendingrows.marked(path) is not None:
-            # an earlier save left the rows behind the page file: write them now
-            try:
-                if pendingrows.finish(path) == "written":
-                    extra["rows_written"] = 1
-            except LockCancelled:
-                raise
-            except OSError as e:
-                extra["rows_pending"] = 1
-                extra["warning"] = "the project database rows of an earlier save could not be written: %s" % e
-        pdir = os.path.normcase(os.path.dirname(os.path.abspath(path)))
-        current = self.currents.get(pdir)
-        if current is None:
-            # the same search path as the document's resolver (CTG_LIB_PATH
-            # carries a real project dir for pages outside their project)
-            current = self.currents[pdir] = _Current(self.resolver_for(path))
+    def _stale_parts(self, path: str, current: Current) -> tuple:
+        """What of page ``path`` is out of date, from one shared parse of the file: (its
+        stale genie links, template, super genie, stale symbol links, the dead entries)."""
         _SHARE_PARSE[0] = True
         try:
             # (an out-of-date entry no record uses: 'dead', the page's save drops it)
@@ -1487,7 +1515,118 @@ class _Run:
         finally:
             _SHARE_PARSE[0] = False
             _PARSE_SLOT[0] = None
-        dead = list(dead) + list(sym_dead)
+        return stale, tpl_stale, sg_stale, sym_stale, list(dead) + list(sym_dead)
+
+    def _apply_updates(self, doc, stale, tpl_stale, sg_stale, sym_stale) -> tuple:
+        """Bring ``doc`` up to date: (template, super genie, symbols, placeholders, genies,
+        the genie changes applied)."""
+        force = self.force
+        n = 0
+        ph = 0
+        ch: dict = {}
+        # the template first, then the super genie and the symbols, then the placeholders
+        # and the genies: the open's order (EditableDocument.apply_open_updates) and
+        # CtDraw's load (the oracle chain5/order: a page whose template and genie both
+        # gained records gives the template's new members the lowest free handles first)
+        if force:
+            # (the template and the super genie composed again also when current; every
+            # placed symbol re-derived, not only the stale ones)
+            t = doc.update_template(force=True, page_properties=self.page_properties) if self.templates else 0
+            sg = doc.update_supergenie_page(force=True) if self.supergenies else 0
+            sy = doc.update_symbol_placements(None) if self.symbols else 0
+        else:
+            t = doc.update_template(page_properties=self.page_properties) if tpl_stale else 0
+            sg = doc.update_supergenie_page() if sg_stale else 0
+            sy = doc.update_symbol_placements(sym_stale) if sym_stale else 0
+        if self.genies and doc.placeholder_genies():
+            # PLACEHOLDER genies whose library opens again (CtDraw's save of the page while
+            # the library was missing: a marker and a stamp-less entry):
+            # placed again first, as the editor's open and CtDraw's load + save do (the
+            # oracle: FxReturned), so their entries take the current stamp. Otherwise the page
+            # reads out of date on every run
+            ph = int(doc.instantiate_placeholder_genies() or 0)
+        # (a placed genie whose instance holds a placeholder of its element that can be
+        # placed now: composed again in full, the genie placed in it, as CtDraw's load)
+        hosts = doc.placeholder_hosts() if (self.genies and stale) else set()
+        if force and self.genies:
+            from ..format.symbols import held_libraries
+
+            # every placed genie composed again in full from its element as it is now
+            ch = {(a.lower(), b.lower()): None for _i, (a, b) in doc.genie_instances()}
+            with held_libraries():
+                n = doc.apply_genie_changes(ch, force=True) if ch else 0
+        elif stale:
+            from ..format.symbols import held_libraries
+
+            # (one read of each library: what changed, the composition and the stamps the
+            # page quotes from the same version of each, also when the editor saves one
+            # meanwhile: format/symbols.held_libraries)
+            with held_libraries():
+                # a genie whose own definition changed is composed again in full; one
+                # where only nested genies changed gets just their copies
+                ch = {k: v for k, v in doc.genie_changes().items() if k in stale or k in hosts}
+                n = doc.apply_genie_changes(ch) if ch else 0
+        return t, sg, sy, ph, n, ch
+
+    def _save_updated(
+        self, i: int, path: str, pdir: str, doc, counts: dict, skipped: int, extra: dict
+    ) -> dict:
+        """Save the updated page ``doc``; its record (``counts``: what the update changed)."""
+        from ..editing import PageBusyError, PageChangedOnDisk, ProjectBusyError, ProjectDatabaseInUse
+
+        read = getattr(doc, "_disk_stamp", None)
+        try:
+            doc.save(batch=True, backup=(self.backup, "update-pages") if self.backup else None)
+        except PageChangedOnDisk:
+            raise
+        except ProjectDatabaseInUse as e:
+            self.db_busy.add(pdir)
+            return page_record(
+                i, path, "db_in_use", checked=1, stale=1, detail=str(e), composites_skipped=skipped, **extra
+            )
+        except (ProjectBusyError, PageBusyError) as e:
+            return page_record(
+                i, path, "failed", checked=1, stale=1, detail=str(e), composites_skipped=skipped, **extra
+            )
+        warning = "; ".join(
+            filter(None, (extra.pop("warning", ""), (doc.save_warning or "").replace("\n", " ")))
+        )
+        pending = int(bool(doc.rows_pending))
+        extra.pop("rows_pending", None)
+        links_gone, labels, detail = _pruned_links_detail(doc)
+        # (the file's (mtime_ns, size) it read and wrote: an editor tab that holds what it
+        # read takes the file as its own, never 'changed by another program')
+        wrote = getattr(doc, "_disk_stamp", None)
+        return page_record(
+            i,
+            path,
+            "updated",
+            checked=1,
+            stale=1,
+            **counts,
+            composites_skipped=skipped,
+            links_dropped=len(links_gone),
+            labels_dropped=len(labels),
+            detail=detail,
+            rows_pending=pending,
+            warning=warning,
+            read=list(read) if read else None,
+            wrote=list(wrote) if wrote else None,
+            **extra,
+        )
+
+    def _page(self, i: int, path: str) -> dict:
+        from ..editing import EditableDocument, ProjectDatabaseInUse
+
+        name = os.path.splitext(os.path.basename(path))[0]
+        extra = _finish_pending_rows(path)
+        pdir = folder_key(path)
+        current = self.currents.get(pdir)
+        if current is None:
+            # the same search path as the document's resolver (CTG_LIB_PATH
+            # carries a real project dir for pages outside their project)
+            current = self.currents[pdir] = Current(self.resolver_for(path))
+        stale, tpl_stale, sg_stale, sym_stale, dead = self._stale_parts(path, current)
         comp_here = bool(self.composites) and has_composites(path)
         other = bool(stale or tpl_stale or sg_stale or sym_stale)
         # out of date only through dead entries: saved all the same (CtDraw's load + save
@@ -1546,70 +1685,8 @@ class _Run:
             current.clear()
         if not other and not c and not save_for_links and not force:
             return page_record(i, path, "current", checked=1, composites_skipped=skipped, **extra)
-        n = 0
-        ph = 0
-        ch: dict = {}
-        # the template first, then the super genie and the symbols, then the placeholders
-        # and the genies: the open's order (EditableDocument.apply_open_updates) and
-        # CtDraw's load (the oracle chain5/order: a page whose template and genie both
-        # gained records gives the template's new members the lowest free handles first)
-        if force:
-            # (the template and the super genie composed again also when current; every
-            # placed symbol re-derived, not only the stale ones)
-            t = doc.update_template(force=True, page_properties=self.page_properties) if self.templates else 0
-            sg = doc.update_supergenie_page(force=True) if self.supergenies else 0
-            sy = doc.update_symbol_placements(None) if self.symbols else 0
-        else:
-            t = doc.update_template(page_properties=self.page_properties) if tpl_stale else 0
-            sg = doc.update_supergenie_page() if sg_stale else 0
-            sy = doc.update_symbol_placements(sym_stale) if sym_stale else 0
-        if self.genies and doc.placeholder_genies():
-            # PLACEHOLDER genies whose library opens again (CtDraw's save of the page while
-            # the library was missing: a marker and a stamp-less entry):
-            # placed again first, as the editor's open and CtDraw's load + save do (the
-            # oracle: FxReturned), so their entries take the current stamp. Otherwise the page
-            # reads out of date on every run
-            ph = int(doc.instantiate_placeholder_genies() or 0)
-        # (a placed genie whose instance holds a placeholder of its element that can be
-        # placed now: composed again in full, the genie placed in it, as CtDraw's load)
-        hosts = doc.placeholder_hosts() if (self.genies and stale) else set()
-        if force and self.genies:
-            from ..format.symbols import held_libraries
-
-            # every placed genie composed again in full from its element as it is now
-            ch = {(a.lower(), b.lower()): None for _i, (a, b) in doc.genie_instances()}
-            with held_libraries():
-                n = doc.apply_genie_changes(ch, force=True) if ch else 0
-        elif stale:
-            from ..format.symbols import held_libraries
-
-            # (one read of each library: what changed, the composition and the stamps the
-            # page quotes from the same version of each, also when the editor saves one
-            # meanwhile: format/symbols.held_libraries)
-            with held_libraries():
-                # a genie whose own definition changed is composed again in full; one
-                # where only nested genies changed gets just their copies
-                ch = {k: v for k, v in doc.genie_changes().items() if k in stale or k in hosts}
-                n = doc.apply_genie_changes(ch) if ch else 0
-        # (a genie left as stored: a nested genie's library could not be read then, or its
-        # composition failed. The page keeps that genie's old stamp, so the next run tries
-        # again; the result says so instead of a plain 'updated')
-        left = sorted("%s.%s" % k for k in (getattr(doc, "genie_update_left", None) or ()))
-        if left or getattr(doc, "genie_update_unfinished", False):
-            extra["warning"] = "; ".join(
-                filter(
-                    None,
-                    (
-                        extra.get("warning", ""),
-                        (
-                            "not every genie could be updated (%s); the log says why. The next run "
-                            "tries again" % ", ".join(left)
-                        )
-                        if left
-                        else "not every genie could be updated; the log says why. The next run tries again",
-                    ),
-                )
-            )
+        t, sg, sy, ph, n, ch = self._apply_updates(doc, stale, tpl_stale, sg_stale, sym_stale)
+        _note_genies_left(doc, extra)
         restamped = (bool(sym_stale) and getattr(doc, "symbol_stamps_updated", False)) or (
             bool(stale) and getattr(doc, "genie_stamps_updated", False)
         )
@@ -1634,65 +1711,15 @@ class _Run:
                 composites_skipped=skipped,
                 **extra,
             )
-        read = getattr(doc, "_disk_stamp", None)
-        try:
-            doc.save(batch=True, backup=(self.backup, "update-pages") if self.backup else None)
-        except PageChangedOnDisk:
-            raise
-        except ProjectDatabaseInUse as e:
-            self.db_busy.add(pdir)
-            return page_record(
-                i, path, "db_in_use", checked=1, stale=1, detail=str(e), composites_skipped=skipped, **extra
-            )
-        except (ProjectBusyError, PageBusyError) as e:
-            return page_record(
-                i, path, "failed", checked=1, stale=1, detail=str(e), composites_skipped=skipped, **extra
-            )
-        warning = "; ".join(
-            filter(None, (extra.pop("warning", ""), (doc.save_warning or "").replace("\n", " ")))
-        )
-        pending = int(bool(doc.rows_pending))
-        extra.pop("rows_pending", None)
-        # (the save left out every entry no record uses: the dead ones found above, and any
-        # other the page carried)
-        dropped = list(getattr(doc, "_pruned_links", None) or ())
-        # (a language label entry ('\label') no text uses any more is no link to a library
-        # element: named in the detail, counted apart)
-        labels = [n for _g, n in dropped if str(n).startswith("\\")]
-        links_gone = [n for _g, n in dropped if not str(n).startswith("\\")]
-        detail = "; ".join(
-            x
-            for x in (
-                "links removed: %s" % ", ".join(links_gone) if links_gone else "",
-                "labels removed: %s" % ", ".join(labels) if labels else "",
-            )
-            if x
-        )
-        # (the file's (mtime_ns, size) it read and wrote: an editor tab that holds what it
-        # read takes the file as its own, never 'changed by another program')
-        wrote = getattr(doc, "_disk_stamp", None)
-        return page_record(
-            i,
-            path,
-            "updated",
-            checked=1,
-            stale=1,
+        counts = dict(
             instances=int(n or 0),
             placeholders=ph,
             templates=int(bool(t)),
             supergenies=int(bool(sg)),
             symbols=int(sy or 0),
             composites=int(c or 0),
-            composites_skipped=skipped,
-            links_dropped=len(links_gone),
-            labels_dropped=len(labels),
-            detail=detail,
-            rows_pending=pending,
-            warning=warning,
-            read=list(read) if read else None,
-            wrote=list(wrote) if wrote else None,
-            **extra,
         )
+        return self._save_updated(i, path, pdir, doc, counts, skipped, extra)
 
 
 def placeholder_keys(records) -> Set[Tuple[str, str]]:

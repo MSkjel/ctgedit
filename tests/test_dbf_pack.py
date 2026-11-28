@@ -101,7 +101,7 @@ def test_a_table_the_change_log_names_keeps_its_record_numbers(ex, tmp_path):
 
 
 def test_pack_database_in_a_helper_process_and_its_result(ex, tmp_path):
-    from ctgedit.ui.window.library import LibraryCommands
+    from ctgedit.ui.main_window import MainWindow
     from ctgedit.workers import pack_worker as PW
 
     for t in ("pgtouch", "pgkey"):
@@ -110,9 +110,9 @@ def test_pack_database_in_a_helper_process_and_its_result(ex, tmp_path):
     ans = PW.pack({"dirs": [str(tmp_path)]})
     (proj,) = ans["projects"]
     assert set(proj["packed"]) == {"pgtouch", "pgkey"}
-    lines = LibraryCommands._pack_database_lines(ans)
+    lines = MainWindow._pack_database_lines(ans)
     assert lines[0].startswith("2 tables packed,") and any("pgtouch" in x for x in lines)
     assert (
-        LibraryCommands._pack_database_lines(PW.pack({"dirs": [str(tmp_path)]}))[0]
+        MainWindow._pack_database_lines(PW.pack({"dirs": [str(tmp_path)]}))[0]
         == "No deleted rows: nothing to pack."
     )

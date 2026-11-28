@@ -7,7 +7,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from ctgedit.format.page import parse_ctg, _XFORM_DOUBLES  # noqa: E402
+from ctgedit.format.page import parse_ctg, XFORM_DOUBLES  # noqa: E402
 
 
 def geom_end(p, start=0):
@@ -21,7 +21,7 @@ def geom_end(p, start=0):
             return None
         mode = p[o]
         o += 1
-        o += _XFORM_DOUBLES.get(mode, 6 if mode > 3 else 0) * 8
+        o += XFORM_DOUBLES.get(mode, 6 if mode > 3 else 0) * 8
     o += 20
     return o if o <= n else None
 

@@ -1,9 +1,14 @@
 """The Find and Replace window."""
 
 from __future__ import annotations
+
+from ...infra.paths import folder_key, path_key
+
+from ...infra.logsetup import note_exception as _note_exc
+
+from ..names import plural
 from ..style.theme import sp as _sp
 
-import contextlib
 import json
 import os
 
@@ -121,17 +126,7 @@ class ClosedHit:
 
 # (the project choice is pick_fields.ProjectScopeField's, shared with Replace Genie)
 from ..pick_fields import project_choices, project_dirs  # noqa: E402,F401
-
-
-@contextlib.contextmanager
-def _busy():
-    """A wait cursor while a search / replace runs (re-composing many genies
-    on a big page takes seconds)."""
-    QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
-    try:
-        yield
-    finally:
-        QtWidgets.QApplication.restoreOverrideCursor()
+from ..busy import wait_cursor  # noqa: E402
 
 
 def page_for_key(key: str) -> str:
@@ -196,10 +191,10 @@ class FindReplaceDialog(QtWidgets.QDialog):
         open_page=None,
     ):
         super().__init__(parent)
-        #: open a closed page in the editor: open_page(path) -> its document or None
+        #: open a closed page in the editor: open_page(path) -> its document (raises, the
+        #: reason in its text, when it cannot be shown)
         self._open_page = open_page
         #: the closed pages' search running now (ui/jobs/helper_job), its options key
-        self._job = None
         self._closed_key = None
         self._closed: list = []
         self._closed_note = ""
@@ -211,6 +206,11 @@ class FindReplaceDialog(QtWidgets.QDialog):
         self._break_lock = break_lock or (lambda: False)
         self._hits: list = []
         self._key = None
+        # (a list shown follows the options a moment after the last change: _refresh_now)
+        self._refresh = QtCore.QTimer(self)
+        self._refresh.setSingleShot(True)
+        self._refresh.setInterval(self.REFRESH_MS)
+        self._refresh.timeout.connect(self._refresh_now)
         self._pos = -1
         #: the object of the current hit (its index when found; -1 = none)
         self._cursor = -1
@@ -259,31 +259,19 @@ class FindReplaceDialog(QtWidgets.QDialog):
         self._look_in = _radio_row((self._rb_page, self._rb_all, self._rb_project))
         self._rb_page.setChecked(True)
         form.addRow("Look in:", self._look_in)
-        # the project and its includes (shared with Replace Genie)
         from ..pick_fields import ProjectScopeField
 
-        self._scope = ProjectScopeField(getattr(doc, "path", "") or "", horizontal=True)
+        self._scope = ProjectScopeField(getattr(doc, "path", "") or "", horizontal=True, remember="find")
         self._cb_project, self._cb_includes = self._scope.combo, self._scope.includes
         self._project_here = self._scope.here
         # the helper processes that search the closed pages at once (the same setting as
         # Settings > Pages and libraries > Find in closed pages: opt/find_processes)
-        from ..prefs.settings import FIND_PROCESSES_RANGE
 
         self._procs_label = QtWidgets.QLabel("Helper processes:")
-        self._procs = QtWidgets.QSpinBox()
-        self._procs.setRange(*FIND_PROCESSES_RANGE)
-        self._procs.setSpecialValueText("Automatic")
-        self._procs.setToolTip(
-            "How many helper processes search the closed pages at once. "
-            "Automatic: half the processors, at most 4. Each takes about "
-            "300 MB while it runs."
-        )
+        from ..prefs.job_options import processes_box
+
+        self._procs = processes_box("opt/find_processes")
         self._procs_label.setBuddy(self._procs)
-        try:
-            # (as text: Qt reads a garbled number as 0, not as an error)
-            self._procs.setValue(int(str(app_settings().value("opt/find_processes", 0)).strip()))
-        except TypeError, ValueError:  # swallow-ok: a garbled setting shows Automatic
-            self._procs.setValue(0)
         self._procs.valueChanged.connect(lambda v: app_settings().setValue("opt/find_processes", int(v)))
         self._procs_row = QtWidgets.QWidget()
         row = QtWidgets.QHBoxLayout(self._procs_row)
@@ -383,10 +371,6 @@ class FindReplaceDialog(QtWidgets.QDialog):
         # Becomes: the field after the replacement, as Replace with is typed (Replace only)
         self._list.setHeaderLabels(["Page", "Object", "Field", "Text", "Becomes"])
         self._ed_repl.textChanged.connect(self._update_becomes)
-        self._b_stop = QtWidgets.QToolButton()
-        self._b_stop.setText("Stop")
-        self._b_stop.setToolTip("Stop searching the closed pages")
-        self._b_stop.setVisible(False)
         self._list.setRootIsDecorated(False)
         self._list.setUniformRowHeights(True)
         self._list.setAlternatingRowColors(True)
@@ -399,7 +383,12 @@ class FindReplaceDialog(QtWidgets.QDialog):
         self._list.itemDoubleClicked.connect(lambda *_a: self.go_to())
         self._list.currentItemChanged.connect(self._on_row)
         lay.addWidget(self._list, 1)
-        self._status = QtWidgets.QLabel()
+        from ..style.theme import note_label
+
+        self._status = note_label("")
+        from ..jobs.helper_job import DialogJob
+
+        self._helper = DialogJob(self._status, "Stop searching the closed pages")
 
     def _filter_values(self) -> dict:
         """{FindOptions field: NameFilter} of the Filters rows."""
@@ -416,10 +405,8 @@ class FindReplaceDialog(QtWidgets.QDialog):
         srow.addWidget(self._status, 1)
         # (a failure's status line has Open Log beside it, never 'see the log';
         # a Replace All that saved closed pages has Open Backup Folder)
-        from ..messages import open_log_button
 
-        self._b_log = open_log_button(self)
-        srow.addWidget(self._b_log)
+        srow.addWidget(self._helper.log_button)
         self._b_backup = QtWidgets.QToolButton()
         self._b_backup.setText("Open Backup Folder")
         self._b_backup.setAutoRaise(True)
@@ -440,8 +427,7 @@ class FindReplaceDialog(QtWidgets.QDialog):
         self._undo_set = None
         self._b_undo_all.clicked.connect(self.undo_replace_all)
         srow.addWidget(self._b_undo_all)
-        srow.addWidget(self._b_stop)
-        self._b_stop.clicked.connect(self._stop_closed)
+        srow.addWidget(self._helper.stop_button)
         lay.addLayout(srow)
 
         btns = QtWidgets.QHBoxLayout()
@@ -449,7 +435,7 @@ class FindReplaceDialog(QtWidgets.QDialog):
         self._b_all.setToolTip("List every field that contains the text")
         self._b_all.clicked.connect(self.find_all)
         self._b_next = QtWidgets.QPushButton("Find Next")
-        self._b_next.setToolTip("Go to the next match in the chosen direction (F3)")
+        self._b_next.setToolTip("Go to the next match in the chosen direction (F3 in this window)")
         self._b_next.setDefault(True)
         self._b_next.clicked.connect(self.find_next)
         self._b_rep = QtWidgets.QPushButton("Replace")
@@ -458,7 +444,7 @@ class FindReplaceDialog(QtWidgets.QDialog):
         self._b_repall = QtWidgets.QPushButton("Replace All")
         self._b_repall.setToolTip("Replace every match (one undo step per page)")
         self._b_repall.clicked.connect(self.replace_all)
-        self._b_goto = QtWidgets.QPushButton("Goto")  # (the menu's Goto Object)
+        self._b_goto = QtWidgets.QPushButton("Go To")
         self._b_goto.setToolTip("Select the object of the selected row on its page")
         self._b_goto.clicked.connect(self.go_to)
         self._b_props = QtWidgets.QPushButton("Properties…")
@@ -480,12 +466,8 @@ class FindReplaceDialog(QtWidgets.QDialog):
 
         self._restore_options()
         if doc is None:
-            # no page open: the closed pages of a project (the project Update Pages ran on
-            # last, else the first)
+            # no page open: the closed pages of a project
             self._rb_project.setChecked(True)
-            last = str(app_settings().value("updatepages/root", "") or "")
-            if last and self._cb_project.findText(last) >= 0:
-                self._cb_project.setCurrentText(last)
         self._sync_page_choices()
         for w in [
             self._rb_page,
@@ -525,10 +507,12 @@ class FindReplaceDialog(QtWidgets.QDialog):
         try:
             tpl_edit = bool(self._template_editable())
         except Exception:  # noqa: BLE001
+            _note_exc("find_dialog.options/template_editable")
             tpl_edit = False
         try:
             unlocked = bool(self._break_lock())
         except Exception:  # noqa: BLE001
+            _note_exc("find_dialog.options/break_lock")
             unlocked = False
         return FR.FindOptions(
             self._ed_find.text(),
@@ -552,17 +536,13 @@ class FindReplaceDialog(QtWidgets.QDialog):
         try:
             docs = list(self._documents() or [])
         except Exception:  # noqa: BLE001
+            _note_exc("find_dialog._targets")
             docs = []
         docs = [d for d in docs if d is not cur]
         out = ([cur] if cur is not None else []) + docs
         if self._rb_project.isChecked():
-            dirs = {os.path.normcase(os.path.abspath(d)) for d in self.project_folders()}
-            out = [
-                d
-                for d in out
-                if getattr(d, "path", "")
-                and os.path.normcase(os.path.dirname(os.path.abspath(d.path))) in dirs
-            ]
+            dirs = {path_key(d) for d in self.project_folders()}
+            out = [d for d in out if getattr(d, "path", "") and folder_key(d.path) in dirs]
         return out
 
     # -- the closed pages of a project ---------------------------------------------
@@ -578,8 +558,10 @@ class FindReplaceDialog(QtWidgets.QDialog):
             has = self._current() is not None
         except Exception:  # noqa: BLE001 -- swallow-ok: no page then
             has = False
-        self._rb_page.setEnabled(has)
-        self._rb_all.setEnabled(has)
+        from ..style.theme import enable
+
+        enable(self._rb_page, has, "Open a page first.")
+        enable(self._rb_all, has, "Open a page first.")
         if not has and not self._rb_project.isChecked():
             self._rb_project.setChecked(True)
 
@@ -610,25 +592,75 @@ class FindReplaceDialog(QtWidgets.QDialog):
             tuple(sorted(os.path.normcase(p) for p in self._open_paths())),
         )
 
-    def _start_closed(self) -> None:
-        """Search the project's closed pages in the background (find_worker)."""
+    def _closed_from_index(self, key) -> dict:
+        """The closed pages' search ``key`` (_closed_search_key) as far as Find's index holds
+        the pages as they are now (features/find_index): {'pages': the project's pages in
+        order, 'rows': {path key: a page's rows}, 'stale': the pages a helper has to read,
+        'more': the rows went past find_worker.MAX_ROWS}. Kept for the search that follows
+        (_start_closed)."""
+        from ...features import find_index as FI
+        from ...workers import find_worker as FW
+
+        opts, projects, open_paths = key
+        try:
+            pages = FW.pages_of(projects)
+        except Exception:  # noqa: BLE001
+            _note_exc("find_dialog._closed_from_index")
+            pages = []
+        open_keys = {path_key(p) for p in open_paths}
+        kept = FI.KeptSearch(opts)
+        rows: dict = {}
+        stale: list = []
+        n, more = 0, False
+        with wait_cursor():
+            for p in pages:
+                k = path_key(p)
+                if k in open_keys or not FR.page_allowed(opts, p):
+                    continue
+                try:
+                    got = kept.rows(p)
+                except Exception:  # noqa: BLE001
+                    _note_exc("find_dialog._closed_from_index", page=p)
+                    got = None
+                if got is None:
+                    stale.append(p)
+                    continue
+                rows[k] = got
+                n += len(got)
+                if n > FW.MAX_ROWS:
+                    more = True  # (the list is full by this page: the later ones are not read)
+                    break
+        ans = {"pages": pages, "rows": rows, "stale": stale, "more": more}
+        self._index_answer = (key, ans)
+        return ans
+
+    def _start_closed(self) -> bool:
+        """Search the project's closed pages: the ones Find's index holds as they are now
+        here, the others in the background (find_worker, which adds them to the index).
+        True when no page had to be read: the rows are listed now (_closed_done)."""
         from ...workers import find_worker as FW
         from ...infra.paths import data_dir
         from ..jobs.helper_job import HelperJob
 
         key = self._closed_search_key()
         if key is None or key == self._closed_key:
-            return
-        if self._job is not None:
-            self._job.stop()
-            self._job = None
+            return False
+        self._helper.close()
         self._closed_key = key
         self._closed = []
         self._set_closed_note("")
+        memo = self.__dict__.pop("_index_answer", None)
+        ans = memo[1] if memo is not None and memo[0] == key else self._closed_from_index(key)
+        self.__dict__.pop("_index_answer", None)
+        self._index_rows = ans
+        if not ans["stale"]:
+            self._closed_done({"format": FW.FORMAT, "rows": []})
+            return True
         req = {
             "format": FW.FORMAT,
             "mode": "find",
             "projects": list(key[1]),
+            "pages": list(ans["stale"]),
             "skip": self._open_paths(),
             "options": FW.options_to_json(key[0]),
         }
@@ -636,10 +668,7 @@ class FindReplaceDialog(QtWidgets.QDialog):
         # page, when there are enough pages for each to be worth its start)
         from ..prefs.settings import find_processes
 
-        try:
-            total = len(FW.pages_of(key[1]))
-        except Exception:  # noqa: BLE001 -- swallow-ok: one helper, as before
-            total = 0
+        total = len(ans["stale"])
         parts = max(1, min(find_processes(), total // max(1, self.PAGES_PER_HELPER)))
         if parts > 1:
             from ..jobs.helper_job import HelperJobs
@@ -664,32 +693,24 @@ class FindReplaceDialog(QtWidgets.QDialog):
                 skip_paths=self._open_paths,
                 label="Find in closed pages",
             )
-        job.progress.connect(lambda i, n, name: self._closed_progress(job, i, n, name))
-        job.finished.connect(lambda res: self._closed_done(job, res))
-        if not job.start():
-            self._set_closed_note("The closed pages could not be searched.", log=True)
-            return
-        self._job = job
         # (the figures of the search: the time so far, the estimate and the rate over every
         # helper, ui/jobs/run_stats)
         self._job_stats = RunStats.from_settings(workers=parts)
         self._job_stats.begin_phase("search", total)
-        self._b_stop.setVisible(True)
+        if not self._helper.run(
+            job,
+            finished=self._closed_done,
+            failed="The closed pages could not be searched.",
+            progress=lambda i, n, name: self._job_line(
+                "Searching the closed pages: %d of %d (%s)…" % (i + 1, n, name), i, n
+            ),
+        ):
+            self._set_closed_note("The closed pages could not be searched.", log=True)
+        return False
 
     def searching(self) -> bool:
         """The closed pages are being searched now."""
-        return self._job is not None
-
-    def _stop_closed(self) -> None:
-        if self._job is not None:
-            self._job.stop()
-            self._status.setText("Stopping…")
-
-    def _closed_progress(self, job, i: int, n: int, name: str) -> None:
-        if job is self._job and not job.stopping:
-            self._status.setText(
-                self._job_line("Searching the closed pages: %d of %d (%s)…" % (i + 1, n, name), i, n)
-            )
+        return self._helper.running()
 
     def _job_line(self, text: str, i: int, n: int) -> str:
         """``text`` with the job's figures after it ('1 min 5 s so far, about 2 min left,
@@ -701,20 +722,38 @@ class FindReplaceDialog(QtWidgets.QDialog):
         figures = stats.time_text()
         return "%s %s." % (text, figures[:1].upper() + figures[1:]) if figures else text
 
-    def _closed_done(self, job, res: dict) -> None:
-        if job is not self._job:
-            return
-        self._job = None
-        self._b_stop.setVisible(False)
+    def _closed_rows(self, res: dict) -> tuple:
+        """(the closed pages' rows in page order, the list is full): those of the pages Find's
+        index held (_closed_from_index) with those of the helper's answer ``res``."""
+        from ...workers import find_worker as FW
+
+        ans = self.__dict__.get("_index_rows") or {"pages": [], "rows": {}, "more": False}
+        read: dict = {}
+        for r in res.get("rows") or ():
+            read.setdefault(path_key(r["page"]), []).append(r)
+        out: list = []
+        more = bool(ans["more"] or res.get("more"))
+        for p in ans["pages"]:
+            k = path_key(p)
+            got = ans["rows"].get(k)
+            out.extend(got if got is not None else read.get(k, ()))
+            if len(out) > FW.MAX_ROWS:
+                del out[FW.MAX_ROWS :]
+                more = True
+                break
+        return out, more
+
+    def _closed_done(self, res: dict) -> None:
         if res.get("error"):
             self._set_closed_note("The closed pages could not be searched: %s" % res["error"], log=True)
             self._closed = []
         else:
-            self._closed = [ClosedHit(r, k) for k, r in enumerate(res.get("rows") or ())]
+            rows, more = self._closed_rows(res)
+            self._closed = [ClosedHit(r, k) for k, r in enumerate(rows)]
             notes = []
             if res.get("stopped"):
                 notes.append("Stopped before every closed page was searched.")
-            if res.get("more"):
+            if more:
                 notes.append("Only the first %d matches of the closed pages are listed." % len(self._closed))
             if res.get("failed"):
                 notes.append(
@@ -737,11 +776,12 @@ class FindReplaceDialog(QtWidgets.QDialog):
             return h
         name = os.path.splitext(os.path.basename(h.path))[0]
         # (why there is none, for the status line: the two cases have different remedies)
-        self._live_why = "%s could not be opened. The window's status bar says why." % name
         if self._open_page is None:
             return None
-        doc = self._open_page(h.path)
-        if doc is None:
+        try:
+            doc = self._open_page(h.path)
+        except Exception as e:  # noqa: BLE001 -- swallow-ok: said in the status line
+            self._live_why = "%s could not be opened: %s" % (name, e)
             return None
         self._live_why = (
             "%s is open now, but that field no longer holds the text. Its matches are listed again." % name
@@ -798,7 +838,7 @@ class FindReplaceDialog(QtWidgets.QDialog):
         """The note after the status line about the closed pages; ``log``: it reports a
         failure, so the Open Log button shows beside it."""
         self._closed_note = text
-        self._b_log.setVisible(bool(log))
+        self._helper.show_log(bool(log))
 
     def _open_backup_folder(self) -> None:
         from ..messages import open_folder
@@ -808,13 +848,38 @@ class FindReplaceDialog(QtWidgets.QDialog):
 
     def _options_changed(self, *_a) -> None:
         self._key = None  # the list is out of date
-        self._clear_stale()
         self._sync_project_widgets()
         self._save_options()
-        self._update_buttons()
         bad = self._filter_problem()
         if bad:
-            self._status.setText("%s. Correct it to search." % bad)
+            self._clear_stale()
+            self._helper.say("%s. Correct it to search." % bad, failed=True, log=False)
+        elif self._following:
+            self._refresh.start()
+        else:
+            self._clear_stale()
+        self._update_buttons()
+
+    def _refresh_now(self) -> None:
+        """The options changed after a search: search again when that reads no page (the open
+        pages' fields are kept, and Find's index holds the closed ones as they are now);
+        else the list goes until Find All, Find Next or Replace searches again."""
+        if not self._following:
+            return
+        ready = (
+            self._ed_find.text()
+            and any(cb.isChecked() for cb in self._cb_scope.values())
+            and not self._filter_problem()
+        )
+        if not ready:
+            self._clear_stale()
+            return
+        key = self._closed_search_key()
+        if key is not None and key != self._closed_key and self._closed_from_index(key)["stale"]:
+            self.__dict__.pop("_index_answer", None)
+            self._clear_stale()
+            return
+        self._run()
 
     def _filter_problem(self) -> str:
         """Why the first bad filter row is not a regular expression ('' = none)."""
@@ -824,30 +889,34 @@ class FindReplaceDialog(QtWidgets.QDialog):
         """A changed query or scope: the matches of the last search go (their count, Go To
         and Properties no longer stand for what the box says) until Find All, Find Next or
         Replace searches again. A search of the closed pages still running stops."""
+        self._following = False
+        self._refresh.stop()
         lst = getattr(self, "_list", None)
         if lst is None:
             return
-        busy = self._job is not None
+        busy = self._helper.running()
         if not (self._hits or lst.topLevelItemCount() or busy):
             return
         if busy:
-            job, self._job = self._job, None
-            job.stop()
+            self._helper.close()
             self._closed_key = None  # (its rows are not complete)
             self._closed = []
-            self._b_stop.setVisible(False)
             self._after_search = None
         self._hits = []
         self._pos = -1
         lst.clear()
         self._set_closed_note("")
-        self._status.setText("Search again to update the results.")
+        self._helper.say("Search again to update the results.")
 
     _SETTINGS = "find/"
     #: the closed pages for each helper process at least (a helper's start costs about as
     #: much as searching this many pages): Settings > Pages and libraries > Long jobs
     #: (ui/prefs/job_options)
     PAGES_PER_HELPER = 8
+    #: the list follows changed options this long after the last change (ms)
+    REFRESH_MS = 250
+    #: a search ran and its list is shown: changed options search again (_refresh_now)
+    _following = False
 
     def _save_options(self, *_a) -> None:
         try:
@@ -860,10 +929,9 @@ class FindReplaceDialog(QtWidgets.QDialog):
             st.setValue(self._SETTINGS + "template", self._cb_template.isChecked())
             st.setValue(self._SETTINGS + "all_pages", self._rb_all.isChecked())
             st.setValue(self._SETTINGS + "project_pages", self._rb_project.isChecked())
-            st.setValue(self._SETTINGS + "includes", self._cb_includes.isChecked())
             st.setValue(self._SETTINGS + "backward", self._rb_back.isChecked())
             st.setValue(self._SETTINGS + "filters", json.dumps(self._filter_list.state()))
-        except Exception:  # noqa: BLE001 -- a convenience only
+        except Exception:  # noqa: BLE001  # swallow-ok: a convenience only
             pass
 
     def _restore_options(self) -> None:
@@ -886,7 +954,6 @@ class FindReplaceDialog(QtWidgets.QDialog):
                 if st.value(self._SETTINGS + "all_pages", False, type=bool)
                 else self._rb_page
             ).setChecked(True)
-            self._cb_includes.setChecked(st.value(self._SETTINGS + "includes", False, type=bool))
             (
                 self._rb_back if st.value(self._SETTINGS + "backward", False, type=bool) else self._rb_fwd
             ).setChecked(True)
@@ -900,22 +967,32 @@ class FindReplaceDialog(QtWidgets.QDialog):
             self._ed_repl.setText(str(st.value(self._SETTINGS + "replace", "") or ""))
             self._ed_find.selectAll()
         except Exception:  # noqa: BLE001
-            pass
+            _note_exc("find_dialog._restore_options")
 
     def _save_texts(self) -> None:
         try:
             st = app_settings()
             st.setValue(self._SETTINGS + "text", self._ed_find.text())
             st.setValue(self._SETTINGS + "replace", self._ed_repl.text())
-        except Exception:  # noqa: BLE001 -- a convenience only
+        except Exception:  # noqa: BLE001  # swallow-ok: a convenience only
             pass
 
     def _update_buttons(self) -> None:
         has_text = bool(self._ed_find.text())
         has_scope = any(cb.isChecked() for cb in self._cb_scope.values())
-        ok = has_text and has_scope and not self._filter_problem()
+        from ..style.theme import enable
+
+        problem = self._filter_problem()
+        ok = has_text and has_scope and not problem
+        why = (
+            "Type the text to find."
+            if not has_text
+            else "Tick something under Options > Search in."
+            if not has_scope
+            else "Correct the filter first."
+        )
         for b in (self._b_all, self._b_next, self._b_rep, self._b_repall):
-            b.setEnabled(ok)
+            enable(b, ok, why)
         hit = self.current_hit()
         self._b_goto.setEnabled(hit is not None)
         self._b_props.setEnabled(hit is not None)
@@ -923,9 +1000,10 @@ class FindReplaceDialog(QtWidgets.QDialog):
     # -- searching ----------------------------------------------------------------
     def _run(self) -> bool:
         """Search again when the list is out of date. True when it did."""
+        self._refresh.stop()  # (this search is the one it waited for)
         bad = self._filter_problem()
         if bad:
-            self._status.setText("%s. Correct it to search." % bad)
+            self._helper.say("%s. Correct it to search." % bad, failed=True, log=False)
             return False
         docs = self._targets()
         key = self._search_key(docs)
@@ -933,19 +1011,21 @@ class FindReplaceDialog(QtWidgets.QDialog):
             return False
         opts = key[0]
         hits = []
-        with _busy():
+        with wait_cursor():
             for d in docs:
                 try:
                     hits.extend(FR.find_hits(d, opts))
                 except Exception as exc:  # noqa: BLE001 -- one page must not stop the others
-                    self._status.setText("%s could not be searched: %s" % (page_name(d), exc))
+                    _note_exc("find_dialog._run", page=page_name(d))
+                    self._helper.say("%s could not be searched: %s" % (page_name(d), exc), failed=True)
         self._hits = hits
         self._key = key
+        self._following = True
         if self._rb_project.isChecked():
-            if self._closed_search_key() == self._closed_key and self._job is None:
+            if self._closed_search_key() == self._closed_key and not self._helper.running():
                 self._hits = hits + self._closed  # (the closed pages' rows still hold)
-            else:
-                self._start_closed()
+            elif self._start_closed():
+                return True  # (listed with the closed pages' rows from the index)
         self._fill()
         return True
 
@@ -999,15 +1079,13 @@ class FindReplaceDialog(QtWidgets.QDialog):
         self._pos = -1
         n = len(self._hits)
         ro = sum(1 for h in self._hits if h.reason)
-        if self._job is not None:
+        if self._helper.running():
             msg = "%d match%s on the open pages; searching the closed pages…" % (n, "" if n == 1 else "es")
-            self._status.setText(msg)
+            self._helper.say(msg)
         elif not self._ed_find.text():
-            self._status.setText("")
+            self._helper.say("")
         elif not n:
-            self._status.setText(
-                ("'%s' was not found. %s" % (self._ed_find.text(), self._closed_note)).strip()
-            )
+            self._helper.say(("'%s' was not found. %s" % (self._ed_find.text(), self._closed_note)).strip())
         else:
             pages = len({h.path if isinstance(h, ClosedHit) else id(h.doc) for h in self._hits})
             msg = "%d match%s" % (n, "" if n == 1 else "es")
@@ -1018,7 +1096,7 @@ class FindReplaceDialog(QtWidgets.QDialog):
                 msg += " (%d closed)" % closed
             if ro:
                 msg += "; %d cannot be replaced (grey rows)" % ro
-            self._status.setText((msg + ". " + self._closed_note).strip())
+            self._helper.say((msg + ". " + self._closed_note).strip())
         self._update_buttons()
 
     def becomes(self, h, opts=None) -> str:
@@ -1066,6 +1144,10 @@ class FindReplaceDialog(QtWidgets.QDialog):
         return list(self._hits)
 
     def current_hit(self):
+        """The selected row's hit; None while the list waits to follow changed options (its
+        rows stand for the old ones)."""
+        if self._refresh.isActive():
+            return None
         item = self._list.currentItem()
         if item is None:
             return None
@@ -1076,7 +1158,7 @@ class FindReplaceDialog(QtWidgets.QDialog):
         if isinstance(h, ClosedHit):
             docs = self._targets() if docs is None else docs
             return len(docs) + h.rank, h.index
-        idx = FR._resolve(h.doc, h) if h.po is not None else -1
+        idx = FR.resolve_hit(h.doc, h) if h.po is not None else -1
         return self._rank(h.doc, docs), -1 if idx is None else idx
 
     def _ref_order(self, docs) -> tuple:
@@ -1085,7 +1167,7 @@ class FindReplaceDialog(QtWidgets.QDialog):
         doc, po, idx = self._last
         if po is None:
             return self._rank(doc, docs), -1
-        i = FR._resolve(doc, FR.Hit(doc, po, idx, "", "", "", "", ""))
+        i = FR.resolve_hit(doc, FR.Hit(doc, po, idx, "", "", "", "", ""))
         return self._rank(doc, docs), idx if i is None else i
 
     def find_next(self, backward: bool | None = None) -> None:
@@ -1093,14 +1175,14 @@ class FindReplaceDialog(QtWidgets.QDialog):
         the page changed since the list was made -- from the last object
         shown, in the chosen direction; wraps at the end."""
         if not self._ed_find.text():
-            self._status.setText("Type the text to find.")
+            self._helper.say("Type the text to find.")
             return
         if backward is None:
             backward = self._rb_back.isChecked()
         fresh = self._run()
         if not self._hits:
             self._cursor = -1
-            if self._job is not None:
+            if self._helper.running():
                 # (the closed pages' rows come later: go to the first then)
                 self._after_search = lambda b=backward: self.find_next(b)
             return
@@ -1112,7 +1194,7 @@ class FindReplaceDialog(QtWidgets.QDialog):
         wrapped = pos < 0 or pos >= n
         self._go(pos % n)
         if wrapped and n > 1:
-            self._status.setText(
+            self._helper.say(
                 "Search wrapped to the %s. %s" % ("end" if backward else "start", self._row_status())
             )
 
@@ -1147,7 +1229,7 @@ class FindReplaceDialog(QtWidgets.QDialog):
                     names = {h.key.lower()}
                 else:
                     names = {n.lower() for n in h.params}
-                g = FR._resolve(h.doc, FR.Hit(h.doc, h.genie_po, h.genie, "", "", "", "", ""))
+                g = FR.resolve_hit(h.doc, FR.Hit(h.doc, h.genie_po, h.genie, "", "", "", "", ""))
                 if g == genie[0] and names <= genie[1]:
                     continue
             return k
@@ -1169,7 +1251,7 @@ class FindReplaceDialog(QtWidgets.QDialog):
         self._list.setCurrentItem(item)  # -> _on_row
         self._list.scrollToItem(item)
         self.go_to()
-        self._status.setText(self._row_status())
+        self._helper.say(self._row_status())
 
     def _on_row(self, item, _prev) -> None:
         if item is not None:
@@ -1186,16 +1268,16 @@ class FindReplaceDialog(QtWidgets.QDialog):
         if isinstance(h, ClosedHit):
             h = self._live_hit(h)
             if h is None:
-                self._status.setText(getattr(self, "_live_why", ""))
+                self._helper.say(getattr(self, "_live_why", ""))
                 return
         if h.po is None:
             self._last = (h.doc, None, -1)
             self._cursor = -1
             self.found.emit(h.doc, -1)
             return
-        i = FR._resolve(h.doc, h)
+        i = FR.resolve_hit(h.doc, h)
         if i is None:
-            self._status.setText("That object is no longer on the page. Click Find All to search again.")
+            self._helper.say("That object is no longer on the page. Click Find All to search again.")
             return
         self._last = (h.doc, h.po, i)
         self._cursor = i
@@ -1208,11 +1290,11 @@ class FindReplaceDialog(QtWidgets.QDialog):
         if isinstance(h, ClosedHit):
             h = self._live_hit(h)
             if h is None:
-                self._status.setText(getattr(self, "_live_why", ""))
+                self._helper.say(getattr(self, "_live_why", ""))
                 return
-        i = FR._resolve(h.doc, h) if h.po is not None else -1
+        i = FR.resolve_hit(h.doc, h) if h.po is not None else -1
         if h.po is not None and i is None:
-            self._status.setText("That object is no longer on the page. Click Find All to search again.")
+            self._helper.say("That object is no longer on the page. Click Find All to search again.")
             return
         self.propertiesRequested.emit(h.doc, -1 if i is None else i, h)
 
@@ -1246,10 +1328,10 @@ class FindReplaceDialog(QtWidgets.QDialog):
                 % (rep.read_only, "" if rep.read_only == 1 else "s")
             )
         if rep.gone:
-            parts.append("%d field%s no longer held the text." % (rep.gone, "" if rep.gone == 1 else "s"))
+            parts.append("%s no longer held the text." % (plural(rep.gone, "field")))
         parts.extend(rep.problems[:3])
         if len(rep.problems) > 3:
-            parts.append("… and %d more problem(s)." % (len(rep.problems) - 3))
+            parts.append("And %s." % plural(len(rep.problems) - 3, "more problem"))
         parts.extend(rep.notes[:3])
         return " ".join(parts)
 
@@ -1257,7 +1339,7 @@ class FindReplaceDialog(QtWidgets.QDialog):
         """Replace the text in the selected row's field (Replace), then go to
         the next match. With no row selected it finds the next one first."""
         if not self._ed_find.text():
-            self._status.setText("Type the text to find.")
+            self._helper.say("Type the text to find.")
             return
         self._run()
         h = self.current_hit()
@@ -1266,28 +1348,28 @@ class FindReplaceDialog(QtWidgets.QDialog):
             return
         if isinstance(h, ClosedHit):
             if h.reason:
-                self._status.setText("This field cannot be replaced: " + h.reason)
+                self._helper.say("This field cannot be replaced: " + h.reason)
                 return
             h = self._live_hit(h)
             if h is None:
-                self._status.setText(getattr(self, "_live_why", ""))
+                self._helper.say(getattr(self, "_live_why", ""))
                 return
         if h.reason:
-            self._status.setText("This field cannot be replaced: " + h.reason)
+            self._helper.say("This field cannot be replaced: " + h.reason)
             if len(self._hits) > 1:
                 self._go((self._pos + 1) % len(self._hits))
             return
-        with _busy():
+        with wait_cursor():
             rep = FR.replace_hits(h.doc, [h], self.options(), self._ed_repl.text(), label="replace")
         if rep.docs:
             self.replaced.emit(list(rep.docs))
         msg = self._report(rep, "Replace")
-        i = FR._resolve(h.doc, h)
+        i = FR.resolve_hit(h.doc, h)
         self._last = (h.doc, h.po, h.index if i is None else i)
         genie = None
         if h.via_genie and h.genie is not None:
             # (a re-composition makes new records at the same places)
-            g = FR._resolve(h.doc, FR.Hit(h.doc, h.genie_po, h.genie, "", "", "", "", ""))
+            g = FR.resolve_hit(h.doc, FR.Hit(h.doc, h.genie_po, h.genie, "", "", "", "", ""))
             names = [h.key] if h.kind == FR.K_PARAM else list(h.params)
             genie = (h.genie if g is None else g, {n.lower() for n in names})
         self._key = None
@@ -1295,19 +1377,19 @@ class FindReplaceDialog(QtWidgets.QDialog):
         if self._hits:
             pos = self._start_at_or_after(skip=(h.kind, h.key.upper()), genie=genie)
             self._go(pos % len(self._hits))
-        self._status.setText(msg + (" " + self._row_status() if self._hits else ""))
+        self._helper.say(msg + (" " + self._row_status() if self._hits else ""))
 
     def replace_all(self) -> None:
         """Replace the text in every field it is found in (Replace All): one
         undo step per page."""
         if not self._ed_find.text():
-            self._status.setText("Type the text to find.")
+            self._helper.say("Type the text to find.")
             return
         docs = self._targets()
         opts = self.options()
         if self._rb_project.isChecked() and not self._replace_closed_first(opts):
             return
-        with _busy():
+        with wait_cursor():
             rep = FR.replace_all(docs, opts, self._ed_repl.text(), label="replace all")
         if rep.docs:
             self.replaced.emit(list(rep.docs))
@@ -1315,7 +1397,7 @@ class FindReplaceDialog(QtWidgets.QDialog):
         self._key = None
         self._closed_key = None
         self._run()
-        self._status.setText(self._report(rep, "Replace All"))
+        self._helper.say(self._report(rep, "Replace All"))
         self._last_report = rep
         if rep.docs:
             # (told over the page too, with Undo of the page shown)
@@ -1337,12 +1419,14 @@ class FindReplaceDialog(QtWidgets.QDialog):
         """Replace All with 'All pages of the project': the closed pages first, in the
         background (asked first; each changed page backed up and saved); the open pages
         follow when it is done. False = not now (cancelled, or it runs)."""
-        if self._job is not None:
-            self._status.setText("Wait until the closed pages have been searched.")
+        if self._helper.running():
+            self._helper.say("Wait until the closed pages have been searched.")
             return False
         folders = self.project_folders()
         closed = sorted({h.path for h in self._closed})
-        ans = QtWidgets.QMessageBox.question(
+        from ..messages import confirm
+
+        if not confirm(
             self,
             "Replace All",
             "Replace in every page of %s%s? The closed pages%s are changed and saved; each "
@@ -1353,10 +1437,9 @@ class FindReplaceDialog(QtWidgets.QDialog):
                 " and the projects it includes" if self._cb_includes.isChecked() else "",
                 " (%d with matches)" % len(closed) if closed else "",
             ),
-            QtWidgets.QMessageBox.Ok | QtWidgets.QMessageBox.Cancel,
-            QtWidgets.QMessageBox.Ok,
-        )
-        if ans != QtWidgets.QMessageBox.Ok:
+            "Replace All",
+            safe_default=False,
+        ):
             return False
         from ...workers import find_worker as FW
         from ...infra import backups
@@ -1367,7 +1450,7 @@ class FindReplaceDialog(QtWidgets.QDialog):
         in_builder = builder_open_pages()
         self._backup_folder = backups.new_folder("replace")
         self._b_backup.setVisible(False)
-        self._b_log.setVisible(False)
+        self._helper.show_log(False)
         req = {
             "format": FW.FORMAT,
             "mode": "replace",
@@ -1386,34 +1469,25 @@ class FindReplaceDialog(QtWidgets.QDialog):
             skip_paths=self._open_paths,
             label="Replace All in closed pages",
         )
-        job.progress.connect(
-            lambda i, n, name: self._status.setText(
-                self._job_line("Replacing in the closed pages: %d of %d (%s)…" % (i + 1, n, name), i, n)
-            )
-        )
-        job.finished.connect(lambda res: self._replaced_closed(job, res, opts))
-        if not job.start():
-            self._status.setText(
-                "The closed pages could not be changed: the helper process did not start. Open Log says why."
-            )
-            self._b_log.setVisible(True)
-            return False
-        self._job = job
         self._job_stats = RunStats.from_settings()
         self._job_stats.begin_phase("replace", len(closed))
-        self._b_stop.setVisible(True)
+        if not self._helper.run(
+            job,
+            finished=lambda res: self._replaced_closed(res, opts),
+            failed="The closed pages could not be changed.",
+            progress=lambda i, n, name: self._job_line(
+                "Replacing in the closed pages: %d of %d (%s)…" % (i + 1, n, name), i, n
+            ),
+        ):
+            self._helper.show_log(True)
         return False
 
-    def _replaced_closed(self, job, res: dict, opts) -> None:
-        if job is not self._job:
-            return
-        self._job = None
-        self._b_stop.setVisible(False)
+    def _replaced_closed(self, res: dict, opts) -> None:
         if res.get("error"):
-            self._status.setText("Replace All in the closed pages failed: %s" % res["error"])
-            self._b_log.setVisible(True)
+            self._helper.say("Replace All in the closed pages failed: %s" % res["error"], failed=True)
+            self._helper.show_log(True)
             return
-        with _busy():
+        with wait_cursor():
             rep = FR.replace_all(self._targets(), opts, self._ed_repl.text(), label="replace all")
         if rep.docs:
             self.replaced.emit(list(rep.docs))
@@ -1438,7 +1512,7 @@ class FindReplaceDialog(QtWidgets.QDialog):
             self._b_backup.setVisible(bool(self._backup_folder) and os.path.isdir(self._backup_folder))
         if res.get("failed"):
             notes.append("Could not change: %s." % "; ".join(res["failed"][:3]))
-            self._b_log.setVisible(True)
+            self._helper.show_log(True)
         if res.get("open_in_builder"):
             notes.append("Left (open in the Graphics Builder): %s." % ", ".join(res["open_in_builder"]))
         if res.get("stopped"):
@@ -1447,7 +1521,7 @@ class FindReplaceDialog(QtWidgets.QDialog):
         self._key = None
         self._closed_key = None
         self._run()
-        self._status.setText(" ".join([self._report(rep, "Replace All")] + notes))
+        self._helper.say(" ".join([self._report(rep, "Replace All")] + notes))
 
     # -- one way back from a Replace All ------------------------------------------------
     def _remember_replace(self, docs, backup: str, saved: list) -> None:
@@ -1482,7 +1556,7 @@ class FindReplaceDialog(QtWidgets.QDialog):
             open_now = {os.path.splitext(os.path.basename(p))[0].lower() for p in self._open_paths()}
             names = [n for n in u["saved"] if n.lower() not in open_now]
             kept += [n for n in u["saved"] if n.lower() in open_now]
-            with _busy():
+            with wait_cursor():
                 rr = updatepages.restore_backup(
                     u["backup"], names, builder_open=builder_open_pages(), libraries=False
                 )
@@ -1502,8 +1576,8 @@ class FindReplaceDialog(QtWidgets.QDialog):
             parts.append("Not undone (changed since, or open now): %s." % ", ".join(kept[:5]))
         if failed:
             parts.append("Could not put back: %s." % "; ".join(failed[:3]))
-            self._b_log.setVisible(True)
-        self._status.setText(" ".join(parts))
+            self._helper.show_log(True)
+        self._helper.say(" ".join(parts))
 
     # -- the Options section -------------------------------------------------------------
     def _show_options(self, on: bool) -> None:
@@ -1558,8 +1632,5 @@ class FindReplaceDialog(QtWidgets.QDialog):
 
     def done(self, r) -> None:
         self._save_texts()  # (the next Find / Replace starts from them)
-        # (a closed-pages search stops with the window)
-        if self._job is not None:
-            self._job.stop()
-            self._job = None
+        self._helper.close()  # (a closed-pages search stops with the window)
         super().done(r)

@@ -200,8 +200,7 @@ def test_scrub_label_drags_the_value_and_commits_once():
     from ctgedit.ui.number_field import ScrubLabel
 
     f, got = _field(lo=-1000, hi=1000, value=10)
-    seen = []
-    lab = ScrubLabel("X", f, preview=seen.append)
+    lab = ScrubLabel("X", f)
     lab.drag_by(20)  # 1 per 2 px
     assert f.value() == 20 and got == []
     lab.drag_by(4, QtCore.Qt.ShiftModifier)  # Shift: 10 per 2 px
@@ -209,7 +208,7 @@ def test_scrub_label_drags_the_value_and_commits_once():
     lab.drag_by(8, QtCore.Qt.AltModifier)  # Alt: 1 per 8 px
     assert f.value() == 41
     lab.finish(True)
-    assert got == [41] and seen[-1] is None and 41 in seen
+    assert got == [41]
 
 
 def test_scrub_escape_puts_the_value_back():
@@ -237,9 +236,9 @@ def test_scrub_label_can_be_off():
 def test_optional_spin_is_a_number_field():
     _app()
     from ctgedit.ui.number_field import NumberField
-    from ctgedit.ui.objprops.fields import _OptionalSpin
+    from ctgedit.ui.objprops.fields import OptionalSpin
 
-    sp = _OptionalSpin(0, 100, 50, " %")
+    sp = OptionalSpin(0, 100, 50, " %")
     assert isinstance(sp, NumberField)
     assert sp.key_value() is None and sp.text() == "(not set)"
     sp.stepBy(1)

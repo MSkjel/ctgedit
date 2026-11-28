@@ -6,13 +6,14 @@ from ..style.theme import sp as _sp  # (the spacing scale)
 from typing import Optional, Tuple
 
 from PySide6 import QtCore, QtGui, QtWidgets
+from ...infra.logsetup import note_exception as _note_exc
 
 NO_COLOUR = 0xFF000000
 #: what the Transparent choice writes (citect.pal's 'Transparent' entry)
 TRANSPARENT = 0xFFFFFFFF
 
 
-def _qcolor(c: Optional[int]) -> Optional[QtGui.QColor]:
+def qcolor(c: Optional[int]) -> Optional[QtGui.QColor]:
     if c is None or (c >> 24) & 0xFF == 0xFF:
         return None
     return QtGui.QColor((c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF)
@@ -21,6 +22,7 @@ def _qcolor(c: Optional[int]) -> Optional[QtGui.QColor]:
 try:
     from ..colour_picker import ColourButton as _ColourButton
 except Exception:  # noqa: BLE001 -- only when the picker module cannot load
+    _note_exc("objprops.colour_field.import")
     _ColourButton = QtWidgets.QToolButton
 
 
@@ -42,7 +44,7 @@ class _Swatch(_ColourButton):
         self._off = off
         on = NO_COLOUR if c is None else c
         self.set_pair((on, on if off is None else off))
-        if c is None or _qcolor(c) is None:
+        if c is None or qcolor(c) is None:
             self.setToolTip("Transparent")
 
 

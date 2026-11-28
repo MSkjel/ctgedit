@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+from ..infra.paths import path_key
+
+from ..format.fileio import file_stamp, find_ci
+
 import bisect
 import heapq
 import os
 import re
 import threading
+import time
 from array import array
 from collections import OrderedDict
 from collections.abc import Mapping
@@ -15,8 +20,8 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from ..format.cnum import is_digits
 from ..format import dbfcols
-from ..format.textcodec import CODEC
 from . import tagscope as TS
+from ..infra.logsetup import note_exception as _note_exc
 
 
 def default_project() -> str:
@@ -27,7 +32,7 @@ def default_project() -> str:
         from .citect_config import live_user_dir
 
         user = live_user_dir()
-    except Exception:  # noqa: BLE001 -- no registry / unreadable ini
+    except Exception:  # noqa: BLE001 -- swallow-ok: no registry / unreadable ini
         user = None
     if user:
         path = os.path.join(user, "Example")
@@ -46,15 +51,6 @@ def __getattr__(name: str):
 
 #: pages.DBF column widths per table (path -> ((path, mtime, size), widths))
 _WIDTHS_CACHE: dict = {}
-
-
-def _stamp_dbf_date(head: bytearray) -> None:
-    """dBASE header bytes 1-3 = date of last update (YY since 1900, MM, DD),
-    stamped by every dBASE writer."""
-    from ..infra import identity
-
-    d = identity.today()
-    head[1], head[2], head[3] = d.year - 1900, d.month, d.day
 
 
 @dataclass(frozen=True)
@@ -200,135 +196,63 @@ class Project:
     # row when the page is SAVED; EditableDocument stages the edits the same way.
 
     def _table_path(self, name: str) -> str | None:
-        p = os.path.join(self.path, name)
-        return p if os.path.exists(p) else None
+        return find_ci(self.path, name)
 
     def page_rows(self) -> list[dict]:
         """All pages.DBF rows (char fields, stripped). [] when absent."""
         from ..format.projects import read_dbf_rows
 
-        p = self._table_path("pages.DBF") or self._table_path("pages.dbf")
+        p = self._table_path("pages.DBF")
         return read_dbf_rows(p) if p else []
 
     def page_names(self) -> list[str]:
         return [r.get("NAME", "").strip() for r in self.page_rows() if r.get("NAME", "").strip()]
 
-    # pages.DBF NAME is C(64) on every shipped table: a longer name is stored
-    # truncated, so it must be matched truncated (else every save would append a
-    # duplicate registration row)
-    NAME_LEN = 64
-
     def page_record(self, page_name: str) -> dict | None:
-        low = page_name.strip().lower()[: self.NAME_LEN]
+        from ..format.projects import PAGE_NAME_LEN
+
+        # (a longer name is stored truncated: matched so, a save appends no second row)
+        low = page_name.strip().lower()[:PAGE_NAME_LEN]
         for r in self.page_rows():
             if r.get("NAME", "").strip().lower() == low:
                 return r
         return None
 
     def update_page_record(self, page_name: str, updates: dict) -> bool:
-        """Patch fields of one pages.DBF row in place."""
-        p = self._table_path("pages.DBF") or self._table_path("pages.dbf")
+        """Patch fields of one pages.DBF row in place (the last live row of the name, as the
+        register and a Save As take it); its other bytes stay as they are."""
+        from ..format.dbf import Dbf
+
+        p = self._pages_path()
         if not p or not updates:
             return False
-        import struct as _struct
-        from ..format import journal
-        from ..format.textcodec import encode_field, truncate
-
-        encoded = {
-            str(k).upper(): encode_field(v, "the %s field of pages.DBF" % str(k).upper())
-            for k, v in updates.items()
-        }
-        with journal.open_patch(p) as fh:
-            head = fh.read(32)
-            if len(head) < 32:
+        with Dbf(p) as d:
+            if "NAME" not in d.fmap:
                 return False
-            nrec = _struct.unpack_from("<I", head, 4)[0]
-            hdr_size = _struct.unpack_from("<H", head, 8)[0]
-            rec_size = _struct.unpack_from("<H", head, 10)[0]
-            fh.seek(32)
-            desc = fh.read(hdr_size - 32)
-            fields = {}
-            off, pos = 0, 1
-            while off + 32 <= len(desc) and desc[off] != 0x0D:
-                fname = desc[off : off + 11].split(b"\x00")[0].decode(CODEC, "replace").strip().upper()
-                ln = desc[off + 16]
-                fields[fname] = (pos, ln)
-                pos += ln
-                off += 32
-            if "NAME" not in fields:
+            live = [i for i, r in d.find("NAME", page_name.strip()) if r[:1] != b"*"]
+            if not live:
                 return False
-            low = page_name.strip().lower()
-            # (the LAST live row of the name, as the register and a Save As take it)
-            for i in range(nrec - 1, -1, -1):
-                base = hdr_size + i * rec_size
-                fh.seek(base)
-                rec = fh.read(rec_size)
-                if len(rec) < rec_size or rec[0] == 0x2A:
-                    continue
-                noff, nln = fields["NAME"]
-                if rec[noff : noff + nln].decode(CODEC, "replace").strip().lower() != low:
-                    continue
-                for key, raw in encoded.items():
-                    f = fields.get(key)
-                    if f is None:
-                        continue
-                    foff, fln = f
-                    enc = truncate(raw, fln).ljust(fln)
-                    fh.seek(base + foff)
-                    fh.write(enc)
-                head = bytearray(head)
-                _stamp_dbf_date(head)
-                fh.seek(0)
-                fh.write(bytes(head))
-                return True
-        return False
+            for key, value in updates.items():
+                if str(key).upper() in d.fmap:
+                    d.set_field(live[-1], str(key), str(value))
+            d.touch()
+        return True
 
     def add_page_record(self, page_name: str, fields: dict | None = None) -> bool:
-        """Register a new page in pages.DBF."""
-        p = self._table_path("pages.DBF") or self._table_path("pages.dbf")
+        """Register a new page in pages.DBF (as CtDraw registers one: TITLE = NAME,
+        IGNOREVQ and CINHERIT blank)."""
+        from ..format.dbf import Dbf
+
+        p = self._pages_path()
         if not p or self.page_record(page_name) is not None:
             return False
-        import struct as _struct
-        from ..format import journal
-        from ..format.textcodec import encode_field, truncate
-
-        # CtDraw's own registration of a new page writes TITLE = NAME and
-        # leaves IGNOREVQ / CINHERIT blank
-        values = {"NAME": page_name, "TITLE": page_name}
-        for k, v in (fields or {}).items():
-            values[str(k).upper()] = str(v)
-        encoded = {k: encode_field(v, "the %s field of pages.DBF" % k) for k, v in values.items()}
-        with journal.open_patch(p) as fh:
-            head = bytearray(fh.read(32))
-            if len(head) < 32:
+        row = {"NAME": page_name, "TITLE": page_name}
+        row.update({str(k).upper(): str(v) for k, v in (fields or {}).items()})
+        with Dbf(p) as d:
+            if "NAME" not in d.fmap:
                 return False
-            nrec = _struct.unpack_from("<I", head, 4)[0]
-            hdr_size = _struct.unpack_from("<H", head, 8)[0]
-            rec_size = _struct.unpack_from("<H", head, 10)[0]
-            fh.seek(32)
-            desc = fh.read(hdr_size - 32)
-            fmap = {}
-            off, pos = 0, 1
-            while off + 32 <= len(desc) and desc[off] != 0x0D:
-                fname = desc[off : off + 11].split(b"\x00")[0].decode(CODEC, "replace").strip().upper()
-                fmap[fname] = (pos, desc[off + 16])
-                pos += desc[off + 16]
-                off += 32
-            if "NAME" not in fmap or pos > rec_size:
-                return False
-            rec = bytearray(b" " * rec_size)
-            for k, raw in encoded.items():
-                f = fmap.get(k)
-                if f is None:
-                    continue
-                foff, fln = f
-                rec[foff : foff + fln] = truncate(raw, fln).ljust(fln)
-            fh.seek(hdr_size + nrec * rec_size)
-            fh.write(bytes(rec) + b"\x1a")
-            _struct.pack_into("<I", head, 4, nrec + 1)
-            _stamp_dbf_date(head)
-            fh.seek(0)
-            fh.write(bytes(head))
+            d.append([d.encode(row)])
+            d.touch()
         return True
 
     def copy_page_record(self, src_dir: str, src_name: str, new_name: str) -> bool:
@@ -439,7 +363,7 @@ class Project:
         return out
 
     def _pages_path(self) -> str | None:
-        return self._table_path("pages.DBF") or self._table_path("pages.dbf")
+        return self._table_path("pages.DBF")
 
     def has_page_table(self) -> bool:
         """The folder is a project that registers pages (it has pages.DBF)."""
@@ -457,7 +381,7 @@ class Project:
             return {}
         try:
             st = os.stat(p)
-            key = (os.path.normcase(os.path.abspath(p)), st.st_mtime_ns, st.st_size)
+            key = (path_key(p), st.st_mtime_ns, st.st_size)
             hit = _WIDTHS_CACHE.get(key[0])
             if hit is not None and hit[0] == key:
                 return dict(hit[1])
@@ -467,21 +391,6 @@ class Project:
             return {}
         _WIDTHS_CACHE[key[0]] = (key, widths)
         return dict(widths)
-
-    def page_keyboard_rows(self, page_name: str, page_wide: bool = False) -> list[dict]:
-        """pgkey.DBF rows for one page (compiled keyboard commands);
-        ``page_wide`` = only the page-wide commands (blank AN)."""
-        from ..format.projects import read_dbf_rows
-
-        p = self._table_path("pgkey.DBF") or self._table_path("pgkey.dbf")
-        if not p:
-            return []
-        low = page_name.strip().lower()
-        return [
-            r
-            for r in read_dbf_rows(p)
-            if r.get("PAGE", "").strip().lower() == low and not (page_wide and r.get("AN", "").strip())
-        ]
 
     def copy_page_keyboard_rows(self, src_dir: str, src_name: str, new_name: str) -> int:
         """Save As: the source page's page-wide keyboard commands (blank-AN
@@ -519,7 +428,7 @@ def delete_page(project_dir: str, page_name: str, *, files: bool = True) -> dict
         exts = (".rdb",) + ((".ctg", ".ctF", ".ctf") if files else ())
         seen = set()
         for ext in exts:
-            p = pgregister._find_file(project_dir, name + ext)
+            p = find_ci(project_dir, name + ext)
             if p is None or os.path.normcase(p) in seen:
                 continue
             seen.add(os.path.normcase(p))
@@ -604,7 +513,7 @@ def rename_pages(
     rep["compstate"] = None
     spelt = []
     for old, new in pairs:
-        f = pgregister.find_file(project_dir, old + ".ctg")
+        f = find_ci(project_dir, old + ".ctg")
         if f is None:
             raise FileNotFoundError("page %s is not in %s" % (old, project_dir))
         old = os.path.splitext(os.path.basename(f))[0]  # (as the file spells it)
@@ -617,8 +526,8 @@ def rename_pages(
     if len(leaving) < len(spelt) or len({n.lower() for _o, n in spelt}) < len(spelt):
         raise ValueError("two pages of %s are given the same name" % project)
     renames = {o.lower(): n for o, n in spelt}
-    here = os.path.normcase(os.path.abspath(project_dir))
-    others = [d for d in link_dirs if os.path.normcase(os.path.abspath(d)) != here]
+    here = path_key(project_dir)
+    others = [d for d in link_dirs if path_key(d) != here]
     steps = ["page files", "pages", "page tables"] + [
         os.path.basename(os.path.normpath(d)) for d in [project_dir] + others
     ]
@@ -635,14 +544,14 @@ def rename_pages(
         locks.enter_context(projectlock.project(project_dir))
         for _o, n in spelt:
             if n.lower() not in leaving and (
-                pgregister.find_file(project_dir, n + ".ctg") is not None or proj.page_record(n) is not None
+                find_ci(project_dir, n + ".ctg") is not None or proj.page_record(n) is not None
             ):
                 raise FileExistsError("project %s already has a page %s" % (project, n))
         # every file goes to a spare name first, then to its own: a swap needs no third page
         moves = []
         for k, (o, n) in enumerate(spelt):
             for ext in (".ctg", ".ctF"):
-                src = pgregister.find_file(project_dir, o + ext)
+                src = find_ci(project_dir, o + ext)
                 if src is not None:
                     spare = os.path.join(project_dir, "~ctgedit-rename-%d%s" % (k, os.path.splitext(src)[1]))
                     moves.append((src, spare, os.path.join(project_dir, n + os.path.splitext(src)[1])))
@@ -696,7 +605,7 @@ def rename_pages(
             if pendingrows.marked(old_ctg) is not None:
                 pendingrows.clear(old_ctg)
                 pendingrows.mark(new_ctg)
-            rdb = pgregister.find_file(project_dir, o + ".rdb")
+            rdb = find_ci(project_dir, o + ".rdb")
             if rdb is not None:
                 try:
                     os.remove(rdb)
@@ -745,11 +654,7 @@ class TrendTag:
     eng_units: str = ""
 
 
-def _find_table(folder: str, name: str) -> str | None:
-    return TS.find_table(folder, name)
-
-
-def _cached_rows(path: str) -> list:
+def cached_rows(path: str) -> list:
     """read_dbf_rows, kept until the file changes (format.dbfcols; the rows are
     shared: read-only)."""
     if not os.path.exists(path):
@@ -778,6 +683,7 @@ def chain_dirs(project_dir: str) -> list[str]:
     try:
         return [project_dir] + include_search_dirs(project_dir)
     except Exception:  # noqa: BLE001 -- a broken registry still has the project
+        _note_exc("project.chain_dirs", project=project_dir)
         return [project_dir]
 
 
@@ -1621,6 +1527,7 @@ def tag_index(
             try:
                 go = progress(n, len(paths), p.name)
             except Exception:  # noqa: BLE001 -- a progress report never stops the read
+                _note_exc("project.tag_index")
                 go = None
             if go is False:
                 # (the Tags panel's Cancel: nothing half read is kept as the scope's index)
@@ -1646,12 +1553,32 @@ def tag_index(
     return idx
 
 
+#: cached_tag_index's tag scopes: (folder, root choice, extra library folders) ->
+#: (time.monotonic(), the scope). For FRESH_FOR seconds the scope stands without its
+#: topology being read again (each key press in an expression field asks); its tables are
+#: statted on every ask
+_FRESH_MEMO: Dict[tuple, tuple] = {}
+FRESH_FOR = 1.0
+
+
 def cached_tag_index(project_dir: str) -> Optional[TagIndex]:
-    """The page folder's whole-scope tag index when it is built and current, else None."""
-    try:
-        sc = TS.scope(project_dir)
-    except Exception:  # noqa: BLE001
-        return None
+    """The page folder's whole-scope tag index when it is built and current, else None (a
+    change of the projects in the scope is seen within :data:`FRESH_FOR` seconds, a change
+    of their tag tables at once)."""
+    mkey = (project_dir, TS.chosen_root(project_dir), os.environ.get("CTG_LIB_PATH", ""))
+    now = time.monotonic()
+    m = _FRESH_MEMO.get(mkey)
+    if m is not None and now - m[0] < FRESH_FOR:
+        sc = m[1]
+    else:
+        try:
+            sc = TS.scope(project_dir)
+        except Exception:  # noqa: BLE001
+            _note_exc("project.cached_tag_index", project=project_dir)
+            return None
+        if len(_FRESH_MEMO) > 64:
+            _FRESH_MEMO.clear()
+        _FRESH_MEMO[mkey] = (now, sc)
     sig = tuple(st for _p, _v, _l, st in _scope_table_paths(sc))
     with _INDEX_LOCK:
         hit = _INDEXES.get((sc.key, False))
@@ -1861,7 +1788,7 @@ def _chain_table(project_dir: str, table: str) -> tuple:
     def build(_sc, tables):
         out, seen = [], set()
         for p, path in tables:
-            for r in _cached_rows(path):
+            for r in cached_rows(path):
                 name = r.get("NAME", "")
                 if name and name.lower() not in seen:
                     seen.add(name.lower())
@@ -1952,7 +1879,7 @@ def menu_rows(project_dir: str) -> tuple:
     def build(_sc, tables):
         out = []
         for p, path in tables:
-            for r in _cached_rows(path):
+            for r in cached_rows(path):
                 out.append(dict(r, PROJECT=p.name))
         return tuple(out)
 
@@ -2100,7 +2027,7 @@ def default_scan_time() -> str:
         from .citect_config import ini_value
 
         v = (ini_value("page", "scantime", "250") or "250").strip()
-    except Exception:  # noqa: BLE001 -- a hint only
+    except Exception:  # noqa: BLE001 -- swallow-ok: a hint only
         v = "250"
     return v if is_digits(v) else "250"
 
@@ -2112,6 +2039,7 @@ def page_area(page_path: str) -> str:
         name = os.path.splitext(os.path.basename(page_path))[0]
         rec = Project(os.path.dirname(os.path.abspath(page_path))).page_record(name)
     except Exception:  # noqa: BLE001 -- a hint only
+        _note_exc("project.page_area", page=page_path)
         return ""
     return (rec or {}).get("AREA", "").strip()
 
@@ -2125,8 +2053,8 @@ def page_area(page_path: str) -> str:
 _HELP_FORMS = ("help", "scadahelp")
 
 
-def _bin_dirs() -> list[str]:
-    from .cicode_catalog import _bin_dirs as dirs
+def bin_dirs() -> list[str]:
+    from .cicode_catalog import bin_dirs as dirs
 
     return dirs()
 
@@ -2139,8 +2067,8 @@ def form_tables() -> dict[str, str]:
     "<table>", <INDEX|NONINDEX|WRITEINDEXED> ...`` lines of the install's
     Bin\\citect.frm: 'variable tags' -> 'variable', 'pages' -> 'pages',
     'contype' -> 'contype', 'labels' -> 'labels', 'equipment' -> 'equip')."""
-    for d in _bin_dirs():
-        p = _find_table(d, "citect.frm")
+    for d in bin_dirs():
+        p = find_ci(d, "citect.frm")
         if not p:
             continue
         try:
@@ -2303,7 +2231,7 @@ def list_values(project_dir: str, list_form: str, list_field: str, list_filter: 
     tables = TS.scope(project_dir).tables(table.lower() + ".dbf")
     if not tables:
         return None
-    sig = tuple(TS.table_stamp(p) for _pr, p in tables)
+    sig = tuple(file_stamp(p) for _pr, p in tables)
     key = (sig, list_field.lower(), list_filter)
     hit = _LIST_CACHE.get(key)
     if hit is not None:
@@ -2349,11 +2277,11 @@ def _help_values(list_field: str, list_filter: str) -> list[str] | None:
         return None
     want = list_field.strip().lower()
     flt = (list_filter or "").strip().lower()
-    for d in _bin_dirs():
+    for d in bin_dirs():
         out = []
         for name in ("scadahelp.dbf", "help.dbf"):
-            p = _find_table(d, name)
-            for r in _cached_rows(p) if p else []:
+            p = find_ci(d, name)
+            for r in cached_rows(p) if p else []:
                 if r.get("TYPE", "").strip().lower() != want:
                     continue
                 f = r.get("FILTER", "").strip().lower()
@@ -2398,6 +2326,7 @@ def _clear_index_tables() -> None:
 
 
 _caches.register("project.tag_indexes", _INDEXES, clear=_clear_index_tables, on=("refresh", "tests"))
+_caches.register("project.index_scopes", _FRESH_MEMO, on=("refresh", "tests"))
 _caches.register("project.tag_formats", _FORMATS, clear=_clear_index_tables, on=("refresh", "tests"))
 _caches.register("project.scope_lists", _SCOPE_LISTS, clear=_clear_index_tables, on=("refresh", "tests"))
 _caches.register("project.form_tables", _FORM_TABLES, on=("refresh", "tests"))

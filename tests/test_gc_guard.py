@@ -126,7 +126,7 @@ def test_the_editor_window_installs_it():
         t = gcguard._state["timer"]
         assert t is not None and t.isActive()
     finally:
-        MainWindow._instances.remove(w)
+        MainWindow.instances.remove(w)
         w.deleteLater()
         app.processEvents()
         gcguard.uninstall()
@@ -150,7 +150,7 @@ def test_ui_worker_threads_install_it_first(monkeypatch, tmp_path):
 
         monkeypatch.setattr(expression, "_WARMED", set())
         nowhere = str(tmp_path / "no_project")
-        expression._warm_tags(nowhere)
+        expression.warm_tags(nowhere)
         from ctgedit.io import cicode_catalog
 
         monkeypatch.setattr(cicode_catalog, "_PRELOADED", set())

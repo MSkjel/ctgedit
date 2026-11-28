@@ -2,6 +2,13 @@
 
 from __future__ import annotations
 
+import tempfile
+
+from .infra.paths import lib_path_dirs, path_key
+
+
+from .format.projects import is_project_dir
+
 import bisect
 import hashlib
 import weakref
@@ -35,7 +42,6 @@ from .editing_base import (
     Sequence,
     struct,
     SymbolSetEditing,
-    tempfile,
     textcodec,
     Tuple,
     UNDO_KEEP_MIN,
@@ -63,26 +69,16 @@ from .editing_base import (
     USER_MARKED_KEYS,  # noqa: F401 (re-exported)
 )
 from .editing_base import (  # noqa: F401  (the private names, re-exported)
-    _CICODE_RESERVED,
-    _Command,
-    _ForestNode,
-    _LIBRARY_GENERATION,
-    _NAME_FORBIDDEN,
-    _check_page_name,
-    _codes,
-    _command_bytes,
-    _ctf_verdict,
-    _find_options,
-    _fresh_identity,
-    _identity_state,
-    _ini_back_color,
-    _name_key,
-    _page_resolver,
-    _parse_object,
-    _prune_link_table,
-    _rename_header,
-    _set_identity_state,
-    _sha1,
+    Command,
+    LIBRARY_GENERATION,
+    check_page_name,
+    command_bytes,
+    ctf_verdict,
+    fresh_identity,
+    name_key,
+    parse_object,
+    prune_link_table,
+    sha1,
 )
 from .doc.geometry import GeometryEdits
 from .doc.properties import PropertyEdits
@@ -91,6 +87,7 @@ from .doc.genieswap import GenieSwapEdits
 from .doc.structure import StructureEdits
 from .doc.pageops import PageEdits
 from .doc.history import HistoryAndSave
+from .infra.logsetup import note_exception as _note_exc
 
 
 def _rising_run(pairs: list) -> list:
@@ -135,10 +132,10 @@ class EditableDocument(
     # the file could not be written when it was opened (read-only attribute,
     # os.access W_OK): the editor saves such a page with Save As
     read_only: bool = False
-    _undo: List[_Command] = field(default_factory=list)
+    _undo: List[Command] = field(default_factory=list)
     #: what the editor window keeps about this document (DocumentUiState)
     ui: DocumentUiState = field(default_factory=DocumentUiState, repr=False)
-    _redo: List[_Command] = field(default_factory=list)
+    _redo: List[Command] = field(default_factory=list)
 
     _project_cache: object = None
 
@@ -214,7 +211,7 @@ class EditableDocument(
                 "%s is damaged (%s) and cannot be shown (%s: %s). Restore it from a "
                 "backup." % (os.path.basename(path), "; ".join(doc.damage), type(e).__name__, e)
             ) from e
-        doc._disk_stamp = doc._stamp(path)
+        doc._disk_stamp = doc.disk_stamp(path)
         doc.read_only = cls.file_read_only(path)
         doc._open_sha1 = hashlib.sha1(data).digest()  # (genie_noop_key)
         doc._composite_links_opened(data)
@@ -235,7 +232,7 @@ class EditableDocument(
             raise ValueError("%s: the data holds no page" % os.path.basename(path))
         doc._records_only = bool(records_only)
         doc._derive(fresh=True)
-        doc._disk_stamp = doc._stamp(path)
+        doc._disk_stamp = doc.disk_stamp(path)
         doc.read_only = cls.file_read_only(path)
         doc._open_sha1 = hashlib.sha1(data).digest()  # (genie_noop_key)
         doc._composite_links_opened(data)
@@ -255,7 +252,7 @@ class EditableDocument(
             return
         path = self.path
         pdir = os.path.dirname(os.path.abspath(path))
-        if not any(os.path.exists(os.path.join(pdir, n)) for n in ("pages.DBF", "pages.dbf")):
+        if not is_project_dir(pdir):
             return
         ctf = path[:-1] + "F" if path.lower().endswith(".ctg") else None
         if not ctf or not os.path.exists(ctf):
@@ -270,7 +267,7 @@ class EditableDocument(
             return
         # the bytes the verdict is about, by their sha1 (not kept: a page and
         # its .ctF are megabytes)
-        box = {"ctg": _sha1(data), "ctf": _sha1(ctf_b), "ok": None}
+        box = {"ctg": sha1(data), "ctf": sha1(ctf_b), "ok": None}
         box["thread"] = CtfPrecheck(box, path, resolver=self._resolver)
         self._ctf_pre = box
 
@@ -307,12 +304,12 @@ class EditableDocument(
         (waits for a running check process; computes it when the process was
         never started or failed), else None."""
         box = getattr(self, "_ctf_pre", None)
-        if not box or box["ctg"] != _sha1(previous) or box["ctf"] != _sha1(old_ctf):
+        if not box or box["ctg"] != sha1(previous) or box["ctf"] != sha1(old_ctf):
             return None
         return box["thread"].join()
 
     @staticmethod
-    def _stamp(path: str):
+    def disk_stamp(path: str):
         try:
             st = os.stat(path)
             return (st.st_mtime_ns, st.st_size)
@@ -323,14 +320,14 @@ class EditableDocument(
         """True when the page file was rewritten by something else (CtDraw,
         another editor) since it was opened / last saved here."""
         stamp = getattr(self, "_disk_stamp", None)
-        return stamp is not None and self._stamp(self.path) not in (None, stamp)
+        return stamp is not None and self.disk_stamp(self.path) not in (None, stamp)
 
     def adopt_disk_version(self) -> None:
         """The page file as it is now is this tab's baseline (what 'changed on disk' and a
         batch save compare with); the records, the undo history and the unsaved changes stay.
         For a file the editor's own helper wrote from the version this tab read (the chain
         after a genie save: what it changed, the tab changes itself)."""
-        self._disk_stamp = self._stamp(self.path)
+        self._disk_stamp = self.disk_stamp(self.path)
         self._open_identity = file_identity(self.path)
 
     @classmethod
@@ -338,11 +335,7 @@ class EditableDocument(
         """A blank page from a template, written and opened."""
         stem = os.path.splitext(os.path.basename(new_path))[0]
         tdir = os.path.dirname(os.path.abspath(new_path))
-        if len(stem.encode(CODEC, "replace")) > 64 and any(
-            os.path.exists(os.path.join(tdir, n)) for n in ("pages.DBF", "pages.dbf")
-        ):
-            raise ValueError("Citect page names are limited to 64 characters (%r has %d)" % (stem, len(stem)))
-        _check_page_name(stem, tdir)
+        check_page_name(stem, tdir)
         parsed = parse_ctg(template_path)
         if parsed.page is not None:
             # keep the page TEMPLATE (the .ctt placement + its art-stripped
@@ -354,8 +347,8 @@ class EditableDocument(
             parsed.page.objects[:] = [parsed.page.objects[i] for i in keep]
             parsed.page.object_count = len(parsed.page.objects)
             parsed.page.thumbnail = b""
-            _prune_link_table(parsed.page)
-        _fresh_identity(parsed, created=True)
+            prune_link_table(parsed.page)
+        fresh_identity(parsed, created=True)
         data = writer.serialize_ctg(parsed.container, parsed.page, parsed.attributes)
         write_atomic(new_path, data)
         doc = cls.open(new_path)
@@ -386,13 +379,10 @@ class EditableDocument(
         if not stem:
             raise ValueError("Enter a name for the new page.")
         pdir = os.path.dirname(os.path.abspath(new_path))
-        if len(stem.encode(CODEC, "replace")) > 64 and any(
-            os.path.exists(os.path.join(pdir, n)) for n in ("pages.DBF", "pages.dbf")
-        ):
-            raise ValueError("Page names can be at most 64 characters (%s has %d)." % (stem, len(stem)))
+        check_page_name(stem, pdir)
         if os.path.exists(new_path):
             raise FileExistsError("%s already exists. Choose another page name." % os.path.basename(new_path))
-        extra = [p for p in os.environ.get("CTG_LIB_PATH", "").split(os.pathsep) if p]
+        extra = lib_path_dirs()
         res = SymbolResolver.for_page(new_path, extra_paths=extra)
         tpl = TP.resolve_template(res, TP.reference_for(template_ref))
         if tpl is None:
@@ -432,6 +422,7 @@ class EditableDocument(
         try:
             return PR.tag_index(self._project_dir())
         except Exception:  # noqa: BLE001 -- the lists are an aid, never required
+            _note_exc("editing.EditableDocument.tag_index")
             return PR.TagIndex(())
 
     def tag_names(self) -> list[str]:
@@ -445,6 +436,7 @@ class EditableDocument(
                 idx = PR.tag_index(pdir, near_only=True)
             return list(idx.sorted_names(("variable",)))
         except Exception:  # noqa: BLE001
+            _note_exc("editing.EditableDocument.tag_names")
             return []
 
     def tag_entry(self, name: str):
@@ -453,6 +445,7 @@ class EditableDocument(
         try:
             return self.tag_index().get(name)
         except Exception:  # noqa: BLE001
+            _note_exc("editing.EditableDocument.tag_entry", name=name)
             return None
 
     def tag_format(self, name: str) -> Optional[str]:
@@ -466,6 +459,7 @@ class EditableDocument(
 
                 fm = tag_format_lookup(os.path.abspath(self.path or "page.ctg"))
             except Exception:  # noqa: BLE001
+                _note_exc("editing.EditableDocument.tag_format", path=self.path)
                 fm = None
             self._tag_formats = fm if fm is not None else {}
             fm = self._tag_formats
@@ -506,6 +500,7 @@ class EditableDocument(
             try:
                 table = colourpalette.table_for_project(pdir)
             except Exception:  # noqa: BLE001 -- no palette: the classic colours
+                _note_exc("editing.EditableDocument.colour_palette", project=pdir)
                 table = colourpalette.standard_table()
             cached = self._colour_palette = (key, table)
         return cached[1]
@@ -524,7 +519,7 @@ class EditableDocument(
             # changed with no undo entry (the Undo stack would not match it)
             self._restore_edit_snapshot(snap)
             raise
-        self._push_step(_Command(label, do, undo))
+        self._push_step(Command(label, do, undo))
         self._note_edit()
 
     #: counts the edits, Undos and Redos of the page, also those that change
@@ -551,7 +546,7 @@ class EditableDocument(
         total = 0
         cap = _undo_page_cap()
         for k in range(len(undo) - 1, -1, -1):
-            total += _command_bytes(undo[k])
+            total += command_bytes(undo[k])
             if total > cap and len(undo) - k > UNDO_KEEP_MIN and k < lowest:
                 self._saved_point_trimmed(undo[: k + 1])
                 del undo[: k + 1]
@@ -616,6 +611,7 @@ class EditableDocument(
                     self._derive()
                     return
                 except Exception:  # noqa: BLE001 -- keep the old model then
+                    _note_exc("editing.EditableDocument._restore_edit_snapshot")
                     self._derivation = None
             # a new model for the views: they rebuild it all
             self.derive_serial = getattr(self, "derive_serial", 0) + 1
@@ -666,7 +662,7 @@ class EditableDocument(
                             for c in reversed(cmds):
                                 c.undo()
 
-                    one = _Command(label, do, undo)
+                    one = Command(label, do, undo)
                     self._undo.append(one)
                     self._saved_point_merged(cmds, one)
                 if getattr(self, "_rerender_pending", False):
@@ -695,7 +691,7 @@ class EditableDocument(
 
         # (automatic steps made one stay automatic: no step of the user's, for the update
         # after a genie save, library._tab_clean, and for the steps to redo)
-        one = _Command(
+        one = Command(
             cmds[0].label,
             do,
             undo,
@@ -728,7 +724,7 @@ class EditableDocument(
                 undo1()
 
         first.do, first.undo = do, undo
-        first.nbytes = -1  # (measured again: _command_bytes)
+        first.nbytes = -1  # (measured again: command_bytes)
         first.folded = int(getattr(first, "folded", 0) or 0) + 1
         del self._undo[-1]
         self._saved_point_merged([first, second], first)
@@ -801,7 +797,7 @@ class EditableDocument(
             self.path,
             prev,
             records_fresh=fresh,
-            generation=_LIBRARY_GENERATION[0],
+            generation=LIBRARY_GENERATION[0],
             touched=touched,
         )
         self._derive_seconds = perf_counter() - t0
@@ -830,7 +826,7 @@ class EditableDocument(
             parse_ctg_bytes(self.serialize()),
             self.path,
             records_fresh=True,
-            generation=_LIBRARY_GENERATION[0],
+            generation=LIBRARY_GENERATION[0],
         )
         diff = model_difference(self.page, full)
         if diff:
@@ -934,9 +930,7 @@ class EditableDocument(
         ]
         return dict(_rising_run(cand))
 
-    def _body_edit(
-        self, label: str, index: int, mutate: Callable[[PageObject], object], rerender: bool = True
-    ):
+    def _body_edit(self, label: str, index: int, mutate: Callable[[PageObject], object]):
         """Generic single-object body edit with snapshot undo/redo."""
         objs = self.parsed.page.objects
         po = objs[index]
@@ -989,8 +983,7 @@ class EditableDocument(
             put_members(mem_new)
             for a, b in anc_new.items():
                 self.parsed.page.objects[a].body_raw = b
-            if rerender:
-                self._rerender_page()
+            self._rerender_page()
 
         def undo():
             po.body_raw = old
@@ -999,14 +992,12 @@ class EditableDocument(
             put_members(mem_old)
             for a, b in anc_old.items():
                 self.parsed.page.objects[a].body_raw = b
-            if rerender:
-                self._rerender_page()
+            self._rerender_page()
 
         # mutate() already applied the change; register without re-applying
-        self._push_step(_Command(label, do, undo))
+        self._push_step(Command(label, do, undo))
         self._note_edit()
-        if rerender:
-            self._rerender_page()
+        self._rerender_page()
         return True
 
 
@@ -1120,7 +1111,7 @@ class ElementDocument(EditableDocument):
         doc.session = sess
         doc.parsed = parsed
         doc.element_ref = (lib_path, sess.pe.name, sess.pe.kind)
-        doc._disk_stamp = doc._stamp(lib_path)
+        doc._disk_stamp = doc.disk_stamp(lib_path)
         doc.read_only = cls.file_read_only(lib_path)
         doc._template_edited = set()
         # the records come straight from the session wrapper's parse: derive
@@ -1325,6 +1316,7 @@ class ElementDocument(EditableDocument):
         try:
             return GN.is_genie_element(self._tree())
         except Exception:  # noqa: BLE001
+            _note_exc("editing.ElementDocument.is_genie_element")
             return False
 
     def _template_record(self, index: int) -> bool:
@@ -1336,7 +1328,7 @@ class ElementDocument(EditableDocument):
             return False
         try:
             r = decode(po)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 -- swallow-ok: a record the strict walk cannot read
             return False
         return bool(r.entries) and len(r.entries) >= 2
 
@@ -1411,6 +1403,7 @@ class ElementDocument(EditableDocument):
         try:
             normed = GN.normalise_records(tree, ext=ext, convert=convert, edited={index + off}, e=origin)
         except Exception:  # noqa: BLE001 -- display derive only; Save re-derives
+            _note_exc("editing.ElementDocument._rederive_member", index=index)
             normed = tree
         changed = {index: normed[index + off]}
         if convert:  # the first %param%: every direct member converts
@@ -1701,7 +1694,7 @@ class ElementDocument(EditableDocument):
             src = st[0]
             t = _links.parse_link_table(st[1]) if st[2] else None
             carried = list(t[1]) if t else []
-        objs = [_parse_object(0, 0, len(b), 0, b) for b in (writer.object_payload(o) for o in src)]
+        objs = [parse_object(0, 0, len(b), 0, b) for b in (writer.object_payload(o) for o in src)]
         if not objs:
             raise ValueError(
                 "A library element needs at least one object. Draw something "
@@ -2093,6 +2086,7 @@ class ElementDocument(EditableDocument):
 
                 shutil.rmtree(tmp, ignore_errors=True)
         except Exception:  # noqa: BLE001
+            _note_exc("editing.ElementDocument._snapshot_element", path=self.path)
             return None
 
     def _element_from_copy(self, copy_path: str):
@@ -2144,23 +2138,11 @@ class ElementDocument(EditableDocument):
     ) -> str:
         """Write the element back into its library, or into another one (Save As)."""
         from .format import element as E
-        from .format.composites import in_composition_cache
 
         target = path or self.path
         name = name or self.element_name
-        if in_composition_cache(target):
-            # only Plant SCADA's composer writes a composition cache (help 1172220)
-            raise ValueError(
-                ("%s is in a composition cache, which only Plant SCADA writes. ctgedit does not save there.")
-                % target
-            )
-        textcodec.encode_field(name, "a library element name")  # never a '?'
-        if len(name.encode(CODEC, "replace")) > 31:
-            raise ValueError("Library element names can be at most 31 characters.")
-        moved = (
-            os.path.normcase(os.path.abspath(target)) != os.path.normcase(os.path.abspath(self.path))
-            or name.lower() != self.element_name.lower()
-        )
+        self._element_save_checks(target, name)
+        moved = path_key(target) != path_key(self.path) or name.lower() != self.element_name.lower()
         self._refuse_self_link(target, name)
         redraw = False
         if thumbnail is not None and thumbnail_for is not None and not moved:
@@ -2174,31 +2156,7 @@ class ElementDocument(EditableDocument):
         # from is written with the target's identity (serialize_element)
         pages = self._create_super_pages(target, page_thumbnail) if self.kind == "genie" else []
         self._instantiated = {r["element"].lower() for r in pages if r.get("status") == "created"}
-        # a library symbol placed in it changed since it was saved: re-derived from its
-        # current element first, as Update Pages does on a page (the import table then
-        # quotes its new stamp). A new element's first save too: a stale copy pasted into it
-        try:
-            sym = self.stale_symbol_elements() if self.symbol_placements() else set()
-            if sym:
-                self.update_symbol_placements(sym)
-                refresh = True
-        except Exception:  # noqa: BLE001 -- saved as edited
-            from .infra import logsetup
-
-            logsetup.note_exception("editing.ElementDocument.save/symbols", page=target)
-        if every_nested:
-            # (Update Pages' 'compose their nested genies again': every copy, whatever the
-            # import table's stamps say, as Edit > Library > Compose Nested Genies Again)
-            refresh = True
-        if not refresh and self.session is not None:
-            # a genie nested in it changed since it was saved: CtDraw's load + save
-            # composes its copies again, also when nothing else was edited
-            try:
-                refresh = bool(self.nested_genie_changes())
-            except Exception:  # noqa: BLE001 -- saved as edited
-                from .infra import logsetup
-
-                logsetup.note_exception("editing.ElementDocument.save/nested", page=target)
+        refresh = self._element_save_refresh(target, refresh, every_nested)
         try:
             memo: dict = {}  # (the records are normalised once)
             if prepare is not None and self.session is not None:
@@ -2232,40 +2190,7 @@ class ElementDocument(EditableDocument):
             self._instantiated = ()
         self.previous_element = None
         if not unchanged:
-            if not moved and self.session is not None and self.kind == "genie":
-                # the stored version as bytes: its Element is made when a page asks for it
-                # (previous_element; most saves have no open page placing the genie)
-                self.__dict__.pop("_previous_element", None)
-                self._previous_bytes = self.session.pe.library.to_bytes()
-            stamp = E.ctdraw_timestamp()
-            content = E.refresh_identity(content, stamp)
-            lib = self.session.pe.library if self.session is not None else None
-            # the element as the library stores it now: an earlier version (Page History)
-            # (the first save after File > Page History > Restore keeps what it replaces)
-            self._keep_element_version(
-                target, name, force=getattr(self, "restored_version", None) is not None
-            )
-            self.restored_version = None
-            E.store_element(
-                target,
-                name,
-                content,
-                stamp=stamp,
-                newer=True,
-                version=lib.version if lib else 9,
-                word2=lib.word2 if lib else 0x0C,
-                expect=bytes(self.session.pe.block.data)
-                if expect_stored and not moved and self.session is not None
-                else None,
-            )
-            libraries_changed()
-            self.save_warning = ctdraw_cache_warning()
-            self.save_files = [target]
-            from .infra import logsetup
-
-            logsetup.files_written(
-                "saved %s %s.%s" % (self.kind, os.path.splitext(os.path.basename(target))[0], name), [target]
-            )
+            self._element_store(target, name, content, moved, expect_stored)
         else:
             self.save_warning = ""
             self.save_files = []
@@ -2276,7 +2201,7 @@ class ElementDocument(EditableDocument):
                 and not self._undo
                 and not self._redo
                 and self._disk_stamp is not None
-                and self._disk_stamp == self._stamp(target)
+                and self._disk_stamp == self.disk_stamp(target)
             ):
                 # nothing written, and the records are the stored ones already (read from
                 # this very file, never edited): the reopen below would read them again
@@ -2289,6 +2214,91 @@ class ElementDocument(EditableDocument):
         self._take_stored(target, name)
         self.super_pages = pages
         return target
+
+    @staticmethod
+    def _element_save_checks(target: str, name: str) -> None:
+        """Refuse a save into a composition cache, or under a name a library cannot hold."""
+        from .format.composites import in_composition_cache
+
+        if in_composition_cache(target):
+            # only Plant SCADA's composer writes a composition cache (help 1172220)
+            raise ValueError(
+                ("%s is in a composition cache, which only Plant SCADA writes. ctgedit does not save there.")
+                % target
+            )
+        textcodec.encode_field(name, "a library element name")  # never a '?'
+        if len(name.encode(CODEC, "replace")) > 31:
+            raise ValueError("Library element names can be at most 31 characters.")
+
+    def _element_save_refresh(self, target: str, refresh: bool, every_nested: bool) -> bool:
+        """Bring the placed symbols up to date; whether the save composes the nested
+        genies' copies again (``refresh``, also when one of them changed)."""
+        # a library symbol placed in it changed since it was saved: re-derived from its
+        # current element first, as Update Pages does on a page (the import table then
+        # quotes its new stamp). A new element's first save too: a stale copy pasted into it
+        try:
+            sym = self.stale_symbol_elements() if self.symbol_placements() else set()
+            if sym:
+                self.update_symbol_placements(sym)
+                refresh = True
+        except Exception:  # noqa: BLE001 -- saved as edited
+            from .infra import logsetup
+
+            logsetup.note_exception("editing.ElementDocument._element_save_refresh/symbols", page=target)
+        if every_nested:
+            # (Update Pages' 'compose their nested genies again': every copy, whatever the
+            # import table's stamps say, as Edit > Library > Compose Nested Genies Again)
+            refresh = True
+        if not refresh and self.session is not None:
+            # a genie nested in it changed since it was saved: CtDraw's load + save
+            # composes its copies again, also when nothing else was edited
+            try:
+                refresh = bool(self.nested_genie_changes())
+            except Exception:  # noqa: BLE001 -- saved as edited
+                from .infra import logsetup
+
+                logsetup.note_exception("editing.ElementDocument._element_save_refresh/nested", page=target)
+        return refresh
+
+    def _element_store(
+        self, target: str, name: str, content: bytes, moved: bool, expect_stored: bool
+    ) -> None:
+        """Store ``content`` as element ``name`` of the library ``target``, with a new
+        identity stamp; the version it replaces is kept (Page History)."""
+        from .format import element as E
+
+        if not moved and self.session is not None and self.kind == "genie":
+            # the stored version as bytes: its Element is made when a page asks for it
+            # (previous_element; most saves have no open page placing the genie)
+            self.__dict__.pop("_previous_element", None)
+            self._previous_bytes = self.session.pe.library.to_bytes()
+        stamp = E.ctdraw_timestamp()
+        content = E.refresh_identity(content, stamp)
+        lib = self.session.pe.library if self.session is not None else None
+        # the element as the library stores it now: an earlier version (Page History)
+        # (the first save after File > Page History > Restore keeps what it replaces)
+        self._keep_element_version(target, name, force=getattr(self, "restored_version", None) is not None)
+        self.restored_version = None
+        E.store_element(
+            target,
+            name,
+            content,
+            stamp=stamp,
+            newer=True,
+            version=lib.version if lib else 9,
+            word2=lib.word2 if lib else 0x0C,
+            expect=bytes(self.session.pe.block.data)
+            if expect_stored and not moved and self.session is not None
+            else None,
+        )
+        libraries_changed()
+        self.save_warning = ctdraw_cache_warning()
+        self.save_files = [target]
+        from .infra import logsetup
+
+        logsetup.files_written(
+            "saved %s %s.%s" % (self.kind, os.path.splitext(os.path.basename(target))[0], name), [target]
+        )
 
     def _refuse_self_link(self, target: str, name: str) -> None:
         """Refuse a save that would make this genie contain itself."""
@@ -2384,7 +2394,7 @@ class ElementDocument(EditableDocument):
         sess, _parsed = opened or self.stored_session()
         self.session = sess
         self.element_ref = (self.path, sess.pe.name, sess.pe.kind)
-        self._disk_stamp = self._stamp(self.path)
+        self._disk_stamp = self.disk_stamp(self.path)
         self.read_only = self.file_read_only(self.path)
 
     def _take_stored(self, target: str, name: str, opened=None) -> None:
@@ -2417,7 +2427,7 @@ class ElementDocument(EditableDocument):
         self.session = sess
         self.path = target
         self.element_ref = (target, sess.pe.name, sess.pe.kind)
-        self._disk_stamp = self._stamp(target)
+        self._disk_stamp = self.disk_stamp(target)
         self.read_only = self.file_read_only(target)
         self._template_edited = set()
         self._page_size = None
@@ -2504,7 +2514,7 @@ def _undo_page_cap() -> int:
 
 
 def _undo_total(doc) -> int:
-    return sum(_command_bytes(c) for c in getattr(doc, "_undo", ()) or ())
+    return sum(command_bytes(c) for c in getattr(doc, "_undo", ()) or ())
 
 
 def _trim_undo_everywhere(current) -> None:
@@ -2527,7 +2537,7 @@ def _trim_undo_everywhere(current) -> None:
         if not cand:
             return
         d = max(cand, key=lambda x: totals[id(x)])
-        drop = _command_bytes(d._undo[0])
+        drop = command_bytes(d._undo[0])
         d._saved_point_trimmed(d._undo[:1])
         del d._undo[0]
         d.undo_trimmed = getattr(d, "undo_trimmed", 0) + 1

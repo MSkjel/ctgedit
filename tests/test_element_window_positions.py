@@ -181,20 +181,20 @@ def test_the_side_follows_the_position_not_the_parse_index(fx):
     tree = E.open_element(_lib(fx), "n1").tree
     k, po = next((k, o) for k, o in enumerate(tree) if o.type_code == 0x05 and k > 1)
     props = po.properties()
-    keep = (getattr(C._PAGE_CTX, "record_at", None), getattr(C._PAGE_CTX, "nested_members", None))
+    keep = (getattr(C.PAGE_CTX, "record_at", None), getattr(C.PAGE_CTX, "nested_members", None))
     try:
         with C.derive_options(element_window=True):
-            C._PAGE_CTX.nested_members = frozenset({po.index})
-            C._PAGE_CTX.record_at = (po, po.index + 7)  # a direct member's place
+            C.PAGE_CTX.nested_members = frozenset({po.index})
+            C.PAGE_CTX.record_at = (po, po.index + 7)  # a direct member's place
             _out, raw = S._element_window_props(po, props)
             assert raw["TXT_OFF"] == "%Label%"
-            C._PAGE_CTX.nested_members = frozenset({po.index + 7})
+            C.PAGE_CTX.nested_members = frozenset({po.index + 7})
             _out, raw = S._element_window_props(po, props)
             assert raw["TXT_OFF"] == "%Name% L1"
-            C._PAGE_CTX.record_at = (tree[0], po.index + 7)  # another record is built
+            C.PAGE_CTX.record_at = (tree[0], po.index + 7)  # another record is built
             assert S._element_window_props(po, props) == (props, None)
     finally:
-        C._PAGE_CTX.record_at, C._PAGE_CTX.nested_members = keep
+        C.PAGE_CTX.record_at, C.PAGE_CTX.nested_members = keep
 
 
 @pytest.mark.parametrize(

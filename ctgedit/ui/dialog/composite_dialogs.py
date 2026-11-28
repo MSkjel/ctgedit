@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+from ..dialog_buttons import dialog_buttons
+
 import html as _html
 import os
 from typing import Callable, Dict, Optional, Sequence
 
-from PySide6 import QtCore, QtGui, QtWidgets
+from PySide6 import QtCore, QtWidgets
 
 from ...format import composites as C
+from ...infra.logsetup import note_exception as _note_exc
 from ..style.theme import TextMatch, set_note_role
 
 _SPIN_MIN, _SPIN_MAX = C.INT_MIN, C.INT_MAX
@@ -219,6 +222,7 @@ class TypedParamsForm(QtWidgets.QWidget):
                 try:
                     note = self._advice(p, self._typed.get(low)) or ""
                 except Exception:  # noqa: BLE001 -- advice never breaks the form
+                    _note_exc("composite_dialogs._refresh/advice")
                     note = ""
             r["note"].setText(note)
             r["note"].setVisible(bool(note))
@@ -556,7 +560,9 @@ class CompositeOptionsPanel(QtWidgets.QWidget):
 
     def _open_folder(self) -> None:
         if self._cache_dir and os.path.isdir(self._cache_dir):
-            QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(self._cache_dir))
+            from ..messages import open_folder
+
+            open_folder(self._cache_dir)
 
 
 class PresentationOptionsDialog(QtWidgets.QDialog):
@@ -628,6 +634,7 @@ class PresentationOptionsDialog(QtWidgets.QDialog):
             try:
                 current = self._options_now()
             except Exception:  # noqa: BLE001 -- keep what is shown
+                _note_exc("composite_dialogs.reload")
                 return
         if current is None or self.panel.form is None:
             return
@@ -719,11 +726,7 @@ class PasteCompositeGenieDialog(QtWidgets.QDialog):
         )
         self.panel.changed.connect(self._update_ok)
         right.addWidget(self.panel, 1)
-        self._buttons = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
-        )
-        self._buttons.accepted.connect(self.accept)
-        self._buttons.rejected.connect(self.reject)
+        self._buttons = dialog_buttons(self)
         lay.addLayout(right, 2)
         page.addWidget(self._buttons)
         self._form = None

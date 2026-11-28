@@ -34,7 +34,6 @@ DISABLE_ENV = "CTG_NO_SIM_ENGINE"
 
 EXE_NAME = "ctsim.exe"
 DLL_NAME = "CicodeSim.Engine.dll"
-CONFIG_NAME = "ctsim.exe.config"
 #: the engine checkout's net48 build output, relative to the repo root
 CHECKOUT_BUILD = ("external", "cicode-sim", "engine", "src", "ctsim", "bin", "Release", "net48")
 
@@ -158,7 +157,7 @@ def process_exe(pid: int) -> str:
                 return buf.value
         finally:
             k32.CloseHandle(h)
-    except Exception:  # noqa: BLE001 -- information only
+    except Exception:  # noqa: BLE001 -- swallow-ok: information only
         pass
     return ""
 
@@ -318,10 +317,8 @@ ERROR_NO_DATA = 232
 ERROR_PIPE_NOT_CONNECTED = 233
 ERROR_MORE_DATA = 234
 ERROR_PIPE_BUSY = 231
-ERROR_SEM_TIMEOUT = 121
 ERROR_IO_PENDING = 997
 ERROR_OPERATION_ABORTED = 995
-ERROR_PIPE_CONNECTED = 535
 WAIT_OBJECT_0 = 0
 WAIT_TIMEOUT = 258
 _EOF_ERRORS = (ERROR_BROKEN_PIPE, ERROR_NO_DATA, ERROR_PIPE_NOT_CONNECTED, ERROR_OPERATION_ABORTED)
@@ -699,7 +696,7 @@ class Connection:
             self._out_idle.wait(drain)
         try:
             self._stream.close()
-        except Exception:  # noqa: BLE001 -- closing never fails its caller
+        except Exception:  # noqa: BLE001 -- swallow-ok: closing never fails its caller
             pass
         self._lost(None)
         t = self._reader
@@ -778,6 +775,7 @@ class Connection:
                     except TypeError:
                         self._stream.write(f)  # (a stream without the hold: tests)
                 except Exception as e:  # noqa: BLE001 -- a write error ends the connection
+                    logsetup.note_exception("sim.client.Connection._write_loop")
                     self._out_idle.set()
                     self._lost(None if self._closing_by_us else str(e))
                     return
@@ -882,7 +880,7 @@ class Connection:
         self._lost(None if self._closing_by_us else reason)
         try:
             self._stream.close()
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 -- swallow-ok: closing never fails its caller
             pass
 
     def _restart_deadlines(self) -> None:
@@ -2618,6 +2616,7 @@ class Session:
             self.events_kinds = tuple(kinds) if kinds is not None else None
             return True
         except Exception:  # noqa: BLE001 -- the events keep coming as before
+            logsetup.note_exception("sim.client.Session.set_events")
             return False
 
     def stop_reason(self) -> str:
@@ -2639,7 +2638,7 @@ def _hello(
 ) -> Dict[str, Any]:
     try:
         from .. import __version__ as version
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- swallow-ok: no version: an empty one
         version = ""
     args: Dict[str, Any] = {"client": CLIENT, "version": version, "protocol": PROTOCOL, "pid": os.getpid()}
     if viewer:
@@ -2832,7 +2831,7 @@ class Hub:
         def run():
             try:
                 s = self.acquire(project, root=root, **kw)
-            except Exception:  # noqa: BLE001 -- the real acquire reports it
+            except Exception:  # noqa: BLE001 -- swallow-ok: the real acquire reports it
                 return
             self.release(s)
 
@@ -2941,7 +2940,7 @@ class Hub:
             try:
                 s.close(fast=fast)
             except Exception:  # noqa: BLE001
-                pass
+                logsetup.note_exception("sim.client.Hub.shutdown")
 
 
 HUB = Hub()

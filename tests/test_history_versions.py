@@ -39,10 +39,10 @@ def win(fx_install, hist, monkeypatch):
     if w.doc.dirty:
         w.save()
     yield w
-    for x in list(MainWindow._instances):
+    for x in list(MainWindow.instances):
         for e in getattr(x, "_docs", []):
             e["doc"].dirty = False
-        MainWindow._instances.remove(x)
+        MainWindow.instances.remove(x)
         x.hide()
 
 

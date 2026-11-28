@@ -23,8 +23,8 @@ def win(fx_page):
     w.show()
     QtWidgets.QApplication.processEvents()
     yield w
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.hide()
 
 

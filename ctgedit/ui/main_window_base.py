@@ -15,15 +15,14 @@ from .prefs.settings import app_settings, option  # noqa: F401 (re-exported)
 
 from ..editing import EditableDocument, ElementDocument, CLIPBOARD_MIME, TransformError  # noqa: F401 (re-exported)
 from .. import editing as editing_mod  # noqa: F401 (re-exported)
-from ..format.fileio import TMP_SUFFIX  # noqa: F401 (re-exported through the star import)
 from ..model.document import Page  # noqa: F401 (re-exported)
 from ..render.scene import PageScene  # noqa: F401 (re-exported)
-from .editor.canvas import CanvasView  # noqa: F401 (re-exported through the star import)
+from .editor.canvas import CanvasView  # noqa: F401 (re-exported to main_window)
 from .style.theme import icon, set_note_role  # noqa: F401 (re-exported)
-from .panels.properties import PropertyPanel  # noqa: F401 (re-exported through the star import)
-from .panels.objects_dock import ObjectsDock  # noqa: F401 (re-exported through the star import)
+from .panels.properties import PropertyPanel  # noqa: F401 (re-exported to main_window)
+from .panels.objects_dock import ObjectsDock  # noqa: F401 (re-exported to main_window)
 from .panels.library_panel import LibraryPanel, paste_linked, set_paste_linked  # noqa: F401 (re-exported)
-from .panels.diag_ui import DiagnosticsMixin  # noqa: F401 (re-exported through the star import)
+from .panels.diag_ui import DiagnosticsMixin  # noqa: F401 (re-exported to main_window)
 from .modeless import ModelessMixin, ModelessWindows, doc_key  # noqa: F401 (re-exported)
 from ..editing import ui_state  # noqa: F401 (re-exported)
 
@@ -39,7 +38,7 @@ def default_open_dir() -> str:
         live = live_project_dir("Example")
         if live:
             return live
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # swallow-ok: no install found: the home folder
         pass
     return os.path.expanduser("~")
 
@@ -68,7 +67,7 @@ def saved_message(path: str, report: str = "", notes=()) -> str:
     return ". ".join(parts) + "."
 
 
-_TOOLS = [
+TOOLS = [
     # (tool id, label, icon, shortcut)
     ("select", "Select", "select", "V"),
     ("line", "Line", "line", "L"),
@@ -91,7 +90,7 @@ _TOOLS = [
     ("pan", "Hand", "hand", "H"),
 ]
 
-_ALIGN = [
+ALIGN = [
     ("left", "Align Left", "align_left"),
     ("hcentre", "Align Horizontal Centres", "align_hcentre"),
     ("right", "Align Right", "align_right"),
@@ -100,7 +99,7 @@ _ALIGN = [
     ("bottom", "Align Bottom", "align_bottom"),
 ]
 
-_V34_KINDS = [
+V34_KINDS = [
     ("trend", "Trend"),
     ("string", "String"),
     ("digital_text", "Digital Text"),
@@ -116,7 +115,7 @@ _V34_KINDS = [
 #: the special objects that are canvas TOOLS (tool id -> icon): CtDraw's
 #: toolbox draws them (help 1172142 / 1172144 / 1172149 / 1172150) and opens
 #: their property sheet once placed
-_SPECIAL_TOOLS = {
+SPECIAL_TOOLS = {
     "trend": "trend",
     "cicode_object": "cicode_object",
     "web_content": "web",
@@ -143,6 +142,8 @@ DESCRIPTIONS = {
     "act_redo": "Make the change you took back again.",
     "act_page_history": "See the earlier saved versions of the page, and open, compare or restore one.",
     "act_mark_changes": "Mark the objects that are new, changed or removed since the save.",
+    "act_preview_states": "Set the page's conditions by hand and see the page in that state.",
+    "act_click_map": "Shade what takes a click or a key, and mark what a click never reaches.",
     "act_next_change": "Select and show the next object that differs from the saved page.",
     "act_prev_change": "Select and show the previous object that differs from the saved page.",
     "act_select_changed": "Select every object that is new or changed since the save.",
@@ -490,10 +491,9 @@ PASTE_POINT_UNREAD = object()
 
 #: the View > Labels (and Settings) names of the label modes; a language mode
 #: shows as the language
-_LABEL_MODE_NAMES = {"literal": "As Stored: @(text)", "native": "Native Text"}
-LABEL_MODE_NAMES = _LABEL_MODE_NAMES
+LABEL_MODE_NAMES = {"literal": "As Stored: @(text)", "native": "Native Text"}
 
-_INSERT_KINDS = [
+INSERT_KINDS = [
     ("activex", "ActiveX Control…"),
     ("process_analyst", "Process Analyst"),
     ("web_content", "Web Content"),
@@ -511,6 +511,7 @@ class WindowState:
     with the code."""
 
     _auto_bar: Any  # set in main_window.py
+    _page: Any  # set in window/view.py (the page shown)
     _break_lock: Any  # set in main_window.py, window/commands.py
     _dialogs: Any  # ModelessWindows, set in main_window.py
     _disk_timer: Any  # QTimer, set in main_window.py
@@ -598,6 +599,8 @@ class WindowState:
     act_show_in_browser: Any  # set in main_window.py
     act_show_tools: Any  # set in main_window.py
     act_simulate: Any  # set in main_window.py
+    act_preview_states: Any  # set in main_window.py
+    act_click_map: Any  # set in main_window.py
     act_slow_keys: Any  # set in main_window.py
     act_slow_mouse: Any  # set in main_window.py
     act_smart_guides: Any  # set in main_window.py
@@ -621,6 +624,7 @@ class WindowState:
     dock_navigator: Any  # set in window/navigation.py
     dock_objects: tuple  # set in main_window.py
     dock_page_checks: Any  # set in main_window.py
+    dock_preview_states: Any  # set in window/page_debug.py
     dock_props: tuple  # set in main_window.py
     dock_sa_checks: Any  # set in main_window.py
     dock_tags: Any  # set in main_window.py
@@ -634,6 +638,7 @@ class WindowState:
     library_dock: Any  # LibraryPanel, set in main_window.py
     modern_v34_actions: list  # set in main_window.py
     objects_dock: Any  # ObjectsDock, set in main_window.py
+    preview_states: Any  # PreviewStatesPanel, set in window/page_debug.py
     props: Any  # PropertyPanel, set in main_window.py
     ribbon: Any  # RibbonBar, set in main_window.py
     sa_checks: Any  # WorkspaceChecksPanel, set in main_window.py
@@ -650,7 +655,7 @@ class WindowState:
     view: Any  # CanvasView, set in main_window.py
 
 
-class _WheelGuard(QtCore.QObject):
+class WheelGuard(QtCore.QObject):
     """A mouse wheel over an UNFOCUSED spinbox / combo scrolls the panel
     instead of silently editing the object under it."""
 
@@ -701,11 +706,11 @@ class _PopupKeyGuard(QtCore.QObject):
         return False
 
 
-def _install_popup_key_guard() -> None:
+def install_popup_key_guard() -> None:
     app = QtWidgets.QApplication.instance()
     if app is not None and getattr(app, "_ctg_popup_keys", None) is None:
         app._ctg_popup_keys = _PopupKeyGuard(app)
-        _app_filter().add(app._ctg_popup_keys, _PopupKeyGuard.TYPES)
+        app_filter().add(app._ctg_popup_keys, _PopupKeyGuard.TYPES)
 
 
 class _MenuCloseWatch(QtCore.QObject):
@@ -737,15 +742,15 @@ def menu_just_closed() -> bool:
     return watch is not None and watch.closing
 
 
-def _install_menu_close_watch() -> None:
+def install_menu_close_watch() -> None:
     app = QtWidgets.QApplication.instance()
     if app is not None and getattr(app, "_ctg_menu_watch", None) is None:
         app._ctg_menu_watch = _MenuCloseWatch(app)
-        _app_filter().add(app._ctg_menu_watch, _MenuCloseWatch.TYPES)
+        app_filter().add(app._ctg_menu_watch, _MenuCloseWatch.TYPES)
 
 
-#: the user input a page's deferred open checks run before (MainWindow._post_open)
-_INPUT_EVENTS = frozenset(
+#: the user input a page's deferred open checks run before
+INPUT_EVENTS = frozenset(
     {
         QtCore.QEvent.Type.MouseButtonPress,
         QtCore.QEvent.Type.MouseButtonDblClick,
@@ -757,13 +762,13 @@ _INPUT_EVENTS = frozenset(
 )
 
 
-class _AppEventFilter(QtCore.QObject):
+class AppEventFilter(QtCore.QObject):
     """The one application-wide event filter."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._handlers: list = []  # (handler, its event types), called in order
-        self._types = frozenset(_INPUT_EVENTS)
+        self._types = frozenset(INPUT_EVENTS)
         #: () -> None, set while a page open's deferred checks are pending
         self.before_input = None
 
@@ -779,11 +784,11 @@ class _AppEventFilter(QtCore.QObject):
         if t not in self._types:
             return False
         hook = self.before_input
-        if hook is not None and t in _INPUT_EVENTS:
+        if hook is not None and t in INPUT_EVENTS:
             self.before_input = None
             try:
                 hook()
-            except Exception:  # noqa: BLE001 -- never swallow the user's input
+            except Exception:  # noqa: BLE001  # swallow-ok: reported through sys.excepthook; the input goes on
                 import sys
 
                 sys.excepthook(*sys.exc_info())
@@ -793,42 +798,42 @@ class _AppEventFilter(QtCore.QObject):
                 try:
                     if h.handle(obj, ev, t):
                         return True
-                except Exception:  # noqa: BLE001
+                except Exception:  # noqa: BLE001  # swallow-ok: reported through sys.excepthook; the next handler runs
                     import sys
 
                     sys.excepthook(*sys.exc_info())
         return False
 
 
-def _app_filter() -> _AppEventFilter | None:
+def app_filter() -> AppEventFilter | None:
     """The application's combined event filter (installed once)."""
     app = QtWidgets.QApplication.instance()
     if app is None:
         return None
     f = getattr(app, "_ctg_app_filter", None)
     if f is None:
-        f = app._ctg_app_filter = _AppEventFilter(app)
+        f = app._ctg_app_filter = AppEventFilter(app)
         app.installEventFilter(f)
     return f
 
 
-def _install_wheel_guard() -> None:
+def install_wheel_guard() -> None:
     app = QtWidgets.QApplication.instance()
     if app is not None and getattr(app, "_ctg_wheel_guard", None) is None:
-        app._ctg_wheel_guard = _WheelGuard(app)
-        _app_filter().add(app._ctg_wheel_guard, _WheelGuard.TYPES)
+        app._ctg_wheel_guard = WheelGuard(app)
+        app_filter().add(app._ctg_wheel_guard, WheelGuard.TYPES)
 
 
-def _run_all_post_open() -> None:
+def run_all_post_open() -> None:
     """User input is about to reach the application: every window's pending
     page-open checks run first (MainWindow._opened)."""
-    for w in list(_mw().MainWindow._instances):
+    for w in editor_windows():
         with contextlib.suppress(RuntimeError):  # a window being destroyed
             if w.__dict__.get("_post_open_pending"):
                 w._run_post_open()
 
 
-class _PaintWatch(QtCore.QObject):
+class PaintWatch(QtCore.QObject):
     """Calls ``fn`` once, right after ``widget``'s next paint has finished."""
 
     def __init__(self, widget: QtWidgets.QWidget, fn):
@@ -849,7 +854,7 @@ class _PaintWatch(QtCore.QObject):
             fn()
 
 
-class _PendingPage:
+class PendingPage:
     """A tab of the restored session that is not opened yet: the page is read
     when the tab is first shown (MainWindow._materialise). It answers what
     the window asks of every open tab -- its path; never unsaved, read-only
@@ -872,11 +877,16 @@ class _PendingPage:
 #: automatic updates ...): ui/editor/notices.PageNoticeBar, kept by the window as ``_auto_bar``
 from .editor.notices import PageNoticeBar  # noqa: E402
 
-_AutoChangesBar = PageNoticeBar
+AutoChangesBar = PageNoticeBar
 
 
-def _mw():
-    """ctgedit.ui.main_window (MainWindow is defined there, after this module is imported)."""
+def main_window_class():
+    """MainWindow (defined in ctgedit.ui.main_window, which imports this module first)."""
     from . import main_window
 
-    return main_window
+    return main_window.MainWindow
+
+
+def editor_windows() -> list:
+    """The open editor windows, in the order they opened."""
+    return list(main_window_class().instances)

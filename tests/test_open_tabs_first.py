@@ -134,16 +134,16 @@ def test_the_read_after_a_save_takes_its_delay_from_the_settings(fx_install, win
 
 def test_opening_an_element_reads_what_uses_its_library_on_a_worker(fx_install, win, monkeypatch):
     from ctgedit.io import genieusage as GU
-    from ctgedit.ui.window import library as L
+    from ctgedit.ui.window import element_users as EU
 
     started = []
-    monkeypatch.setattr(L, "warm_element_users", lambda p: started.append(p))
+    monkeypatch.setattr(EU, "warm_element_users", lambda p: started.append(p))
     lib = fx_install.file("FxLib", "fxnest.ctm")
     win._open_element(lib, "n1")
     assert started == [lib]
     monkeypatch.undo()
     GU._LIB_CACHE.clear()
-    L.warm_element_users(lib)
+    EU.warm_element_users(lib)
     key = os.path.normcase(os.path.dirname(os.path.abspath(lib)))
-    L._USERS_WARMING[key].join(60)
+    EU._USERS_WARMING[key].join(60)
     assert lib in GU._LIB_CACHE, "its library's tables were read on the worker"

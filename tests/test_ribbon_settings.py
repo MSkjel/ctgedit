@@ -19,8 +19,8 @@ def win():
 
     w = MainWindow()
     yield w
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.hide()
 
 
@@ -75,13 +75,13 @@ def test_settings_page_edits_the_ribbon_choices(win, monkeypatch):
     assert "Design/Data" in dlg._ribbon_boxes and dlg._ribbon_boxes["Design/Data"].isChecked()
     dlg._ribbon_boxes["Design/Data"].setChecked(False)
     monkeypatch.setattr(QtWidgets.QInputDialog, "getItem", staticmethod(lambda *a, **k: ("Check Page", True)))
-    dlg._ribbon_add_command()
+    dlg._ribbon_field.add_command()
     monkeypatch.setattr(
         QtWidgets.QInputDialog, "getItem", staticmethod(lambda *a, **k: ("Quick Open…", True))
     )
-    dlg._ribbon_add_command()
+    dlg._ribbon_field.add_command()
     dlg._ribbon_list.setCurrentRow(1)
-    dlg._ribbon_move(-1)
+    dlg._ribbon_field.move(-1)
     c = dlg.ribbon_choices()
     assert c["ui/ribbon_hidden_groups"] == ["Design/Data"]
     # (stored by command id: ui/prefs/keymap; the list shows the names)
@@ -91,7 +91,7 @@ def test_settings_page_edits_the_ribbon_choices(win, monkeypatch):
     assert dlg._choices()["ui/ribbon_hidden_groups"] == ["Design/Data"]
     labels = type(win).ribbon_command_labels(win)
     assert "Check Page" in labels and labels == sorted(labels, key=str.lower)
-    dlg._ribbon_remove_command()
+    dlg._ribbon_field.remove_command()
     assert dlg.ribbon_choices()["ui/ribbon_custom"] == ["act_check_page"]
     dlg.restore_defaults()
     assert dlg.ribbon_choices() == {"ui/ribbon_hidden_groups": [], "ui/ribbon_custom": []}

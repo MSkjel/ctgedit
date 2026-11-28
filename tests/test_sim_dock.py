@@ -6,6 +6,8 @@ import os
 import pytest
 from qtkit import app as _app
 
+from ctgedit.ui.modeless import alive
+
 
 class _Clock:
     def __init__(self):
@@ -74,8 +76,8 @@ def editor():
         w.doc = None
         if sw is not None:
             sw.release_host(w)
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.close()
     if sw is not None:
         sw.close()
@@ -190,7 +192,7 @@ def test_closing_the_editor_window_stops_its_docked_simulation(editor):
     QtWidgets.QApplication.processEvents()
     assert type(sim).stopped >= 1 and sw.tabs.count() == 0
     # the one Simulate window outlives the editor window (out of its dock, hidden)
-    assert SW._alive(sw) and not sw.is_docked() and sw.isWindow() and not sw.isVisible()
+    assert alive(sw) and not sw.is_docked() and sw.isWindow() and not sw.isVisible()
     w.deleteLater()
     QtWidgets.QApplication.processEvents()
     assert SW.simulate_window(create=False) is sw

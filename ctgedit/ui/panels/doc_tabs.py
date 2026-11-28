@@ -1,6 +1,8 @@
 """The document tab bar."""
 
 from __future__ import annotations
+
+from ..style.theme import set_note_role
 from ..style.theme import sp as _sp  # (the spacing scale)
 
 from typing import Optional
@@ -355,10 +357,8 @@ class _TabTail(QtWidgets.QWidget):
 
     def set_project(self, text: str) -> None:
         if text:
-            from ..style.theme import COLORS
-
             self.project.setText("· " + text)
-            self.project.setStyleSheet("color: %s; background: transparent;" % COLORS["text_dim"])
+            set_note_role(self.project, "text_dim", "background: transparent;")
             self.project.show()
         else:
             self.project.clear()

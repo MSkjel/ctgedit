@@ -19,10 +19,12 @@ from ..editing_base import (  # noqa: F401
     writer,
 )
 from ..editing_base import (  # noqa: F401
-    _Command,
+    Command,
 )
 from ..format import colourstate as _colourstate
 from ..format import placement as _placement
+from ..format import symbols as _symbols
+from ..infra.logsetup import note_exception as _note_exc
 
 
 class _BlockDiff:
@@ -192,6 +194,34 @@ def _with_fraction(w, f):
 _TURN_STATES = 8
 
 
+def _restore_bodies(objs, state: dict, parses=None) -> None:
+    """Put the records' (body, dwFlags) of ``state`` back, with their parses when
+    ``parses`` holds them."""
+    for i, (body, fl) in state.items():
+        po = objs[i]
+        po.body_raw = body
+        po.subtype_size = fl
+        if parses is None or not writer.restore_parse(po, parses.get(i)):
+            writer.refresh_object_bags(po)
+
+
+def _turn_error(exc: Exception, idx: list, sem, op: str) -> tuple:
+    """The error a failed turn or mirror (``op``) of the records ``idx`` reports, and
+    its cause."""
+    subject = "The selection"
+    k = getattr(exc, "index", None)
+    if k is not None and 0 <= k < len(idx):
+        kind = getattr(sem[idx[k]].kind, "value", sem[idx[k]].kind)
+        subject = "Object %d (%s)" % (idx[k], kind)
+        exc = getattr(exc, "error", exc)
+    verb = "rotated" if op in ("cw", "acw") else "mirrored"
+    err = TransformError(
+        "%s could not be %s (%s). Nothing was changed; leave that "
+        "object out of the selection and try again." % (subject, verb, exc)
+    )
+    return err, exc
+
+
 class GeometryEdits:
     """EditableDocument's geometry, placement and node edits."""
 
@@ -205,6 +235,7 @@ class GeometryEdits:
         try:
             ref = reference_from_object(po)
         except Exception:  # noqa: BLE001
+            _note_exc("geometry.GeometryEdits._link_info")
             ref = None
         if ref is None:
             return None
@@ -269,7 +300,7 @@ class GeometryEdits:
                 except (struct.error, OverflowError) as e:
                     raise TransformError(COORD_REFUSED) from e
                 except Exception:  # noqa: BLE001
-                    pass
+                    _note_exc("geometry.GeometryEdits._translate_detached")
 
     def _used_handles(self) -> set:
         """Every object handle in use on the page."""
@@ -393,7 +424,7 @@ class GeometryEdits:
             for a in fit0:
                 self._container_model_from_record(a)
 
-        self._push_step(_Command("move", redo, undo))
+        self._push_step(Command("move", redo, undo))
         # (a move does not derive: what a page window and the Simulate window watch for an edit)
         self._note_edit()
 
@@ -419,7 +450,7 @@ class GeometryEdits:
             pb = geom.predict_bounds(0x05, r1, flags) or r1
             pb = tuple(int(v) for v in pb)
             if pb != geom.norm_rect(gh.rect2):
-                geom._set_rect2(po, pb)
+                geom.set_rect2(po, pb)
 
     def _shift_model(self, idx: Sequence[int], ddx: int, ddy: int) -> None:
         """Move the derived objects of records ``idx`` in place (a move does not derive; their
@@ -576,6 +607,7 @@ class GeometryEdits:
         _colourstate.LAYOUT_MEMO_ATTR,
         _placement.SLOTS_MEMO_ATTR,
         writer.VALUE_BAG_MEMO_ATTR,
+        _symbols.BODY_REF_MEMO_ATTR,
     )
 
     def _compact_states(self) -> None:
@@ -700,7 +732,7 @@ class GeometryEdits:
             # twin; the record keeps the normalised extent + its start point
             # as the anchor (any corner) -- turn both, keep the Bounds offsets
             na = geom.find_node_array(po)
-            d = geom._rect2_deltas(gh)
+            d = geom.rect2_deltas(gh)
             l, t, r, b = gh.rect1
             (x1, y1), (x2, y2) = fn((l, t)), fn((r, b))
             r1 = (
@@ -725,7 +757,7 @@ class GeometryEdits:
             # the true draw-order endpoints (a free line's rect1 is normalised)
             pts = geom.get_object_nodes(po) or [gh.rect1[:2], gh.rect1[2:]]
             (x1, y1), (x2, y2) = fn(tuple(pts[0])), fn(tuple(pts[1]))
-            geom._set_line_endpoints(po, int(round(x1)), int(round(y1)), int(round(x2)), int(round(y2)))
+            geom.set_line_endpoints(po, int(round(x1)), int(round(y1)), int(round(x2)), int(round(y2)))
             return
         na = geom.find_node_array(po)
         if na is not None:
@@ -760,7 +792,7 @@ class GeometryEdits:
             if not geom.refit_text(po):
                 l, t, r, b = gh.rect1
                 p1, p2 = fn((l, t)), fn((r, b))
-                geom._retarget_header(
+                geom.retarget_header(
                     po,
                     geom.norm_rect(gh.rect1),
                     (
@@ -878,7 +910,7 @@ class GeometryEdits:
             w = echo[axis]
             v = _with_fraction(w, f) if 1e-9 < f < 1.0 - 1e-9 else float(w)
             true.append(known[axis] if v is None else v)
-        inv = placement._affine_inv(L)
+        inv = placement.affine_inv(L)
         bx = inv[0] * true[0] + inv[2] * true[1] + inv[4]
         by = inv[1] * true[0] + inv[3] * true[1] + inv[5]
         body = bytearray(po.body_raw)
@@ -996,7 +1028,7 @@ class GeometryEdits:
         box = (int(min(x1, x2)), int(min(y1, y2)), int(max(x1, x2)), int(max(y1, y2)))
         if not measured:
             # (no metrics here: the old box goes where the operation puts it)
-            geom._retarget_header(po, old_box, box)
+            geom.retarget_header(po, old_box, box)
         elif turns:
             # (the box in memory is the old box turned, as for a turned text)
             pts.set_box(box)
@@ -1086,6 +1118,7 @@ class GeometryEdits:
             try:
                 has_ref = reference_from_object(po) is not None
             except Exception:  # noqa: BLE001
+                _note_exc("geometry.GeometryEdits._orient_content")
                 has_ref = False
             if not has_ref:
                 return
@@ -1130,14 +1163,14 @@ class GeometryEdits:
     def _bitmap_pixels_op(self, po: PageObject, op: str, gh) -> bool:
         """Rotate/flip an EMBEDDED bitmap's DIB pixels (CtDraw stores no matrix for
         bitmaps). Returns False for non-bitmap tc=7."""
-        from ..format.symbols import embedded_bitmaps_from_body, _find_stream
+        from ..format.symbols import embedded_bitmaps_from_body, find_stream
 
         body = po.body_raw
         start = gh.end if gh else 0
         primary, flash = embedded_bitmaps_from_body(body, start)
         if primary is None:
             return False
-        hit = _find_stream(body, start)
+        hit = find_stream(body, start)
         if hit is None or hit[0] < 12:
             return False
         off = hit[0]
@@ -1196,7 +1229,7 @@ class GeometryEdits:
         new = factory.make_bitmap_record(0, (0, 0, w1, h1), rgba1, w1, h1, flash_rgba=frgba)
         # reuse only the freshly-encoded DIB SECTION from the helper record
         ngh = geom.parse_geom_header(new.body_raw)
-        nhit = _find_stream(new.body_raw, ngh.end if ngh else 0)
+        nhit = find_stream(new.body_raw, ngh.end if ngh else 0)
         po.body_raw = body[:sec_start] + new.body_raw[nhit[0] - 12 :]
         return True
 
@@ -1324,7 +1357,7 @@ class GeometryEdits:
             if parent is not None:
                 _pm, P = parent
                 if abs(P[1]) > 1e-12 or abs(P[2]) > 1e-12 or P[0] != 1.0 or P[3] != 1.0:
-                    Pi = placement._affine_inv(P)
+                    Pi = placement.affine_inv(P)
                     M = placement.affine_mul(Pi, placement.affine_mul(Q, P))
                     L2 = geom.compose_transform(L if mode else placement.IDENT, M)
                     return L2, self._mode_for_matrix(L2)
@@ -1504,14 +1537,6 @@ class GeometryEdits:
         # each state keeps the records' parses: an undo / redo puts them back with the bytes
         parses_before = {i: writer.parse_state(objs[i]) for i in before}
 
-        def restore(state, parses=None):
-            for i, (body, fl) in state.items():
-                po = objs[i]
-                po.body_raw = body
-                po.subtype_size = fl
-                if parses is None or not writer.restore_parse(po, parses.get(i)):
-                    writer.refresh_object_bags(po)
-
         self._use_tag_formats()
         try:
             placement.turn_records(
@@ -1534,44 +1559,40 @@ class GeometryEdits:
             for a in fit:
                 self._refit_container(a)
         except Exception as exc:  # noqa: BLE001 -- reported, never half-applied
-            restore(before)
-            subject = "The selection"
-            k = getattr(exc, "index", None)
-            if k is not None and 0 <= k < len(idx):
-                kind = getattr(sem[idx[k]].kind, "value", sem[idx[k]].kind)
-                subject = "Object %d (%s)" % (idx[k], kind)
-                exc = getattr(exc, "error", exc)
-            verb = "rotated" if op in ("cw", "acw") else "mirrored"
-            raise TransformError(
-                "%s could not be %s (%s). Nothing was changed; leave that "
-                "object out of the selection and try again." % (subject, verb, exc)
-            ) from exc
+            _restore_bodies(objs, before)
+            err, cause = _turn_error(exc, idx, sem, op)
+            raise err from cause
         after = {i: (bytes(objs[i].body_raw), objs[i].subtype_size) for i in before}
         if points is not None:
-            # a record whose bytes changed after its own turn (an input record onto its
-            # owner's new hotspot, a refit container) keeps no true positions; a carrier
-            # keeps its Local and its state under a plain group (its refit changes its box,
-            # not its Local)
-            kept = {i: m for i, m in points.new.items() if turned.get(i) == after[i]}
-            for i in carriers:
-                if i in points.new and i in after:
-                    m = kept.get(i)
-                    new_m = points.new[i]
-                    kept[i] = (
-                        [{}, {}, new_m[2], None, new_m[4]]
-                        if m is None
-                        else [m[0], m[1], new_m[2], m[3], new_m[4]]
-                    )
-            self._remember_turned(kept, after)
+            self._keep_true_positions(points, turned, carriers, after)
         self._turn_centre = (tuple(roots), {i: self._turn_key(*after[i]) for i in after}, fn.pivot)
 
         parses_after = {i: writer.parse_state(objs[i]) for i in after}
 
         def apply(state, parses):
-            restore(state, parses)
+            _restore_bodies(objs, state, parses)
             self._rerender_page()
 
         self._apply(label, lambda: apply(after, parses_after), lambda: apply(before, parses_before))
+
+    def _keep_true_positions(self, points: "_TurnPoints", turned: dict, carriers: set, after: dict) -> None:
+        """Remember the true positions of the records a turn moved (``turned``: their
+        bytes after their own turn; ``after``: after the whole turn)."""
+        # a record whose bytes changed after its own turn (an input record onto its
+        # owner's new hotspot, a refit container) keeps no true positions; a carrier
+        # keeps its Local and its state under a plain group (its refit changes its box,
+        # not its Local)
+        kept = {i: m for i, m in points.new.items() if turned.get(i) == after[i]}
+        for i in carriers:
+            if i in points.new and i in after:
+                m = kept.get(i)
+                new_m = points.new[i]
+                kept[i] = (
+                    [{}, {}, new_m[2], None, new_m[4]]
+                    if m is None
+                    else [m[0], m[1], new_m[2], m[3], new_m[4]]
+                )
+        self._remember_turned(kept, after)
 
     def _kept_turn_centre(self, roots):
         """The centre of the last turn or mirror when it was of the same selection and none

@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+from ..infra import backups
+
+from ..infra.paths import lib_path_dirs, path_key
+
+from ..format.fileio import LIBRARY_EXTS
+
 import os
 import struct
 import threading
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Dict, Iterable, List, Optional, Set, Tuple
-
-LIB_EXTS = (".ctm", ".ctt", ".ctl")
+from ..infra.logsetup import note_exception as _note_exc
 
 
 # -- the element tables of a library file -------------------------------------------------
@@ -82,14 +87,14 @@ def _library(lib_path: str) -> Tuple[tuple, Dict[str, ElementTable], str]:
     try:
         # (unbuffered: a library's directory read seeks to every element's head)
         with open(lib_path, "rb", buffering=0) as fh:
-            d = PS._read_dir(fh, lib_path, st[1])
+            d = PS.read_dir(fh, lib_path, st[1])
             err = PS.directory_problem(d)
             # (a truncated file: the elements it holds whole are read still)
             if d.ok and not PS.header_problem(d):
                 legacy = d.word2 < 0x0C
                 hs = PS.PAGE_HEAD_SIZE_LEGACY if legacy else PS.PAGE_HEAD_SIZE
                 for e in d.elements():
-                    h = PS._read_head(fh, e.offset, e.size, d.word2)
+                    h = PS.read_head(fh, e.offset, e.size, d.word2)
                     if h is None:
                         out[e.name.lower()] = ElementTable(
                             e.name, None, (), "its block head could not be read (%d bytes)" % e.size
@@ -142,7 +147,7 @@ class Ref:
 
     @property
     def key(self) -> tuple:
-        return (self.kind, os.path.normcase(os.path.abspath(self.path)), self.element.lower())
+        return (self.kind, path_key(self.path), self.element.lower())
 
     @property
     def library(self) -> str:
@@ -355,7 +360,7 @@ class UsageIndex:
         if res is None:
             from ..format.symbols import SymbolResolver
 
-            extra = [d for d in os.environ.get("CTG_LIB_PATH", "").split(os.pathsep) if d]
+            extra = lib_path_dirs()
             res = self._resolvers[key] = SymbolResolver.for_page(os.path.join(folder, "_.ctg"), extra)
         return res
 
@@ -392,13 +397,13 @@ class UsageIndex:
     def users_of(self, target: Ref) -> List[Tuple[_Referrer, str]]:
         """The referrers whose entry resolves to ``target``, with the entry."""
         key = (target.library.lower(), target.element.lower(), target.ext)
-        want = os.path.normcase(os.path.abspath(target.path))
+        want = path_key(target.path)
         out = []
         for r in self.by_name.get(key, ()):
             if r.ref.key == target.key:
                 continue
             f = self.resolve(r.ref, key)
-            if f is not None and os.path.normcase(os.path.abspath(f)) == want:
+            if f is not None and path_key(f) == want:
                 out.append((r, r.entries[key]))
         return out
 
@@ -502,7 +507,7 @@ def scope_projects(lib_path: str, catalog=None) -> list:
     # (CTG_LIB_PATH) is searched by every project, and with the sibling search on
     # (CTG_LIB_SIBLINGS) every project under the same User folder searches the others.
     norm = os.path.normcase
-    extra = [p for p in os.environ.get("CTG_LIB_PATH", "").split(os.pathsep) if p]
+    extra = lib_path_dirs()
     in_lib_path = any(norm(os.path.abspath(p)) == norm(d) for p in extra)
     siblings = os.environ.get("CTG_LIB_SIBLINGS") == "1"
     if in_lib_path or siblings:
@@ -549,7 +554,7 @@ def build_index(projects, catalog=None, progress=None, pages: bool = True) -> Us
             logsetup.note_exception("genieusage.build_index/pages", project=info.dir)
             idx.problems.append("%s: its pages could not be listed: %s" % (info.name, ex))
         try:
-            files = [f for f in sorted(os.listdir(info.dir)) if f.lower().endswith(LIB_EXTS)]
+            files = [f for f in sorted(os.listdir(info.dir)) if f.lower().endswith(LIBRARY_EXTS)]
         except OSError:
             logsetup.note_exception("genieusage.build_index/listdir", project=info.dir)
             files = []
@@ -666,7 +671,7 @@ def _deepest_first(elements: List[User]) -> List[User]:
     return out
 
 
-def update_plan(usage: Usage, include_shipped: bool = False) -> UpdatePlan:
+def update_plan(usage: Usage) -> UpdatePlan:
     """The users that need an update, in update order."""
     want = [u for u in usage.users if u.needs_update]
     els = [u for u in want if u.ref.kind == "element"]
@@ -675,7 +680,7 @@ def update_plan(usage: Usage, include_shipped: bool = False) -> UpdatePlan:
     for u in els:
         if u.damaged:
             plan.skipped.append((u, DAMAGED_WHY))
-        elif u.shipped and not include_shipped:
+        elif u.shipped:
             plan.skipped.append((u, SHIPPED_WHY))
         else:
             keep.append(u)
@@ -857,29 +862,8 @@ class UpdateUsersReport:
     stopped: bool = False
 
 
-def _backup_library(path: str, dest_root: str, kind: str = "update-users") -> None:
-    """Copy a library file into ``dest_root``/<project>/ before its first write in this
-    run, listed in the manifest (updatepages.restore_backup puts it back); ``kind`` = the
-    backup's kind when this is its first entry."""
-    import shutil
-    from ..infra import backups
-
-    proj = os.path.basename(os.path.dirname(os.path.abspath(path)))
-    d = os.path.join(dest_root, proj)
-    dst = os.path.join(d, os.path.basename(path))
-    if os.path.exists(dst):
-        return
-    os.makedirs(d, exist_ok=True)
-    shutil.copyfile(path, dst)  # (a fresh mtime: the temp cleanup goes by date)
-    backups.add_entry(
-        dest_root, kind, {"library": os.path.abspath(path), "folder": proj, "file": os.path.basename(path)}
-    )
-
-
-#: public names (genieswap_worker): a link-table entry's (library, element, ext) and the
-#: backup of a library file before a run writes it
+#: public name (genieswap_worker): a link-table entry's (library, element, ext)
 entry_key = _entry_key
-backup_library = _backup_library
 
 
 #: the word before a template's name among the nested copies (nested_copy_labels): a
@@ -1002,6 +986,76 @@ def update_user_pages(
     return updatepages.relabelled(rep, pages)
 
 
+def _element_for_update(u, rep: UpdateUsersReport, open_element, editor_state, tab_clean):
+    """(the document of element user ``u``, whether it is open in a tab, its tab's state),
+    or None when it is skipped (unsaved changes in its tab, a read-only library)."""
+    from ..editing import ElementDocument
+
+    label = u.ref.label
+    doc = open_element(u.ref) if open_element is not None else None
+    state = editor_state(u.ref) if doc is None and editor_state is not None else None
+    dirty = (
+        doc is not None and getattr(doc, "dirty", False) and not (tab_clean is not None and tab_clean(doc))
+    )
+    if dirty or state == "dirty":
+        rep.skipped.append(
+            "%s: it has unsaved changes in the editor (save it there, then update again)" % label
+        )
+        return None
+    if doc is not None:
+        in_tab = True
+    else:
+        doc = ElementDocument.open_element(u.ref.path, u.ref.element)
+        in_tab = state == "clean"
+    if getattr(doc, "read_only", False):
+        rep.skipped.append("%s: its library file is read only" % label)
+        return None
+    return doc, in_tab, state
+
+
+def _note_element_saved(rep: UpdateUsersReport, u, doc, report: dict, read, in_tab: bool) -> None:
+    """What the save of element user ``u`` did, into ``rep`` (``read``: the element's
+    version before the save)."""
+    label = u.ref.label
+    wrote = element_version(doc)
+    if read[0] and wrote[0]:
+        # (what it read and stored, and the files its copies were composed from:
+        # the same before and after the save, or not known)
+        same = read[1] is not None and read[1] == wrote[1]
+        rep.element_versions.append(
+            (
+                os.path.abspath(u.ref.path),
+                u.ref.element,
+                read[0],
+                wrote[0],
+                sorted(list(x) for x in wrote[1]) if same else None,
+            )
+        )
+    if in_tab:
+        # (saved or already current: the tab's automatic changes are in the store)
+        rep.tabs_saved.append((os.path.abspath(u.ref.path), u.ref.element))
+    # the copies the save could not compose again: they stay as stored (a stamp
+    # current already stays current, so only this says it: compose-all)
+    left = nested_copy_labels(doc, report.get("stale_nested", ()))
+    if getattr(doc, "save_files", None):
+        (rep.elements_in_editor if in_tab else rep.elements_saved).append(label)
+        if u.ref.path not in rep.libraries_written:
+            rep.libraries_written.append(u.ref.path)
+        rep.save_warning = rep.save_warning or getattr(doc, "save_warning", "")
+        if left:
+            rep.not_composed.append((label, left))
+    elif left or (left := _left_stale(doc)):
+        # nothing written, yet a nested genie is still out of date: its copy could
+        # not be composed again (the save kept its old stamp). Said, never counted
+        # as 'already matched'
+        rep.skipped.append("%s: its copy of %s could not be composed again" % (label, ", ".join(left)))
+    else:
+        rep.elements_current.append(label)
+    for r in getattr(doc, "super_pages", None) or ():
+        if r.get("status") == "created":
+            rep.super_pages.append(str(r.get("name") or r.get("element") or ""))
+
+
 def run_update(
     plan: UpdatePlan,
     *,
@@ -1022,7 +1076,7 @@ def run_update(
     on_element=None,
 ) -> UpdateUsersReport:
     """Update an element's users in plan order."""
-    from ..editing import ElementChangedMeanwhile, ElementDocument, libraries_changed
+    from ..editing import ElementChangedMeanwhile, libraries_changed
 
     rep = UpdateUsersReport(backup=backup)
     rep.element_kinds = {
@@ -1038,28 +1092,12 @@ def run_update(
             rep.stopped = True
             return rep
         try:
-            doc = open_element(u.ref) if open_element is not None else None
-            state = editor_state(u.ref) if doc is None and editor_state is not None else None
-            dirty = (
-                doc is not None
-                and getattr(doc, "dirty", False)
-                and not (tab_clean is not None and tab_clean(doc))
-            )
-            if dirty or state == "dirty":
-                rep.skipped.append(
-                    "%s: it has unsaved changes in the editor (save it there, then update again)" % label
-                )
+            got = _element_for_update(u, rep, open_element, editor_state, tab_clean)
+            if got is None:
                 continue
-            if doc is not None:
-                in_tab = True
-            else:
-                doc = ElementDocument.open_element(u.ref.path, u.ref.element)
-                in_tab = state == "clean"
-            if getattr(doc, "read_only", False):
-                rep.skipped.append("%s: its library file is read only" % label)
-                continue
+            doc, in_tab, state = got
             if backup:
-                _backup_library(u.ref.path, backup, backup_kind)
+                backups.backup_file(backup, backup_kind, u.ref.path, once=True)
             if state is not None and editor_state(u.ref) == "dirty":
                 # (edited in its tab since it was looked at)
                 rep.skipped.append(
@@ -1082,46 +1120,9 @@ def run_update(
                     "%s: it was saved somewhere else while it was being updated (update again)" % label
                 )
                 continue
-            wrote = element_version(doc)
-            if read[0] and wrote[0]:
-                # (what it read and stored, and the files its copies were composed from:
-                # the same before and after the save, or not known)
-                same = read[1] is not None and read[1] == wrote[1]
-                rep.element_versions.append(
-                    (
-                        os.path.abspath(u.ref.path),
-                        u.ref.element,
-                        read[0],
-                        wrote[0],
-                        sorted(list(x) for x in wrote[1]) if same else None,
-                    )
-                )
-            if in_tab:
-                # (saved or already current: the tab's automatic changes are in the store)
-                rep.tabs_saved.append((os.path.abspath(u.ref.path), u.ref.element))
-            # the copies the save could not compose again: they stay as stored (a stamp
-            # current already stays current, so only this says it: compose-all)
-            left = nested_copy_labels(doc, report.get("stale_nested", ()))
-            if getattr(doc, "save_files", None):
-                (rep.elements_in_editor if in_tab else rep.elements_saved).append(label)
-                if u.ref.path not in rep.libraries_written:
-                    rep.libraries_written.append(u.ref.path)
-                rep.save_warning = rep.save_warning or getattr(doc, "save_warning", "")
-                if left:
-                    rep.not_composed.append((label, left))
-            elif left or (left := _left_stale(doc)):
-                # nothing written, yet a nested genie is still out of date: its copy could
-                # not be composed again (the save kept its old stamp). Said, never counted
-                # as 'already matched'
-                rep.skipped.append(
-                    "%s: its copy of %s could not be composed again" % (label, ", ".join(left))
-                )
-            else:
-                rep.elements_current.append(label)
-            for r in getattr(doc, "super_pages", None) or ():
-                if r.get("status") == "created":
-                    rep.super_pages.append(str(r.get("name") or r.get("element") or ""))
+            _note_element_saved(rep, u, doc, report, read, in_tab)
         except Exception as ex:  # noqa: BLE001 -- one element never stops the rest
+            _note_exc("genieusage.run_update", element=label)
             rep.failed.append("%s: %s" % (label, getattr(ex, "strerror", None) or ex))
         finally:
             if on_element is not None:

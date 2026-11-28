@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .fileio import file_stamp
+
 import codecs
 import os
 import re
@@ -13,6 +15,7 @@ from typing import Callable, Iterator, List, Optional, Sequence, Tuple
 
 from . import textcodec as _tc
 from .textcodec import CODEC
+from ..infra.logsetup import note_exception as _note_exc
 
 _DELETED = 0x2A  # '*'
 _FIELD_TERM = 0x0D
@@ -124,19 +127,22 @@ def _slicer(
 
 
 # --------------------------------------------------------------------------- "citect"
-def citect_rows(path: str, columns: Optional[Sequence[str]] = None, default: str = "") -> list:
+def citect_rows(
+    path: str, columns: Optional[Sequence[str]] = None, default: str = "", encodings: Optional[dict] = None
+) -> list:
     """:func:`projects.read_dbf_rows` of ``path`` -- every row as a {FIELD: value}
     dict (``columns`` None), or as a tuple of the ``columns`` values (``default``
-    for a column the table lacks). A fresh list every call; ``[]`` when the file
-    cannot be read or is not a table."""
+    for a column the table lacks). ``encodings``: {FIELD: codec} for the dict rows, a
+    column stored in another code page (a language table's LOCAL). A fresh list every
+    call; ``[]`` when the file cannot be read or is not a table."""
     try:
         with open(path, "rb") as fh:
-            return _citect(_open(fh), columns, default)
+            return _citect(_open(fh), columns, default, encodings)
     except OSError:
         return []
 
 
-def _citect(f: _File, columns, default) -> list:
+def _citect(f: _File, columns, default, encodings=None) -> list:
     n = f.size if f.data is None else len(f.data)
     if n < 33:
         return []
@@ -168,6 +174,9 @@ def _citect(f: _File, columns, default) -> list:
         # a dict of every field (a later field of the same name overwrites the value
         # at the first one's position, as a dict comprehension does)
         spans = [(offsets[k], offsets[k] + lengths[k]) for k in range(len(names))]
+        if encodings:
+            table = None  # (a column of its own code page: each field decoded alone)
+            codecs = [{k.upper(): v for k, v in encodings.items()}.get(n.upper(), CODEC) for n in names]
         for buf, base, k in f.records(hdr_size, rec_size, count):
             for i in range(k):
                 o = base + i * rec_size
@@ -178,7 +187,11 @@ def _citect(f: _File, columns, default) -> list:
                     append(dict(zip(names, [s[a:b].strip() for a, b in spans])))
                 else:
                     rec = buf[o : o + rec_size]
-                    append(dict(zip(names, [rec[a:b].decode(CODEC, "replace").strip() for a, b in spans])))
+                    if encodings:
+                        vals = [rec[a:b].decode(c, "replace").strip() for (a, b), c in zip(spans, codecs)]
+                    else:
+                        vals = [rec[a:b].decode(CODEC, "replace").strip() for a, b in spans]
+                    append(dict(zip(names, vals)))
         return rows
     picks = _picks(names, columns)
     st, where = _slicer(offsets, lengths, [k for k in picks if k is not None], rec_size)
@@ -339,18 +352,9 @@ MAX_CELLS = 2_500_000
 _cells = [0]
 
 
-def stamp(path: str) -> Optional[Tuple[str, int, int]]:
-    """(normalised path, mtime_ns, size) of a file, None when it cannot be stat'ed."""
-    try:
-        st = os.stat(path)
-    except OSError:
-        return None
-    return (os.path.normcase(os.path.abspath(path)), st.st_mtime_ns, st.st_size)
-
-
 def cached(path: str, kind, build: Callable[[str], object], weight: Callable[[object], int] = len):
     """``build(path)``, cached while the file is unchanged."""
-    st = stamp(path)
+    st = file_stamp(path)
     if st is None:
         return build(path)
     key = st + (kind,)
@@ -360,11 +364,12 @@ def cached(path: str, kind, build: Callable[[str], object], weight: Callable[[ob
             _CACHE.move_to_end(key)
             return hit[0]
     value = build(path)
-    if stamp(path) != st:
+    if file_stamp(path) != st:
         return value
     try:
         w = max(1, int(weight(value)))
     except Exception:  # noqa: BLE001
+        _note_exc("dbfcols.cached", path=path)
         w = 1
     with _LOCK:
         hit = _CACHE.get(key)
@@ -457,6 +462,7 @@ class ColumnTable:
                     try:
                         w = max(0, int(weight(v)))
                     except Exception:  # noqa: BLE001
+                        _note_exc("dbfcols.ColumnTable.derived")
                         w = 0
                     self.weight += w
                     with _COL_LOCK:
@@ -539,7 +545,7 @@ def column_table(
     while the file's stamp is unchanged (None when the file cannot be stat'ed).
     ``unique`` = columns whose values are mostly distinct (not shared). A
     second thread asking for a table being read waits for it."""
-    st = stamp(path)
+    st = file_stamp(path)
     if st is None:
         return None
     key = st + (tuple(c.upper() for c in columns),)
@@ -560,7 +566,7 @@ def column_table(
             continue
         try:
             t = _build_columns(path, st, columns, unique)
-            if stamp(path) == st:
+            if file_stamp(path) == st:
                 with _COL_LOCK:
                     _COLS[key] = t
                     _col_bytes[0] += t.weight

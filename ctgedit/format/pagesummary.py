@@ -200,7 +200,7 @@ class LibraryDirectory:
         return [e for e in self.entries if e.name and not e.is_deleted]
 
 
-def _read_dir(fh: BinaryIO, path: str, file_size: int) -> LibraryDirectory:
+def read_dir(fh: BinaryIO, path: str, file_size: int) -> LibraryDirectory:
     d = LibraryDirectory(path=path, file_size=file_size)
     hdr = fh.read(HEADER_FIXED)
     if len(hdr) < HEADER_FIXED:
@@ -284,7 +284,7 @@ def read_directory(path: str) -> LibraryDirectory:
         # unbuffered: a library's directory read seeks to every element's head for 32 bytes
         # (_grow_last_block), and a buffered read fills 8 KB at each
         with open(path, "rb", buffering=0) as fh:
-            return _read_dir(fh, path, size)
+            return read_dir(fh, path, size)
     except OSError, struct.error, ValueError:
         return LibraryDirectory(path=path)
 
@@ -417,7 +417,7 @@ class _Head:
     area_code: str = ""
 
 
-def _read_head(fh: BinaryIO, off: int, size: int, word2: int) -> Optional[_Head]:
+def read_head(fh: BinaryIO, off: int, size: int, word2: int) -> Optional[_Head]:
     legacy = word2 < 0x0C
     head_size = PAGE_HEAD_SIZE_LEGACY if legacy else PAGE_HEAD_SIZE
     if size < head_size:
@@ -503,7 +503,7 @@ def read_page_summary(
         st = os.stat(path)
         s.mtime_ns, s.size = st.st_mtime_ns, st.st_size
         with open(path, "rb") as fh:
-            d = _read_dir(fh, path, st.st_size)
+            d = read_dir(fh, path, st.st_size)
             if not d.ok:
                 s.error = "not a Citect container"
                 return s
@@ -516,7 +516,7 @@ def read_page_summary(
             if pg is None:
                 s.error = "no page block"
                 return s
-            h = _read_head(fh, pg.offset, pg.size, d.word2)
+            h = read_head(fh, pg.offset, pg.size, d.word2)
             if h is None:
                 s.error = "bad page head"
                 return s
@@ -544,13 +544,13 @@ def read_link_names(path: str) -> List[str]:
     try:
         size = os.path.getsize(path)
         with open(path, "rb") as fh:
-            d = _read_dir(fh, path, size)
+            d = read_dir(fh, path, size)
             if not d.ok:
                 return []
             pg = next((e for e in d.entries if e.name == "page" and not e.is_deleted), None)
             if pg is None:
                 return []
-            h = _read_head(fh, pg.offset, pg.size, d.word2)
+            h = read_head(fh, pg.offset, pg.size, d.word2)
             if h is None or not h.link_count:
                 return []
             head_size = PAGE_HEAD_SIZE_LEGACY if d.word2 < 0x0C else PAGE_HEAD_SIZE
@@ -610,7 +610,7 @@ def _element_summary(
 ) -> ElementSummary:
     es = ElementSummary(library_path=lib_path, name=e.name, offset=e.offset, size=e.size, tag=e.tag)
     try:
-        h = _read_head(fh, e.offset, e.size, word2)
+        h = read_head(fh, e.offset, e.size, word2)
         if h is None:
             return es
         es.width, es.height, es.object_count = h.width, h.height, h.count
@@ -655,7 +655,7 @@ def _element_flashing(fh: BinaryIO, off: int, size: int, h: _Head) -> bool:
                 if sec is not None and sec.flags & 0x100:
                     return True
         return False
-    except Exception:  # noqa: BLE001 -- a hint in a list: never an error
+    except Exception:  # noqa: BLE001 -- swallow-ok: a hint in a list: never an error
         return False
 
 
@@ -667,7 +667,7 @@ def read_element_summaries(
     try:
         size = os.path.getsize(lib_path)
         with open(lib_path, "rb") as fh:
-            d = _read_dir(fh, lib_path, size)
+            d = read_dir(fh, lib_path, size)
             if not d.ok:
                 return []
             elems = d.elements()
@@ -694,7 +694,7 @@ def read_element_summary(
         fsize = os.path.getsize(lib_path)
         with open(lib_path, "rb") as fh:
             if offset is None or size is None or word2 is None:
-                d = _read_dir(fh, lib_path, fsize)
+                d = read_dir(fh, lib_path, fsize)
                 if not d.ok:
                     return None
                 e = d.block(name)

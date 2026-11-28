@@ -1,6 +1,10 @@
 """Named styles: store, gallery and commands."""
 
 from __future__ import annotations
+
+from ..dialog_buttons import dialog_buttons
+
+from ..names import plural
 from ..style.theme import sp as _sp  # (the spacing scale)
 
 import json
@@ -79,18 +83,22 @@ def read_style_file(path: str) -> List[Style]:
     read)."""
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
-    items = data.get("styles") if isinstance(data, dict) else data
-    if not isinstance(items, list):
-        raise ValueError("The file holds no styles.")
-    return _styles_from(items)
+    if not isinstance(data, dict) or not isinstance(data.get("styles"), list) or "format" not in data:
+        raise ValueError("%s is not a styles file saved by ctgedit." % os.path.basename(path))
+    try:
+        fmt = int(data["format"])
+    except (TypeError, ValueError) as e:
+        raise ValueError("%s is not a styles file saved by ctgedit." % os.path.basename(path)) from e
+    if fmt > FILE_FORMAT:
+        raise ValueError("%s was saved by a newer ctgedit." % os.path.basename(path))
+    return _styles_from(data["styles"])
 
 
 def write_style_file(path: str, styles: List[Style]) -> None:
+    from ...format.fileio import write_atomic
+
     data = {"format": FILE_FORMAT, "styles": [s.as_json() for s in styles]}
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=1, sort_keys=True)
-    os.replace(tmp, path)
+    write_atomic(path, json.dumps(data, indent=1, sort_keys=True).encode("utf-8"))
 
 
 class StyleStore(QtCore.QObject):
@@ -650,9 +658,7 @@ class ManageStylesDialog(QtWidgets.QDialog):
         self.note = theme.note_label("", parent=self)
         self.note.setWordWrap(True)
         lay.addWidget(self.note)
-        bb = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
-        bb.accepted.connect(self.accept)
-        bb.rejected.connect(self.reject)
+        bb = dialog_buttons(self)
         lay.addWidget(bb)
         self.btn_rename.clicked.connect(self.rename_selected)
         self.btn_remove.clicked.connect(self.remove_selected)
@@ -709,8 +715,10 @@ class ManageStylesDialog(QtWidgets.QDialog):
             return False
         s = self._styles[r]
         if new_name is None:
-            new_name, ok = QtWidgets.QInputDialog.getText(self, "Rename Style", "New name:", text=s.name)
-            if not ok:
+            from ..messages import ask_text
+
+            new_name = ask_text(self, "Rename Style", "New name:", s.name)
+            if new_name is None:
                 return False
         new_name = (new_name or "").strip()
         if not new_name or new_name == s.name:
@@ -758,7 +766,7 @@ class ManageStylesDialog(QtWidgets.QDialog):
             else:
                 self._styles[k] = s
         self._fill()
-        self.note.setText("Imported %d style%s." % (len(got), "" if len(got) == 1 else "s"))
+        self.note.setText("Imported %s." % (plural(len(got), "style")))
         self.note.setVisible(True)
         return len(got)
 
@@ -777,13 +785,17 @@ class ManageStylesDialog(QtWidgets.QDialog):
         return True
 
     def _import(self) -> None:
-        path, _f = QtWidgets.QFileDialog.getOpenFileName(self, "Import Styles", "", FILE_FILTER)
+        from ..remember import file_path
+
+        path = file_path(self, "Import Styles", "styles", FILE_FILTER, save=False)
         if path:
             self.import_file(path)
 
     def _export(self) -> None:
-        path, _f = QtWidgets.QFileDialog.getSaveFileName(
-            self, "Export Styles", "styles" + FILE_SUFFIX, FILE_FILTER
+        from ..remember import file_path
+
+        path = file_path(
+            self, "Export Styles", "styles", FILE_FILTER, save=True, file_name="styles" + FILE_SUFFIX
         )
         if path:
             if not os.path.splitext(path)[1]:
@@ -990,9 +1002,7 @@ class StyleCommands:
             return
         n = self.doc.apply_appearance(list(self._sel), s.appearance or {}, label="style %s" % name)
         self._refresh()
-        self.statusBar().showMessage(
-            "Applied the style %s to %d object%s." % (name, n, "" if n == 1 else "s"), 5000
-        )
+        self.statusBar().showMessage("Applied the style %s to %s." % (name, plural(n, "object")), 5000)
 
     def update_style(self, name: str) -> None:
         """Update Style from Selection: style ``name`` takes the selected object's look."""
@@ -1018,8 +1028,10 @@ class StyleCommands:
         if s is None:
             return False
         if new_name is None:
-            new_name, ok = QtWidgets.QInputDialog.getText(self, "Rename Style", "New name:", text=name)
-            if not ok:
+            from ..messages import ask_text
+
+            new_name = ask_text(self, "Rename Style", "New name:", name)
+            if new_name is None:
                 return False
         new_name = (new_name or "").strip()
         if not new_name or new_name == name:
@@ -1058,7 +1070,7 @@ class StyleCommands:
             self._on_canvas_selection(hits)
             self.view.set_selection(hits)
         self.statusBar().showMessage(
-            "%d object%s with the style %s." % (len(hits), "" if len(hits) == 1 else "s", name)
+            "%s with the style %s." % (plural(len(hits), "object"), name)
             if hits
             else "No object on the page has the style %s." % name,
             5000,
@@ -1197,7 +1209,7 @@ class StyleCommands:
         a = getattr(self, "act_style_default", None)
         if a is None:
             return
-        _i, kind = self._first_selected() if getattr(self, "doc", None) is not None else (None, None)
+        i, kind = self._first_selected() if getattr(self, "doc", None) is not None else (None, None)
         a.setText("Use Selection as Default for New %s" % (DS.label(kind, True) if kind else "Objects"))
         a.setEnabled(kind is not None)
 

@@ -1,5 +1,6 @@
 """What follows a library save."""
 
+from ctgedit.ui.window import open_genie_updates as open_genie_updates_mod
 import gc
 import hashlib
 import json
@@ -35,8 +36,8 @@ def _drop_win(w):
         if hasattr(d, "dirty"):
             d.dirty = False
     w.doc = None
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.close()
 
 
@@ -296,7 +297,7 @@ def test_a_closed_window_stops_its_timers_and_lets_its_pages_go(fx_install, win2
     ref = weakref.ref(d)
     d.dirty = False
     win2.close()
-    assert win2 not in MainWindow._instances
+    assert win2 not in MainWindow.instances
     assert not win2._idle_timer.isActive() and not win2._lib_timer.isActive()
     assert not win2._docs and win2.doc is None and not win2._idle_docs
     assert win2._idle_tick() == [] and not d._undo, "nothing lands on the closed page"
@@ -367,7 +368,7 @@ def test_a_moved_tab_marked_to_be_drawn_again_is_drawn_again(fx_install, win, wi
         parse_ctg_bytes(pd.serialize()),
         pd.path,
         records_fresh=True,
-        generation=editing._LIBRARY_GENERATION[0],
+        generation=editing.LIBRARY_GENERATION[0],
     )
     assert not model_difference(pd.page, full), "drawn from the library as saved"
 
@@ -687,7 +688,6 @@ def test_how_long_an_update_waits_for_the_steps_to_redo_is_a_setting(fx_install,
     read it; a look that leaves the steps to redo out does so whatever it is."""
     from ctgedit.ui.prefs.settings import app_settings
     from ctgedit.ui.prefs.settings_dialog import SettingsDialog
-    from ctgedit.ui.window import files
 
     _no_jobs(win, monkeypatch)
     win.open_document(fx_install.page("FxShapes"))
@@ -696,7 +696,7 @@ def test_how_long_an_update_waits_for_the_steps_to_redo_is_a_setting(fx_install,
     d.undo()
     st = app_settings()
     try:
-        assert files.redo_wait_s() == 60
+        assert open_genie_updates_mod.redo_wait_s() == 60
         assert not win._genie_may_land(d, 59.0) and win._genie_may_land(d, 61.0)
         st.setValue("opt/auto_update_redo_wait_s", 120)
         assert not win._genie_may_land(d, 90.0) and win._redo_holds(d)
@@ -704,7 +704,7 @@ def test_how_long_an_update_waits_for_the_steps_to_redo_is_a_setting(fx_install,
         st.setValue("opt/auto_update_redo_wait_s", 0)
         assert win._genie_may_land(d, 0.0) and not win._redo_holds(d)
         st.setValue("opt/auto_update_redo_wait_s", -5)  # (out of its span)
-        assert files.redo_wait_s() == 60
+        assert open_genie_updates_mod.redo_wait_s() == 60
     finally:
         st.remove("opt/auto_update_redo_wait_s")
     rows = [r for r in SettingsDialog.ROWS if r.key == "opt/auto_update_redo_wait_s"]

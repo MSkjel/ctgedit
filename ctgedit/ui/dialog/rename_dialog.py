@@ -1,6 +1,8 @@
 """Edit > Rename Objects: rename several objects at once."""
 
 from __future__ import annotations
+
+from ..names import element_label, kind_name, object_name_of, plural, what_label
 from ..style.theme import sp as _sp
 
 import json
@@ -9,7 +11,6 @@ import string
 
 from PySide6 import QtCore, QtWidgets
 
-from ..names import element_label, kind_name, object_name_of, what_label
 
 #: the orders the numbers are given in
 ORDERS = (("reading", "Reading order"), ("drawing", "Drawing order"), ("selection", "Selection order"))
@@ -531,7 +532,7 @@ class RenameObjectsDialog(QtWidgets.QDialog):
             msg = error
         elif problems:
             k = len(problems)
-            msg = "%d name%s cannot be used. %s" % (k, "" if k == 1 else "s", next(iter(problems.values())))
+            msg = "%s cannot be used. %s" % (plural(k, "name"), next(iter(problems.values())))
         elif not changes:
             msg = "No name changes."
         else:

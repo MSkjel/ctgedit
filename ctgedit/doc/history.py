@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from ..infra.paths import path_key
+
+from ..format.projects import is_project_dir
+
 from ..editing_base import (  # noqa: F401
     CODEC,
     Optional,
@@ -16,12 +20,13 @@ from ..editing_base import (  # noqa: F401
     writer,
 )
 from ..editing_base import (  # noqa: F401
-    _check_page_name,
-    _fresh_identity,
-    _identity_state,
-    _prune_link_table,
-    _set_identity_state,
+    check_page_name,
+    fresh_identity,
+    identity_state,
+    prune_link_table,
+    set_identity_state,
 )
+from ..infra.logsetup import note_exception as _note_exc
 
 
 def keep_earlier_version(path: str, data: bytes, element: str = "", force: bool = False) -> None:
@@ -372,12 +377,7 @@ class HistoryAndSave:
         target = path or self.path
         stem = os.path.splitext(os.path.basename(target))[0]
         tdir = os.path.dirname(os.path.abspath(target))
-        if len(stem.encode(CODEC, "replace")) > 64 and any(
-            os.path.exists(os.path.join(tdir, n)) for n in ("pages.DBF", "pages.dbf")
-        ):
-            # pages.DBF NAME is C(64): a longer page name cannot be registered
-            raise ValueError("Citect page names are limited to 64 characters (%r has %d)" % (stem, len(stem)))
-        _check_page_name(stem, tdir)
+        check_page_name(stem, tdir)
         from ..format import projectlock
 
         with projectlock.page(target):
@@ -388,97 +388,22 @@ class HistoryAndSave:
         from ..format import projectlock
 
         tdir = os.path.dirname(os.path.abspath(target))
-        in_project = any(os.path.exists(os.path.join(tdir, n)) for n in ("pages.DBF", "pages.dbf"))
+        in_project = is_project_dir(tdir)
         name = os.path.splitext(os.path.basename(target))[0]
         src_path = self.path
-        save_as = os.path.normcase(os.path.abspath(target)) != os.path.normcase(os.path.abspath(src_path))
+        save_as = path_key(target) != path_key(src_path)
         self.rows_pending = False
         self.save_warning = ""
         if batch:
-            ident = getattr(self, "_open_identity", None)
-            if ident is not None and file_identity(target) != ident:
-                raise PageChangedOnDisk(target)
-            if in_project:
-                from ..io import pgregister
-
-                pgregister.probe_writable(tdir)
-            if backup:
-                from ..io import updatepages
-
-                updatepages.backup_page(target, backup[0], backup[1])
+            self._batch_save_checks(target, tdir, in_project, backup)
         self._restore_pruned_links()
         # every save: a new identity (CtDraw's CoCreateGuid on each save: the .ctF
         # staleness key and the container's ts_modified) and a link table without the
         # entries nothing on the page uses any more (CtDraw rebuilds the table from the
         # records on every save), kept on the document only once the page is on disk
-        hook = SAVE_THUMBNAIL
-        if hook is not None and self.parsed.page is not None:
-            try:
-                blob = hook(self)
-                if blob:
-                    self.parsed.page.thumbnail = blob
-            except Exception:  # noqa: BLE001 -- the stored thumbnail then
-                from ..infra import logsetup
-
-                logsetup.note_exception("editing.save/thumbnail", page=self.path)
-        old_state = _identity_state(self.parsed)
-        _fresh_identity(
-            self.parsed, created=not os.path.exists(target) or bool(getattr(self, "_creating", False))
-        )
-        dropped = _prune_link_table(self.parsed.page)
-        copy_state = _identity_state(self.parsed)
-        # a named record carries its name as '__AN_NAME__' too and a text its extent as
-        # measured now, as CtDraw's load + save writes them (genie_place.save_form): in the
-        # file only, the document's records stay
-        from ..format import genie_place as GP
-
-        pb = self.parsed.page
-        objs0 = pb.objects if pb is not None else None
-        saved, owners0 = objs0, None
-        try:
-            if objs0 is not None:
-                owners0 = self._save_owners(objs0)
-                saved = GP.save_form(
-                    objs0, owners0, fonts=self._save_fonts(objs0, target), tag_format=self._save_tag_format()
-                )
-                pb.objects = saved
-            data = self.serialize()
-        finally:
-            if objs0 is not None:
-                pb.objects = objs0
-            if copy_state is not None:
-                _set_identity_state(self.parsed, old_state)
-        # the page block of these bytes for the .ctF: the records the file holds (the save
-        # form), the owners of the save form's own records with them (a record's owner is
-        # itself or a library record, and the save form only remeasures and renames)
-        ctf_page = pb
-        if pb is not None and saved is not objs0:
-            import copy as _copy
-
-            ctf_page = _copy.copy(pb)
-            ctf_page.objects = saved
-        ctf_owners = None
-        if owners0 is not None and objs0 is not None and len(owners0) == len(saved):
-            ctf_owners = [saved[i] if ow is objs0[i] else ow for i, ow in enumerate(owners0)]
-        # the page as it is on disk now (paired with its .ctF when CtDraw wrote
-        # both): the per-page check of the native .ctF writer
-        try:
-            with open(target, "rb") as fh:
-                previous = fh.read()
-        except OSError:
-            previous = None
-        # a fast-display check process still reading this page / its .ctF
-        # ends first: Windows cannot replace or remove a file another process
-        # holds open (its verdict is the one this save then uses)
-        if not save_as:
-            self._settle_ctf_precheck()
-        # the page as it was on disk goes into its earlier versions (File > Page History)
-        # first: a copy of those bytes, which never changes what is written
-        if previous is not None:
-            # (the first save after File > Page History > Restore keeps what it replaces
-            # whatever Settings 'New earlier version at most every' says)
-            keep_earlier_version(target, previous, force=getattr(self, "restored_version", None) is not None)
-            self.restored_version = None
+        self._take_save_thumbnail()
+        data, copy_state, dropped, ctf_page, ctf_owners = self._serialize_save_form(target)
+        previous = self._keep_previous_version(target, save_as)
         record_files: list = []
         if batch and in_project:
             # the page's pages.DBF row and staged Page Properties BEFORE the page file: a
@@ -493,19 +418,7 @@ class HistoryAndSave:
                 ) from e
         marked = had_marker = False
         if in_project:
-            # the rows fall behind the page file from here until the register has run
-            from ..io import pendingrows
-
-            had_marker = pendingrows.marked(target) is not None
-            try:
-                pendingrows.mark(target)
-                marked = True
-            except OSError:
-                # (ctgedit's data folder cannot be written: the save goes on without a
-                # marker)
-                from ..infra import logsetup
-
-                logsetup.note_exception("editing.save/pending_marker", page=target)
+            marked, had_marker = self._mark_rows_pending(target)
         with projectlock.uncancellable():
             # write ATOMICALLY: a crash / full disk mid-write must never leave a
             # truncated page (temp file in the same folder, then replace). A
@@ -517,6 +430,8 @@ class HistoryAndSave:
                 # (nothing was written: the marker goes, unless an earlier save left it,
                 # whose rows are still behind the page file on disk)
                 if marked and not had_marker:
+                    from ..io import pendingrows
+
                     pendingrows.clear(target)
                 raise
             from ..infra.paths import kill_point
@@ -538,6 +453,124 @@ class HistoryAndSave:
                 ctf_page,
                 ctf_owners,
             )
+
+    def _batch_save_checks(self, target: str, tdir: str, in_project: bool, backup) -> None:
+        """An Update Pages save: refused when the file changed since it was opened or the
+        project database cannot be written; the page backed up first (``backup`` =
+        (folder, reason))."""
+        ident = getattr(self, "_open_identity", None)
+        if ident is not None and file_identity(target) != ident:
+            raise PageChangedOnDisk(target)
+        if in_project:
+            from ..io import pgregister
+
+            pgregister.probe_writable(tdir)
+        if backup:
+            from ..io import updatepages
+
+            updatepages.backup_page(target, backup[0], backup[1])
+
+    def _take_save_thumbnail(self) -> None:
+        """The page's thumbnail drawn by the SAVE_THUMBNAIL hook, when one is set."""
+        hook = SAVE_THUMBNAIL
+        if hook is not None and self.parsed.page is not None:
+            try:
+                blob = hook(self)
+                if blob:
+                    self.parsed.page.thumbnail = blob
+            except Exception:  # noqa: BLE001 -- the stored thumbnail then
+                from ..infra import logsetup
+
+                logsetup.note_exception("history.HistoryAndSave._take_save_thumbnail", page=self.path)
+
+    def _serialize_save_form(self, target: str) -> tuple:
+        """The page's bytes with a new identity and a pruned link table: (the bytes, the
+        identity state they carry, the link entries dropped, the page block and owners
+        the .ctF is built from). The document keeps its own identity and records."""
+        old_state = identity_state(self.parsed)
+        fresh_identity(
+            self.parsed, created=not os.path.exists(target) or bool(getattr(self, "_creating", False))
+        )
+        dropped = prune_link_table(self.parsed.page)
+        copy_state = identity_state(self.parsed)
+        # a named record carries its name as '__AN_NAME__' too and a text its extent as
+        # measured now, as CtDraw's load + save writes them (genie_place.save_form): in the
+        # file only, the document's records stay
+        from ..format import genie_place as GP
+
+        pb = self.parsed.page
+        objs0 = pb.objects if pb is not None else None
+        saved, owners0 = objs0, None
+        try:
+            if objs0 is not None:
+                owners0 = self._save_owners(objs0)
+                saved = GP.save_form(
+                    objs0, owners0, fonts=self._save_fonts(objs0, target), tag_format=self._save_tag_format()
+                )
+                pb.objects = saved
+            data = self.serialize()
+        finally:
+            if objs0 is not None:
+                pb.objects = objs0
+            if copy_state is not None:
+                set_identity_state(self.parsed, old_state)
+        # the page block of these bytes for the .ctF: the records the file holds (the save
+        # form), the owners of the save form's own records with them (a record's owner is
+        # itself or a library record, and the save form only remeasures and renames)
+        ctf_page = pb
+        if pb is not None and saved is not objs0:
+            import copy as _copy
+
+            ctf_page = _copy.copy(pb)
+            ctf_page.objects = saved
+        ctf_owners = None
+        if owners0 is not None and objs0 is not None and len(owners0) == len(saved):
+            ctf_owners = [saved[i] if ow is objs0[i] else ow for i, ow in enumerate(owners0)]
+        return data, copy_state, dropped, ctf_page, ctf_owners
+
+    def _keep_previous_version(self, target: str, save_as: bool) -> Optional[bytes]:
+        """The page's bytes on disk now (None for a new file), kept as an earlier version
+        (File > Page History)."""
+        # the page as it is on disk now (paired with its .ctF when CtDraw wrote
+        # both): the per-page check of the native .ctF writer
+        try:
+            with open(target, "rb") as fh:
+                previous = fh.read()
+        except OSError:
+            previous = None
+        # a fast-display check process still reading this page / its .ctF
+        # ends first: Windows cannot replace or remove a file another process
+        # holds open (its verdict is the one this save then uses)
+        if not save_as:
+            self._settle_ctf_precheck()
+        # the page as it was on disk goes into its earlier versions (File > Page History)
+        # first: a copy of those bytes, which never changes what is written
+        if previous is not None:
+            # (the first save after File > Page History > Restore keeps what it replaces
+            # whatever Settings 'New earlier version at most every' says)
+            keep_earlier_version(target, previous, force=getattr(self, "restored_version", None) is not None)
+            self.restored_version = None
+        return previous
+
+    @staticmethod
+    def _mark_rows_pending(target: str) -> tuple:
+        """Mark the page's project rows as behind its file; (marked, an earlier save had
+        marked them)."""
+        # the rows fall behind the page file from here until the register has run
+        from ..io import pendingrows
+
+        marked = False
+        had_marker = pendingrows.marked(target) is not None
+        try:
+            pendingrows.mark(target)
+            marked = True
+        except OSError:
+            # (ctgedit's data folder cannot be written: the save goes on without a
+            # marker)
+            from ..infra import logsetup
+
+            logsetup.note_exception("history.HistoryAndSave._mark_rows_pending", page=target)
+        return marked, had_marker
 
     def _after_page_write(
         self,
@@ -568,10 +601,10 @@ class HistoryAndSave:
             self._turn_memo_after_save()
         self.save_files = [target] + [p for p in record_files if p != target]
         if copy_state is not None:
-            _set_identity_state(self.parsed, copy_state)
+            set_identity_state(self.parsed, copy_state)
             self._pruned_links = list(getattr(self, "_pruned_links", None) or []) + dropped
         self.path = target  # Save As: track the file now on disk
-        self._disk_stamp = self._stamp(target)
+        self._disk_stamp = self.disk_stamp(target)
         self._open_identity = file_identity(target)
         self.read_only = False
         self.damage = ()  # the file on disk is whole again
@@ -700,93 +733,113 @@ class HistoryAndSave:
         notes = []
         self._rows_ok, self._ctf_ok = True, True
         pdir = os.path.dirname(os.path.abspath(target))
-        is_project = any(os.path.exists(os.path.join(pdir, n)) for n in ("pages.DBF", "pages.dbf"))
+        is_project = is_project_dir(pdir)
         if not is_project:
             return ""
         ctf_path = target[:-1] + "F" if target.lower().endswith(".ctg") else None
+        if ctf_path:
+            self._update_fast_display(target, ctf_path, data, previous, page, owners, notes)
+        self._register_rows(pdir, target, notes)
+        return "; ".join(notes)
+
+    def _ctf_trusted(self, target: str, previous, existing: list, old_ctf, res, notes: list) -> bool:
+        """Whether the native .ctF writer may write this page's .ctF (else a stale one is
+        removed and the runtime reads the .ctg)."""
+        from ..format import ctf as CTF
+
+        # trusted = the writer reproduces CtDraw's .ctF of this page's
+        # previous version byte for byte -- or the .ctF on disk is the
+        # one this document wrote (no need to rebuild the old one)
+        mine = getattr(self, "_ctf_stamp", None)
+        trusted = bool(existing) and mine is not None and self.disk_stamp(existing[0]) == mine
+        if not trusted and previous is not None and old_ctf is not None:
+            pre = self._ctf_precheck_result(previous, old_ctf)
+            # (equal up to the stamps of CtDraw's .ctF write: ctf_matches)
+            trusted = (
+                pre
+                if pre is not None
+                else ctf_matches(CTF.build_ctf(previous, target, resolver=res), old_ctf)
+            )
+        if (
+            not trusted
+            and previous is not None
+            and old_ctf is not None
+            and os.environ.get("CTG_CTF_REMOVE_STALE") != "1"
+        ):
+            why = ctf_out_of_date(previous, existing[0], res)
+            if why:
+                # the old .ctF shows what the page was before its genies or
+                # libraries changed: CtDraw's save writes a new one, and the
+                # writer reproduces those
+                trusted = True
+                notes.append("fast display was out of date (%s)" % why)
+        if not trusted and not existing and previous is None:
+            # a page this document CREATES whose .ctF the native
+            # writer is known to reproduce (a super genie page)
+            trusted = bool(getattr(self, "_ctf_new_page", False))
+        return trusted
+
+    def _update_fast_display(
+        self, target: str, ctf_path: str, data: bytes, previous: Optional[bytes], page, owners, notes: list
+    ) -> None:
+        """Write the page's .ctF (fast display), or remove a stale one."""
         try:
             from ..io.citect_config import fast_display_enabled
 
             fast = fast_display_enabled()
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 -- swallow-ok: no install or an unreadable ini: the default
             fast = True
-        if ctf_path:
-            # one file on Windows ('.ctF' and '.ctf' are the same name there)
-            existing, seen = [], set()
-            for p in (ctf_path, target[:-1] + "f"):
-                key = os.path.normcase(os.path.abspath(p))
-                if key not in seen and os.path.exists(p):
-                    seen.add(key)
-                    existing.append(p)
-            old_ctf = None
-            if existing:
-                try:
-                    with open(existing[0], "rb") as fh:
-                        old_ctf = fh.read()
-                except OSError:
-                    old_ctf = None
-            wrote = False
-            if fast:
-                try:
-                    from ..format import ctf as CTF
+        # one file on Windows ('.ctF' and '.ctf' are the same name there)
+        existing, seen = [], set()
+        for p in (ctf_path, target[:-1] + "f"):
+            key = path_key(p)
+            if key not in seen and os.path.exists(p):
+                seen.add(key)
+                existing.append(p)
+        old_ctf = None
+        if existing:
+            try:
+                with open(existing[0], "rb") as fh:
+                    old_ctf = fh.read()
+            except OSError:
+                old_ctf = None
+        wrote = False
+        if fast:
+            try:
+                from ..format import ctf as CTF
 
-                    res = self._resolver()
-                    # trusted = the writer reproduces CtDraw's .ctF of this page's
-                    # previous version byte for byte -- or the .ctF on disk is the
-                    # one this document wrote (no need to rebuild the old one)
-                    mine = getattr(self, "_ctf_stamp", None)
-                    trusted = bool(existing) and mine is not None and self._stamp(existing[0]) == mine
-                    if not trusted and previous is not None and old_ctf is not None:
-                        pre = self._ctf_precheck_result(previous, old_ctf)
-                        # (equal up to the stamps of CtDraw's .ctF write: ctf_matches)
-                        trusted = (
-                            pre
-                            if pre is not None
-                            else ctf_matches(CTF.build_ctf(previous, target, resolver=res), old_ctf)
-                        )
-                    if (
-                        not trusted
-                        and previous is not None
-                        and old_ctf is not None
-                        and os.environ.get("CTG_CTF_REMOVE_STALE") != "1"
-                    ):
-                        why = ctf_out_of_date(previous, existing[0], res)
-                        if why:
-                            # the old .ctF shows what the page was before its genies or
-                            # libraries changed: CtDraw's save writes a new one, and the
-                            # writer reproduces those
-                            trusted = True
-                            notes.append("fast display was out of date (%s)" % why)
-                    if not trusted and not existing and previous is None:
-                        # a page this document CREATES whose .ctF the native
-                        # writer is known to reproduce (a super genie page)
-                        trusted = bool(getattr(self, "_ctf_new_page", False))
-                    if trusted:
-                        blob = CTF.build_ctf(data, target, resolver=res, page=page, owners=owners)
-                        out = existing[0] if existing else ctf_path
-                        write_atomic(out, blob)
-                        self._ctf_stamp = self._stamp(out)
-                        wrote = True
-                        notes.append("fast display rebuilt")
-                        self._saved_file(out)
-                except ImportError:
-                    pass
-                except Exception as e:  # noqa: BLE001
-                    notes.append("fast display not rebuilt (%s)" % e)
-            # the trust check was about the page before this save: done with it
-            self.stop_ctf_precheck()
-            if not wrote:
-                for p in existing:
-                    try:
-                        os.remove(p)
-                        notes.append("stale fast display removed (runtime reads the .ctg)")
-                        self._saved_file("removed " + p)
-                    except OSError as e:
-                        self._ctf_ok = False
-                        self.save_warning = (self.save_warning + "\n" if self.save_warning else "") + (
-                            "could not remove the stale %s (%s): the "
-                            "runtime keeps showing the old page" % (os.path.basename(p), e)
-                        )
+                res = self._resolver()
+                trusted = self._ctf_trusted(target, previous, existing, old_ctf, res, notes)
+                if trusted:
+                    blob = CTF.build_ctf(data, target, resolver=res, page=page, owners=owners)
+                    out = existing[0] if existing else ctf_path
+                    write_atomic(out, blob)
+                    self._ctf_stamp = self.disk_stamp(out)
+                    wrote = True
+                    notes.append("fast display rebuilt")
+                    self._saved_file(out)
+            except ImportError:
+                pass
+            except Exception as e:  # noqa: BLE001
+                _note_exc("history.HistoryAndSave._update_fast_display", path=self.path)
+                notes.append("fast display not rebuilt (%s)" % e)
+        # the trust check was about the page before this save: done with it
+        self.stop_ctf_precheck()
+        if not wrote:
+            for p in existing:
+                try:
+                    os.remove(p)
+                    notes.append("stale fast display removed (runtime reads the .ctg)")
+                    self._saved_file("removed " + p)
+                except OSError as e:
+                    self._ctf_ok = False
+                    self.save_warning = (self.save_warning + "\n" if self.save_warning else "") + (
+                        "could not remove the stale %s (%s): the "
+                        "runtime keeps showing the old page" % (os.path.basename(p), e)
+                    )
+
+    def _register_rows(self, pdir: str, target: str, notes: list) -> None:
+        """Write the page's project database rows (io/pgregister.register_page)."""
         try:
             from ..io import pgregister
 
@@ -835,12 +888,12 @@ class HistoryAndSave:
             if BUSY_WARNING not in self.save_warning and BUSY_NEW_PAGE_WARNING not in self.save_warning:
                 self.save_warning = (self.save_warning + "\n" if self.save_warning else "") + BUSY_WARNING
         except Exception as e:  # noqa: BLE001
+            _note_exc("history.HistoryAndSave._register_rows", path=self.path)
             self._rows_ok = False
             self.save_warning = (self.save_warning + "\n" if self.save_warning else "") + (
                 "The project database could not be updated (%s). Its tables were left as "
                 "they were before this save; save again to retry." % e
             )
-        return "; ".join(notes)
 
     def _saved_file(self, path: str) -> None:
         files = getattr(self, "save_files", None)

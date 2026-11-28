@@ -9,7 +9,7 @@ from PySide6 import QtCore, QtGui
 class CanvasSelection:
     """Which objects the canvas can select, in what order, and box selection (mixed into CanvasView)."""
 
-    def select_units(self, units: list, reveal: bool = True, say: bool = True) -> None:
+    def select_units(self, units: list, reveal: bool = True) -> None:
         """Select ``units`` as a click would (selectionChanged follows), scroll them into
         view and name them on the status bar: the keyboard's way to select."""
         units = [list(u) for u in units if u]
@@ -18,7 +18,7 @@ class CanvasSelection:
             self._key_root = min(units[-1])
         if reveal:
             self.reveal_selection()
-        if say and units:
+        if units:
             if len(units) == 1:
                 self.statusMessage.emit(self.unit_label(min(units[0])))
             else:

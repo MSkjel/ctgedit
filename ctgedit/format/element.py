@@ -16,7 +16,7 @@ from ctgedit.format.page import (
     PageBlock,
     PageObject,
     parse_page,
-    _parse_object,
+    parse_object,
 )
 from ctgedit.format import writer
 from ctgedit.format.fileio import write_atomic
@@ -114,7 +114,8 @@ class LibraryFile:
     blocks, orphaned gaps, stale slack, directory quirks -- is preserved)."""
 
     def __init__(self, data: bytes):
-        self.buf = bytearray(data)
+        # (the file's bytes as read; a buffer of their own from the first change: _writable)
+        self.buf = data if type(data) is bytes else bytearray(data)
         self._dir_grown = False  # the directory grew; moves wait for close
         self._retiled = False  # the directory was retiled (before the first change)
         self._dirty = False  # the directory changed
@@ -307,8 +308,14 @@ class LibraryFile:
         self._dirty = True
         return s
 
+    def _writable(self) -> None:
+        """Make the file bytes a buffer of their own (before the first change)."""
+        if type(self.buf) is not bytearray:
+            self.buf = bytearray(self.buf)
+
     def _put(self, offset: int, content: bytes) -> None:
         """Write ``content`` at ``offset``, as CtDraw rewrites a block."""
+        self._writable()
         end = offset + len(content)
         if end > len(self.buf):
             self.buf += b"\0" * (end - len(self.buf))
@@ -318,6 +325,7 @@ class LibraryFile:
         """A fresh slot: every entry loses the 'last block' byte, the new
         one is 0x0101 at the PHYSICAL end of the file (past a stale tail or the
         appendix), size = content + 0x200, zero filled."""
+        self._writable()
         size = len(content) + PAD
         end = len(self.buf)
         # the block that was last and grew in place past its directory size: its
@@ -348,6 +356,7 @@ class LibraryFile:
 
     def _page_to_end(self, s: Slot) -> int:
         """Copy the block to the end of the file, as CtDraw moves a block."""
+        self._writable()
         old, size = s.offset, s.size
         end = len(self.buf)  # the end of the file, as an append
         src, left = old, size + PAD
@@ -391,6 +400,7 @@ class LibraryFile:
             d.raw = b"\0" * ENTRY_SIZE
         dir_end = HEADER_FIXED + n * ENTRY_SIZE
         if len(self.buf) < dir_end:
+            self._writable()
             self.buf += b"\0" * (dir_end - len(self.buf))
         self._dir_grown = False
 
@@ -464,7 +474,7 @@ def _read_bag(p: bytes, o: int = 0) -> Tuple[List[Tuple[str, str]], int]:
     return pairs, o
 
 
-def _bag_bytes(pairs: Sequence[Tuple[str, str]]) -> bytes:
+def bag_bytes(pairs: Sequence[Tuple[str, str]]) -> bytes:
     out = bytearray(struct.pack("<H", len(pairs)))
     for k, v in pairs:
         kb, vb = k.encode(CODEC), v.encode(CODEC)
@@ -546,14 +556,14 @@ class ElementTrailer:
             self.props, self.associations, self.keyboards, self.extra, self.raw
         ):
             return list(self.raw)
-        out = [_bag_bytes(self.props)]
+        out = [bag_bytes(self.props)]
         d = dict(self.props)
         if c_atoi(d.get(KEY_ASSOCIATIONS)):
-            out.append(_bag_bytes(self.associations or []))
+            out.append(bag_bytes(self.associations or []))
         if c_atoi(d.get(KEY_KEYBOARDS)):
             kb = bytearray(struct.pack("<H", len(self.keyboards or [])))
             for bag in self.keyboards or []:
-                kb += _bag_bytes(bag)
+                kb += bag_bytes(bag)
             out.append(bytes(kb))
         return out + list(self.extra)
 
@@ -570,7 +580,7 @@ class ElementTrailer:
 def trailer_record(payload: bytes) -> PageObject:
     """A trailer payload as a PageObject that object_payload() re-emits
     verbatim (parse via the unframed-record path)."""
-    po = _parse_object(0, 0, len(payload), 0, payload)
+    po = parse_object(0, 0, len(payload), 0, payload)
     if po.raw_payload is None:  # a >=12-byte bag would 'frame': force raw
         po.raw_payload = bytes(payload)
     return po
@@ -987,7 +997,7 @@ def wrapped_tree(tree: Sequence[PageObject], origin) -> List[PageObject]:
     ):
         return tree
     blob = writer.object_payload(tree[0])
-    member = _parse_object(0, 0, len(blob), 0, blob)
+    member = parse_object(0, 0, len(blob), 0, blob)
     # (the member first: a marker's baked box is the root's, _bake_marker)
     to_member_form(member, origin)
     root = root_group([member] + list(tree[1:]), [0], origin)

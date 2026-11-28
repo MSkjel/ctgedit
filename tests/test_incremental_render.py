@@ -131,13 +131,13 @@ def test_derive_check_catches_a_stale_unit(tmp_path, monkeypatch):
     """The debug check is real: an undetected record change is reported."""
     doc = _open_copy(LARGE, tmp_path, monkeypatch)
     rect = _first(doc, (K.RECTANGLE,))
-    real = reader._record_sig
+    real = reader.record_sig
 
     def blind(po):  # hides every rectangle's body change
         s = real(po)
         return s[:5] + (b"",) if po.type_code == 0x0F else s
 
-    monkeypatch.setattr(reader, "_record_sig", blind)
+    monkeypatch.setattr(reader, "record_sig", blind)
     doc._derivation.sigs = [blind(po) for po in doc._derivation.records]
     doc.derive_check = True
     with pytest.raises(AssertionError, match="differs from a full one"):
@@ -700,8 +700,8 @@ def test_main_window_refresh_patches_scene_and_tree(tmp_path, monkeypatch):
         assert _stack(w.scene) == _stack_fresh(doc, w)
     finally:
         w.doc.dirty = False
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
 
 
 def test_scene_and_tree_patch_appended_and_removed_units(tmp_path, monkeypatch):
@@ -824,8 +824,8 @@ def test_random_ui_session_patches_equal_rebuilds(tmp_path, monkeypatch):
         assert full[0] < 20  # most refreshes patched
     finally:
         w.doc.dirty = False
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
 
 
 def _stack_fresh(doc, w):
@@ -849,7 +849,7 @@ def test_the_undo_history_is_capped_by_memory(tmp_path, monkeypatch):
     doc = E.EditableDocument.open(dst)
     big = max(doc.page.roots(), key=lambda r: len(doc.page.subtree(r)))
     doc.move_objects([big], 1, 0)
-    one = E._command_bytes(doc._undo[-1])
+    one = E.command_bytes(doc._undo[-1])
     assert one > 3000
     monkeypatch.setattr(E, "UNDO_BYTES_TOTAL", one * 15)
     for _k in range(30):
@@ -900,8 +900,8 @@ def test_a_move_and_its_undo_redo_shift_the_items_instead_of_rebuilding(tmp_path
         assert calls and _stack(w.scene) == _stack_fresh(doc, w)
     finally:
         w.doc.dirty = False
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
 
 
 def test_a_tab_keeps_its_scene_and_tree_rows(tmp_path, monkeypatch):
@@ -933,15 +933,15 @@ def test_a_tab_keeps_its_scene_and_tree_rows(tmp_path, monkeypatch):
     finally:
         for e in w._docs:
             e["doc"].dirty = False
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
 
 
 def test_move_undo_keeps_only_the_changed_blocks_and_restores_the_bytes(tmp_path, monkeypatch):
     """A move's undo keeps only the changed blocks and restores the bytes."""
     import shutil
     from ctgedit import editing as E
-    from ctgedit.editing_base import _command_bytes
+    from ctgedit.editing_base import command_bytes
 
     p = str(tmp_path / "FxLarge.ctg")
     shutil.copyfile(_path(LARGE), p)
@@ -965,7 +965,7 @@ def test_move_undo_keeps_only_the_changed_blocks_and_restores_the_bytes(tmp_path
     idx = sorted({j for r in roots for j in doc.page.subtree(r)})
     body = sum(len(doc.parsed.page.objects[i].body_raw) for i in idx)
     doc.move_objects(roots, 7, 3)
-    kept = _command_bytes(doc._undo[-1])
+    kept = command_bytes(doc._undo[-1])
     assert kept < body / 2, (kept, body)
     doc.undo()
     assert doc.serialize() == before
@@ -1185,7 +1185,7 @@ def test_kept_units_give_the_scene_and_tree_a_rebuild_gives(src, tmp_path, monke
             seen.append(out)
         finally:
             w.doc.dirty = False
-            if w in MainWindow._instances:
-                MainWindow._instances.remove(w)
+            if w in MainWindow.instances:
+                MainWindow.instances.remove(w)
     for step, (a, b) in enumerate(zip(*seen)):
         assert a == b, "step %d differs" % step

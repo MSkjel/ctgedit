@@ -181,8 +181,8 @@ def test_compose_again_in_the_window_says_what_it_could_not_compose(fx_install, 
     finally:
         for e in list(w._docs):
             e["doc"].dirty = False
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
 
 
 def test_the_chain_never_calls_a_host_it_could_not_compose_current(fx_install, monkeypatch):

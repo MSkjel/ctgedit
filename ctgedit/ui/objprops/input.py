@@ -1,6 +1,8 @@
 """The Input tab: touch and keyboard commands."""
 
 from __future__ import annotations
+
+from ..dialog_buttons import dialog_buttons
 from ..style.theme import sp as _sp  # (the spacing scale)
 
 import os
@@ -12,6 +14,7 @@ from PySide6 import QtCore, QtWidgets
 from ...format import inputs as IN
 from .scroll import FitTabWidget, LinesMixin, scroll_page
 from ..style.theme import set_note_role
+from ...infra.logsetup import note_exception as _note_exc
 
 #: key sequences with numeric arguments, offered at the top of the key menu
 _ARG_PATTERNS = ["### ENTER", "##### ENTER", "########## ENTER"]
@@ -38,14 +41,14 @@ def key_sequence_choices(doc=None) -> List[str]:
             for row in keyboard_keys(os.path.dirname(os.path.abspath(path))):
                 add(row.get("NAME"))
         except Exception:  # noqa: BLE001 -- the menu is an aid, never required
-            pass
+            _note_exc("objprops.input.key_sequence_choices/keyboard_keys")
     try:
-        from ...io.reader import _catalog
+        from ...io.reader import catalog
 
-        for k in _catalog().get("key_seq_value_enum", []):
+        for k in catalog().get("key_seq_value_enum", []):
             add(k)
     except Exception:  # noqa: BLE001 -- the menu is an aid, never required
-        pass
+        _note_exc("objprops.input.key_sequence_choices/catalog")
     return out
 
 
@@ -257,9 +260,7 @@ class KeySequenceDialog(QtWidgets.QDialog):
         set_note_role(self.warning, "warn")
         lay.addWidget(self.warning)
         self.combo.editTextChanged.connect(self._check)
-        box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
-        box.accepted.connect(self._ok)
-        box.rejected.connect(self.reject)
+        box = dialog_buttons(self, accept=self._ok)
         lay.addWidget(box)
         self._check()
 

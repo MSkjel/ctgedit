@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .conditions import ConditionsEditing, property_table, resizable, table_item
+
 from typing import List, Optional, Tuple
 
 from PySide6 import QtCore, QtGui, QtWidgets
@@ -9,19 +11,20 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from ...format import fillcolour as F
 from ...format.symbolset import combination_label, combination_text
 from .colour_field import ColourPairField
-from .fields import NUMBER_RANGES, _L_EXPR, _Field, _i, _Sub
+from .fields import NUMBER_RANGES, L_EXPR, Field, i, Sub
 from .range_field import join_range, split_range
 from .scroll import CurrentStack, note
 from ..style.theme import color, set_note_role
+from ...infra.logsetup import note_exception as _note_exc
 
 #: the Fill > Color keys (the sheet's key contract, objprops.sheet_keys);
 #: the page is a custom editor, not declarative fields
-COLOR = _Sub("Colour", [], family=F.KEYS)
-LEVEL = _Sub(
+COLOR = Sub("Colour", [], family=F.KEYS)
+LEVEL = Sub(
     "Level",
     [
-        _Field("Level expression:", "FIL", limit=_L_EXPR, range=True),
-        _i(
+        Field("Level expression:", "FIL", limit=L_EXPR, range=True),
+        i(
             "At minimum:",
             "FILMINPC",
             0,
@@ -29,7 +32,7 @@ LEVEL = _Sub(
             lo=NUMBER_RANGES["fill"][0],
             hi=NUMBER_RANGES["fill"][1],
         ),
-        _i(
+        i(
             "At maximum:",
             "FILMAXPC",
             100,
@@ -43,7 +46,7 @@ LEVEL = _Sub(
 
 FILL_SUBS = [COLOR, LEVEL]
 SUBS = FILL_SUBS
-FIELDS = [_Field("", k) for k in F.KEYS + F.LEVEL_KEYS]
+FIELDS = [Field("", k) for k in F.KEYS + F.LEVEL_KEYS]
 
 HELP_COLOUR = "properties#fill-colour"
 HELP_LEVEL = "properties#fill-level"
@@ -111,39 +114,10 @@ def pair_text(pair) -> str:
     return "%s / %s (flashing)" % (one(pair[0]), one(pair[1]))
 
 
-def _item(text: str, editable: bool = False) -> QtWidgets.QTableWidgetItem:
-    it = QtWidgets.QTableWidgetItem(text)
-    flags = QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable
-    if editable:
-        flags |= QtCore.Qt.ItemIsEditable
-    it.setFlags(flags)
-    return it
-
-
 def _colour_item(pair) -> QtWidgets.QTableWidgetItem:
-    it = _item(pair_text(pair))
+    it = table_item(pair_text(pair))
     it.setIcon(pair_icon(pair))
     return it
-
-
-def _resizable(t, name: str) -> None:
-    """Resizable, remembered columns (ui/tables.py)."""
-    from ..tables import make_resizable
-
-    make_resizable(t, "ObjectPropertiesDialog/" + name)
-
-
-def _table(headers) -> QtWidgets.QTableWidget:
-    t = QtWidgets.QTableWidget(0, len(headers))
-    t.setHorizontalHeaderLabels(headers)
-    t.horizontalHeader().setStretchLastSection(True)
-    t.verticalHeader().setVisible(False)
-    t.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
-    t.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
-    t.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
-    t.setIconSize(QtCore.QSize(30, 14))
-    t.verticalHeader().setDefaultSectionSize(t.fontMetrics().height() + 8)
-    return t
 
 
 def _inner(text: str) -> str:
@@ -153,7 +127,7 @@ def _inner(text: str) -> str:
 
 
 # --------------------------------------------------------------------------- Fill > Color
-class FillColorEditor:
+class FillColorEditor(ConditionsEditing):
     """Fill > Color: builds the page and writes it (before the sheet's key
     edits, in the same undo step)."""
 
@@ -175,7 +149,7 @@ class FillColorEditor:
             from ..help import set_help
 
             set_help(self.widget, HELP_COLOUR)
-        except Exception:  # noqa: BLE001
+        except RuntimeError:
             pass
 
     # -- widgets ----------------------------------------------------------------------
@@ -231,6 +205,17 @@ class FillColorEditor:
         row.addWidget(self._stack, 1)
         lim = F.TEXT_LIMITS
 
+        self._build_on_off(lim)
+        self._build_multi_state(lim)
+        self._build_array(lim)
+        self._build_threshold(lim)
+        self._build_gradient(lim)
+
+        self._types.idToggled.connect(self._on_type)
+        return page
+
+    def _build_on_off(self, lim: dict) -> None:
+        """The On / Off panel: the condition, the OFF and ON colours."""
         # On / Off
         w = QtWidgets.QWidget()
         f = QtWidgets.QFormLayout(w)
@@ -247,44 +232,19 @@ class FillColorEditor:
         f.addRow("ON colour:", self._on_col)
         self._stack.addWidget(self._panel(w, F.ON_OFF))
 
+    def _build_multi_state(self, lim: dict) -> None:
+        """The Multi-state panel: the conditions and the colour of each combination."""
         # Multi-state
         w = QtWidgets.QWidget()
         v = QtWidgets.QVBoxLayout(w)
         v.setContentsMargins(0, 0, 0, 0)
-        cbox = QtWidgets.QGroupBox("Conditions")
-        cl = QtWidgets.QGridLayout(cbox)
-        self._conds = _table(["", "Condition (TRUE / FALSE)"])
-        self._conds.setColumnWidth(0, 28)
-        _resizable(self._conds, "fill_conditions")
-        self._conds.setFixedHeight(
-            self._conds.horizontalHeader().sizeHint().height()
-            + F.MAX_CONDITIONS * self._conds.verticalHeader().defaultSectionSize()
-            + 4
-        )
-        self._conds.currentCellChanged.connect(lambda *_a: self._show_condition())
-        cl.addWidget(self._conds, 0, 0, 3, 1)
-        self._btn_add = QtWidgets.QPushButton("Add")
-        self._btn_add.setToolTip("Add a condition (at most 5)")
-        self._btn_add.clicked.connect(self._add_condition)
-        self._btn_del = QtWidgets.QPushButton("Remove")
-        self._btn_del.setToolTip("Remove the selected condition")
-        self._btn_del.clicked.connect(self._delete_condition)
-        cl.addWidget(self._btn_add, 0, 1)
-        cl.addWidget(self._btn_del, 1, 1)
-        self._cond_label = QtWidgets.QLabel("Condition A:")
-        self._cond_edit = self._expr_field(lim["condition"])
-        self._cond_edit.setToolTip("The selected condition: a TRUE / FALSE expression")
-        self._cond_edit.valueChanged.connect(self._on_condition_edit)
-        ce = QtWidgets.QHBoxLayout()
-        ce.addWidget(self._cond_label)
-        ce.addWidget(self._cond_edit, 1)
-        cl.addLayout(ce, 3, 0, 1, 2)
+        cbox = self._conditions_group("fill_conditions", lim["condition"])
         v.addWidget(cbox)
         sbox = QtWidgets.QGroupBox("State colours")
         sl = QtWidgets.QVBoxLayout(sbox)
-        self._states = _table(["Combination", "Colour"])
+        self._states = property_table(["Combination", "Colour"], icon_size=(30, 14))
         self._states.setColumnWidth(0, 130)
-        _resizable(self._states, "fill_states")
+        resizable(self._states, "fill_states")
         self._states.currentCellChanged.connect(lambda *_a: self._show_state())
         self._states.cellDoubleClicked.connect(lambda *_a: self._state_col._choose(False))
         sl.addWidget(self._states, 1)
@@ -298,6 +258,8 @@ class FillColorEditor:
         v.addWidget(sbox, 1)
         self._stack.addWidget(self._panel(w, F.MULTI_STATE))
 
+    def _build_array(self, lim: dict) -> None:
+        """The Array panel: the expression and the colour of each value."""
         # Array
         w = QtWidgets.QWidget()
         v = QtWidgets.QVBoxLayout(w)
@@ -310,9 +272,9 @@ class FillColorEditor:
         v.addLayout(f)
         abox = QtWidgets.QGroupBox("Array colours")
         al = QtWidgets.QVBoxLayout(abox)
-        self._array = _table(["Value", "Colour"])
+        self._array = property_table(["Value", "Colour"], icon_size=(30, 14))
         self._array.setColumnWidth(0, 60)
-        _resizable(self._array, "fill_array")
+        resizable(self._array, "fill_array")
         self._array.currentCellChanged.connect(lambda *_a: self._show_array())
         self._array.cellDoubleClicked.connect(lambda *_a: self._array_col._choose(False))
         al.addWidget(self._array, 1)
@@ -326,6 +288,9 @@ class FillColorEditor:
         v.addWidget(abox, 1)
         self._stack.addWidget(self._panel(w, F.ARRAY))
 
+    def _build_threshold(self, lim: dict) -> None:
+        """The Threshold panel: the expression with its range, the thresholds and their
+        colours."""
         # Threshold
         w = QtWidgets.QWidget()
         v = QtWidgets.QVBoxLayout(w)
@@ -339,10 +304,10 @@ class FillColorEditor:
         v.addLayout(f)
         tbox = QtWidgets.QGroupBox("Thresholds (% of the range)")
         tl = QtWidgets.QGridLayout(tbox)
-        self._thr = _table(["Comparison", "Threshold", "Colour"])
+        self._thr = property_table(["Comparison", "Threshold", "Colour"], icon_size=(30, 14))
         self._thr.setColumnWidth(0, 90)
         self._thr.setColumnWidth(1, 80)
-        _resizable(self._thr, "fill_thresholds")
+        resizable(self._thr, "fill_thresholds")
         self._thr.currentCellChanged.connect(lambda *_a: self._show_threshold())
         self._thr.cellDoubleClicked.connect(lambda _r, c: self._thr_col._choose(False) if c == 2 else None)
         tl.addWidget(self._thr, 0, 0, 3, 1)
@@ -373,6 +338,9 @@ class FillColorEditor:
         v.addWidget(tbox, 1)
         self._stack.addWidget(self._panel(w, F.THRESHOLD))
 
+    def _build_gradient(self, lim: dict) -> None:
+        """The Gradient panel: the expression with its range, the colours at its minimum and
+        maximum."""
         # Gradient
         w = QtWidgets.QWidget()
         f = QtWidgets.QFormLayout(w)
@@ -389,9 +357,6 @@ class FillColorEditor:
         self._max_col.changed.connect(lambda: self._set_on(self._max_col.pair(), self._max_col))
         f.addRow("At maximum:", self._max_col)
         self._stack.addWidget(self._panel(w, F.GRADIENT))
-
-        self._types.idToggled.connect(self._on_type)
-        return page
 
     def _panel(self, body: QtWidgets.QWidget, kind: int) -> QtWidgets.QWidget:
         w = QtWidgets.QWidget()
@@ -510,22 +475,6 @@ class FillColorEditor:
             F.GRADIENT: self._grad_expr,
         }[m].text()
 
-    def _fill_conditions(self, select: int = 0) -> None:
-        conds = self._fc.conditions
-        self._syncing = True
-        try:
-            self._conds.setRowCount(len(conds))
-            for r, c in enumerate(conds):
-                self._conds.setItem(r, 0, _item("ABCDE"[r]))
-                self._conds.setItem(r, 1, _item(c))
-        finally:
-            self._syncing = False
-        self._conds.setCurrentCell(max(0, min(select, len(conds) - 1)), 1)
-        self._show_condition()
-        ro = self._read_only
-        self._btn_add.setEnabled(not ro and len(conds) < F.MAX_CONDITIONS)
-        self._btn_del.setEnabled(not ro and len(conds) > 1)
-
     def _fill_states(self) -> None:
         n = len(self._fc.conditions)
         self._fc.states = F.resized_states(self._fc.states, n, self._initial.states)
@@ -536,7 +485,7 @@ class FillColorEditor:
         try:
             self._states.setRowCount(len(self._fc.states))
             for r, pair in enumerate(self._fc.states):
-                lab = _item(combination_label(r, n))
+                lab = table_item(combination_label(r, n))
                 lab.setToolTip(
                     combination_text(r, n) + ("  (the object's own fill colour)" if r == 0 else "")
                 )
@@ -555,7 +504,7 @@ class FillColorEditor:
         try:
             self._array.setRowCount(F.ARRAY_SIZE)
             for r in range(F.ARRAY_SIZE):
-                lab = _item(str(r))
+                lab = table_item(str(r))
                 if r == 0:
                     lab.setToolTip("Value 0: the object's own fill colour")
                 self._array.setItem(r, 0, lab)
@@ -572,8 +521,8 @@ class FillColorEditor:
         try:
             self._thr.setRowCount(len(rows))
             for r, t in enumerate(rows):
-                self._thr.setItem(r, 0, _item(t.comparison))
-                self._thr.setItem(r, 1, _item("%d %%" % t.value))
+                self._thr.setItem(r, 0, table_item(t.comparison))
+                self._thr.setItem(r, 1, table_item("%d %%" % t.value))
                 self._thr.setItem(r, 2, _colour_item(t.pair))
         finally:
             self._syncing = False
@@ -648,60 +597,22 @@ class FillColorEditor:
         # field already shows it in the panel's own form
         self._fc.expression = self._current_expression()
 
-    def _show_condition(self) -> None:
-        r = self._conds.currentRow()
-        if not (0 <= r < len(self._fc.conditions)):
-            r = 0
-        self._cond_label.setText("Condition %s:" % "ABCDE"[r])
-        was = self._syncing
-        self._syncing = True
-        try:
-            self._show_text(self._cond_edit, self._fc.conditions[r])
-        finally:
-            self._syncing = was
+    # -- the Conditions group (objprops/conditions.ConditionsEditing) --------------------------
+    _MAX_CONDITIONS = F.MAX_CONDITIONS
 
-    def _on_condition_edit(self, text: str) -> None:
-        if self._syncing:
-            return
-        r = max(0, self._conds.currentRow())
-        if r >= len(self._fc.conditions):
-            return
+    def _conditions(self) -> list:
+        return self._fc.conditions
+
+    def _conditions_touched(self) -> None:
         self._fc.cleared = False
-        self._fc.conditions[r] = text
-        if r == 0:
-            self._show_expression(text, self._cond_edit)
-            self._fc.expression = self._current_expression()
-            return
-        self._syncing = True
-        try:
-            it = self._conds.item(r, 1)
-            if it is not None:
-                it.setText(text)
-        finally:
-            self._syncing = False
 
-    def _add_condition(self) -> None:
-        if len(self._fc.conditions) >= F.MAX_CONDITIONS or self._read_only:
-            return
-        self._fc.conditions.append("")
-        self._fill_conditions(len(self._fc.conditions) - 1)
-        self._fill_states()
-        self._cond_edit.setFocus()
+    def _condition_a_changed(self, text: str) -> None:
+        self._show_expression(text, self._cond_edit)
+        self._fc.expression = self._current_expression()
 
-    def _delete_condition(self) -> None:
-        conds = self._fc.conditions
-        if len(conds) <= 1 or self._read_only:
-            return
-        r = self._conds.currentRow()
-        if not (0 <= r < len(conds)):
-            r = len(conds) - 1
-        del conds[r]
-        self._fc.cleared = False
-        if r == 0:
-            self._show_expression(conds[0], self._cond_edit)
-            self._fc.expression = self._current_expression()
-        self._fill_conditions(min(r, len(conds) - 1))
-        self._fill_states()
+    def _condition_a_removed(self, text: str) -> None:
+        self._show_expression(text, self._cond_edit)
+        self._fc.expression = self._current_expression()
 
     def _show_state(self) -> None:
         r = self._states.currentRow()
@@ -874,6 +785,7 @@ class FillColorEditor:
         try:
             done = s._doc.apply_fill_colour(s._index, self._initial, self.current())
         except Exception as exc:  # noqa: BLE001 -- reported in the sheet
+            _note_exc("objprops.fill.apply_colour")
             s._fail("The fill colour could not be written: %s" % exc, self.widget)
             return False
         if done is False:
@@ -951,7 +863,7 @@ class LevelEditor:
     def reload(self) -> None:
         s = self.sheet
         props = s._doc.object_properties(s._index)
-        get = F._getter(props)
+        get = F.getter(props)
         self._fil0 = get("FIL")
         self._dir0 = F.direction(props)
         self._bg0 = F.level_background(props)
@@ -981,7 +893,7 @@ class LevelEditor:
         fields, a typed percentage included, itself)."""
         s = self.sheet
         props = s._doc.object_properties(s._index)
-        get = F._getter(props)
+        get = F.getter(props)
         self._fil0 = get("FIL")
         self._dir0 = F.direction(props)
         self._bg0 = F.level_background(props)
@@ -1000,7 +912,7 @@ class LevelEditor:
         s = self.sheet
         doc, i = s._doc, s._index
         props = doc.object_properties(i)
-        get = F._getter(props)
+        get = F.getter(props)
         fil = get("FIL")
         if not fil:
             return False  # no level: nothing of it is stored
@@ -1022,6 +934,7 @@ class LevelEditor:
         try:
             ok = doc.set_fill_keys(i, edits, label="fill level")
         except Exception as exc:  # noqa: BLE001 -- reported in the sheet
+            _note_exc("objprops.fill.apply_level")
             s._fail("The fill level could not be written: %s" % exc)
             return False
         if not ok:
@@ -1107,7 +1020,7 @@ def build_fill_level(sheet, page):
         from ..help import set_help
 
         set_help(w, HELP_LEVEL)
-    except Exception:  # noqa: BLE001
+    except RuntimeError:
         pass
     return w
 

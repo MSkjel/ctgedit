@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ...infra.paths import path_key
+
 import copy
 import os
 from collections import OrderedDict
@@ -11,6 +13,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 from ...format import genieform as GF
 from ...format.genieform import DraftItem, FormField
+from ..messages import warn
 
 #: a field's least width in columns ('{', its number, '}')
 MIN_FIELD = 3
@@ -397,22 +400,18 @@ class GenieFormEditor(QtWidgets.QDialog):
         self.problem = Q.QLabel()
         self.problem.setWordWrap(True)
         lay.addWidget(self.problem)
-        row = Q.QHBoxLayout()
-        self.btn_revert = Q.QPushButton("Revert")
+        box = Q.QDialogButtonBox()
+        self.btn_revert = box.addButton("Revert", Q.QDialogButtonBox.ResetRole)
         self.btn_revert.setAutoDefault(False)
         self.btn_revert.setToolTip("Go back to the form as it is saved")
         self.btn_revert.clicked.connect(self.revert)
-        row.addWidget(self.btn_revert)
-        row.addStretch(1)
-        self.btn_save = Q.QPushButton("Save")
+        self.btn_save = box.addButton("Save", Q.QDialogButtonBox.ApplyRole)
         self.btn_save.setDefault(True)
         self.btn_save.clicked.connect(self.save)
-        self.btn_close = Q.QPushButton("Close")
+        self.btn_close = box.addButton(Q.QDialogButtonBox.Close)
         self.btn_close.setAutoDefault(False)
         self.btn_close.clicked.connect(self.close)
-        row.addWidget(self.btn_save)
-        row.addWidget(self.btn_close)
-        lay.addLayout(row)
+        lay.addWidget(box)
         sc = QtGui.QShortcut(QtGui.QKeySequence.Save, self)
         sc.activated.connect(self.save)
         self._preview_timer = QtCore.QTimer(self)
@@ -583,11 +582,7 @@ class GenieFormEditor(QtWidgets.QDialog):
             used = GF.find_form(self.project_dir, self.library, self.element)
         except Exception:  # noqa: BLE001  # swallow-ok: the note only
             used = None
-        if (
-            used is not None
-            and used.source
-            and os.path.normcase(os.path.abspath(used.source)) != os.path.normcase(os.path.abspath(self.path))
-        ):
+        if used is not None and used.source and path_key(used.source) != path_key(self.path):
             s += (
                 "\nThe Graphics Builder uses the form in %s for this project: it is found "
                 "first." % used.source
@@ -868,7 +863,7 @@ class GenieFormEditor(QtWidgets.QDialog):
         """The form into the .frm file (its other blocks and comments as they are)."""
         why = self.problem_text()
         if why:
-            QtWidgets.QMessageBox.warning(self, "Genie Form", "The form was not saved: %s." % why)
+            warn(self, "Genie Form", "The form was not saved: %s." % why)
             return False
         from ...format import textcodec
         from ...format.fileio import write_atomic
@@ -893,7 +888,7 @@ class GenieFormEditor(QtWidgets.QDialog):
             data = textcodec.encode_field(new, "the genie form")
             write_atomic(self.path, data)
         except Exception as e:  # noqa: BLE001 -- said to the user
-            QtWidgets.QMessageBox.warning(self, "Genie Form", "%s could not be saved: %s" % (self.path, e))
+            warn(self, "Genie Form", "%s could not be saved: %s" % (self.path, e))
             return False
         try:
             from ...infra import logsetup

@@ -231,8 +231,8 @@ def test_help_menu_about_opens_the_about_dialog(monkeypatch):
         acts[0].trigger()
         assert len(opened) == 1 and opened[0].windowTitle() == "About ctgedit"
     finally:
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
 
 
 def test_app_icon_is_a_real_ico(tmp_path):
@@ -474,8 +474,8 @@ def test_handed_over_pages_open_as_tabs_in_the_running_window(tmp_path, monkeypa
         assert w.doc is not None and os.path.samefile(w.doc.path, page)
     finally:
         w.close()
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
 
 
 def test_target_window_is_a_visible_editor(monkeypatch):
@@ -483,7 +483,7 @@ def test_target_window_is_a_visible_editor(monkeypatch):
     from ctgedit.app import target_window
     from ctgedit.ui.main_window import MainWindow
 
-    monkeypatch.setattr(MainWindow, "_instances", [])
+    monkeypatch.setattr(MainWindow, "instances", [])
     assert target_window() is None
     w = MainWindow()
     try:
@@ -513,8 +513,8 @@ def test_open_files_explains_what_it_cannot_open(tmp_path, monkeypatch):
         assert len(warned) == 1 and warned[0][1] == "Could Not Open Pages"
         assert "does not exist" in warned[0][2] and "File > Open" in warned[0][2]
     finally:
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
 
 
 # --------------------------------------------------------------- crash / error logs

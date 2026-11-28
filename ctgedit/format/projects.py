@@ -2,17 +2,19 @@
 
 from __future__ import annotations
 
+from ..infra import backups
+
+from ..infra.paths import path_key
+
 import os
 from typing import Dict, List, Optional, Tuple
 from .dbfcols import citect_rows as _citect_rows
+from .fileio import LIBRARY_EXTS, find_ci
 from ..infra import runmemo as _runmemo
 
 # ---------------------------------------------------------------------------
 # Minimal dBASE reader (char fields only)
 # ---------------------------------------------------------------------------
-
-_DELETED = 0x2A  # '*' deletion flag on a record
-_FIELD_TERM = 0x0D  # end of the field-descriptor array
 
 
 def read_dbf_rows(path: str) -> List[Dict[str, str]]:
@@ -25,13 +27,35 @@ def read_dbf_rows(path: str) -> List[Dict[str, str]]:
 # ---------------------------------------------------------------------------
 
 
+#: pages.DBF NAME is C(64): a longer page name is stored, and so matched, truncated
+PAGE_NAME_LEN = 64
+
+
+def pages_table(folder: str) -> Optional[str]:
+    """The folder's pages.DBF (any case), or None: the folder is no project."""
+    return find_ci(folder, "pages.DBF") if folder else None
+
+
+def is_project_dir(folder: Optional[str]) -> bool:
+    """A Citect project folder: it has a pages.DBF."""
+    return pages_table(folder or "") is not None
+
+
+def registered_names(project_dir: str) -> Optional[set]:
+    """Lower-case names of the pages registered in the project's pages.DBF (compare a file
+    name truncated to :data:`PAGE_NAME_LEN`), or None when the folder is no project (every
+    page counts)."""
+    path = pages_table(project_dir)
+    if path is None:
+        return None
+    return {n for n in ((r.get("NAME") or "").strip().lower() for r in read_dbf_rows(path)) if n}
+
+
 def master_projects(user_dir: str) -> Dict[str, str]:
     """MASTER.DBF: lower-case name -> project path."""
-    path = os.path.join(user_dir, "MASTER.DBF")
-    if not os.path.isfile(path):  # case-insensitive on Windows; probe variants
-        path = os.path.join(user_dir, "master.dbf")
-        if not os.path.isfile(path):
-            return {}
+    path = find_ci(user_dir, "MASTER.DBF")
+    if path is None:
+        return {}
     out: Dict[str, str] = {}
     for row in read_dbf_rows(path):
         name = row.get("NAME", "")
@@ -43,15 +67,10 @@ def master_projects(user_dir: str) -> Dict[str, str]:
 
 def included_project_names(project_dir: str) -> List[str]:
     """The ordered NAME rows of a project's ``include.dbf`` (``[]`` if none)."""
-    try:
-        names = os.listdir(project_dir)
-    except OSError:
+    path = find_ci(project_dir, "include.dbf")
+    if path is None:
         return []
-    for fn in names:
-        if fn.lower() == "include.dbf":
-            rows = read_dbf_rows(os.path.join(project_dir, fn))
-            return [r.get("NAME", "") for r in rows if r.get("NAME", "").strip()]
-    return []
+    return [r.get("NAME", "") for r in read_dbf_rows(path) if r.get("NAME", "").strip()]
 
 
 def sibling_install_user_dirs(user_dir: str) -> List[str]:
@@ -72,7 +91,7 @@ def sibling_install_user_dirs(user_dir: str) -> List[str]:
         if os.path.normcase(root) == os.path.normcase(install_root):
             continue
         cand = os.path.join(root, user_base)
-        if os.path.isfile(os.path.join(cand, "MASTER.DBF")):
+        if find_ci(cand, "MASTER.DBF"):
             out.append(cand)
     return out
 
@@ -96,7 +115,7 @@ def resolve_project_dirs(
         cands.append(os.path.join(ud, name))
         for cand in cands:
             if os.path.isdir(cand):
-                key = os.path.normcase(os.path.abspath(cand))
+                key = path_key(cand)
                 if key not in seen:
                     seen.add(key)
                     out.append(cand)
@@ -127,7 +146,7 @@ def include_search_dirs(project_dir: str) -> List[str]:
 
     def add(name: str) -> None:
         for p in resolve_project_dirs(name, user_dirs, masters):
-            key = os.path.normcase(os.path.abspath(p))
+            key = path_key(p)
             if key in seen:
                 continue
             seen.add(key)
@@ -144,9 +163,6 @@ def include_search_dirs(project_dir: str) -> List[str]:
     if memo is not None:
         memo[os.path.normcase(project_dir)] = list(out)
     return out
-
-
-LIBRARY_EXTS = (".ctl", ".ctm", ".ctt")
 
 
 class PackError(RuntimeError):
@@ -258,7 +274,7 @@ def pack_libraries(project_dir: str, backup: Optional[str] = None) -> PackResult
             with open(path, "rb") as fh:
                 data = fh.read()
             packed = packed_library(data)
-        except Exception as e:  # noqa: BLE001 -- never die on a foreign file
+        except Exception as e:  # noqa: BLE001 -- swallow-ok: never die on a foreign file; the failure goes back to the caller
             failures.append((path, "not packed: it could not be read as a library (%s)" % e))
             continue
         if packed is not None:
@@ -269,7 +285,7 @@ def pack_libraries(project_dir: str, backup: Optional[str] = None) -> PackResult
         stage = "backed up"
         try:
             if backup:
-                _backup_library(path, data, backup)
+                backups.backup_file(backup, "pack", path, data)
             stage = "written"
             write_atomic(path, packed)
         except Exception as e:  # noqa: BLE001 -- put back what this run changed
@@ -330,40 +346,21 @@ def pack_composition_caches(
     return CompositePackResult(unused, files, backup, len(unused))
 
 
-def _backup_library(path: str, data: bytes, backup: str) -> None:
-    from ..infra import backups
-    from .fileio import write_atomic
-
-    proj = os.path.basename(os.path.dirname(os.path.abspath(path)))
-    d = os.path.join(backup, proj)
-    os.makedirs(d, exist_ok=True)
-    dest = os.path.join(d, os.path.basename(path))
-    write_atomic(dest, data)
-    backups.add_entry(
-        backup,
-        "pack",
-        {"original": os.path.abspath(path), "backup": os.path.relpath(dest, backup), "size": len(data)},
-    )
-
-
 def restore_pack_backup(folder: str, only: Optional[List[str]] = None) -> PackResult:
     """Put the libraries of a Pack Libraries backup back (atomically).
     ``only`` = the original paths to restore (default: all). Returns a
     PackResult: ``packed`` = the files restored, ``failures`` the others."""
     from ..infra import backups
-    from .fileio import write_atomic
 
     m = backups.read_manifest(folder)
-    want = {os.path.normcase(os.path.abspath(p)) for p in only} if only else None
+    want = {path_key(p) for p in only} if only else None
     done, failures = [], []
     for e in m.get("entries") or []:
         orig = e.get("original", "")
-        if want is not None and os.path.normcase(os.path.abspath(orig)) not in want:
+        if want is not None and path_key(orig) not in want:
             continue
         try:
-            with open(os.path.join(folder, e.get("backup", "")), "rb") as fh:
-                data = fh.read()
-            write_atomic(orig, data)
+            backups.restore_file(folder, e)
             done.append(orig)
         except OSError as ex:
             failures.append((orig, ex.strerror or str(ex)))

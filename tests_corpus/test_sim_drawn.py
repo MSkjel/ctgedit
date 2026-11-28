@@ -72,9 +72,9 @@ def _text(an=5, x=100, y=50, text="Hello", **args):
 
 def _text_item(item):
     from PySide6 import QtWidgets
-    from ctgedit.render.sim_drawn import _walk
+    from ctgedit.render.scene import walk_items
 
-    return next(it for it in _walk(item) if isinstance(it, QtWidgets.QGraphicsSimpleTextItem))
+    return next(it for it in walk_items(item) if isinstance(it, QtWidgets.QGraphicsSimpleTextItem))
 
 
 def _render(sc, w=W, h=H):
@@ -242,7 +242,7 @@ def test_the_example_report_rtf_draws_in_a_rich_text_box():
         rtf = f.read()
     from PySide6 import QtWidgets
     from ctgedit.render.rtf_html import rtf_paragraphs
-    from ctgedit.render.sim_drawn import _walk
+    from ctgedit.render.scene import walk_items
 
     paras = rtf_paragraphs(rtf)
     assert any("@(Example Report)" in p for p in paras)
@@ -252,7 +252,7 @@ def test_the_example_report_rtf_draws_in_a_rich_text_box():
     entry["args"] = {"width": W, "height": H, "row": 0, "col": 0, "rtf": rtf}
     sc.sim_layer().apply_drawn({7: entry})
     box = sc.sim_layer().drawn_layer().items()[7]
-    t = next(it for it in _walk(box) if isinstance(it, QtWidgets.QGraphicsTextItem))
+    t = next(it for it in walk_items(box) if isinstance(it, QtWidgets.QGraphicsTextItem))
     assert t.document().blockCount() == len(paras)
     seen = _colours(_render(sc), (0, 0, W, H))
     assert any(r > 200 and g < 90 and b < 90 for r, g, b in seen)  # the red title

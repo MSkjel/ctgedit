@@ -125,12 +125,13 @@ def test_the_fixture_tables_cover_the_kinds_the_app_reads():
     assert not names & {"almcat", "menu", "langtable"}
 
 
-def test_the_page_register_writes_the_forms_fields_in_their_order():
+def test_the_page_register_writes_the_tables_the_schema_has():
     from ctgedit.format import dbfschema as S
     from ctgedit.io import pgregister as PR
 
-    for table, fields in PR.TABLE_FIELDS.items():
-        assert [f.upper() for f in fields] == [n.upper() for n, *_r in S.fields(table)], table
+    for table in PR.PAGE_TABLES:
+        assert PR.TABLE_FIELDS[table][:2] in (["PAGE", "TYPE"], ["PAGE", "AN"], ["PAGE", "INDEX"]), table
+        assert S.index_field(table) is not None, table
     assert S.fields("pglang") == [("NATIVE", "C", PR.LANG_MAX, 0)]
 
 

@@ -1,6 +1,8 @@
 """Genie parameter dialogs, for placed and pasted genies."""
 
 from __future__ import annotations
+
+from ..dialog_buttons import dialog_buttons
 from ..style.theme import sp as _sp
 
 import html as _html
@@ -10,6 +12,7 @@ from typing import Callable, Dict, List, Optional
 
 from PySide6 import QtCore, QtGui, QtWidgets
 from ..style.theme import set_note_role
+from ...infra.logsetup import note_exception as _note_exc
 
 # display labels for common genie binding keys (the default form)
 _LABELS = {
@@ -36,7 +39,7 @@ AN_TIP = "The genie's animation number (AN). It is set when the genie is placed.
 _TAG_LIST_FORMS = ("variable tags", "variable")
 
 
-def _friendly_ref(ref: str) -> str:
+def friendly_ref(ref: str) -> str:
     """'lib.element.<ctm' -> 'lib.element' (the stored link carries the
     file-type tag CtDraw appends; users know genies as library.element)."""
     ref = " ".join(ref.split())
@@ -127,7 +130,7 @@ class _MultiListField(QtWidgets.QWidget):
         self.edit.setMaxLength(n)
 
 
-class _BrowseField(QtWidgets.QWidget):
+class BrowseField(QtWidgets.QWidget):
     """A text box with a 'Browse…' button that picks the value from a list
     (equipment, a menu item, a tab bar -- ui/panels/sa_pickers.py)."""
 
@@ -444,6 +447,7 @@ class GenieParamsForm(QtWidgets.QWidget):
             try:
                 items = self._list_values(fld)
             except Exception:  # noqa: BLE001 -- a list is a convenience
+                _note_exc("genie_dialogs._editor_for/list")
                 items = None
         tip = self._description(*(([self.form.label_for(fld.number)] if fld is not None else []) + [name]))
         spec = None
@@ -451,6 +455,7 @@ class GenieParamsForm(QtWidgets.QWidget):
             try:
                 spec = self._pickers.for_param(name, value)
             except Exception:  # noqa: BLE001 -- a picker is a convenience
+                _note_exc("genie_dialogs._editor_for/picker", param=name)
                 spec = None
             if spec is not None and spec.kind == "combo":
                 items = spec.items
@@ -471,7 +476,7 @@ class GenieParamsForm(QtWidgets.QWidget):
             w = (
                 factory(value, browse, spec.tip)
                 if factory is not None
-                else _BrowseField(value, browse, spec.tip)
+                else BrowseField(value, browse, spec.tip)
             )
             w.setMaxLength(limit)
             if self._completer is not None and factory is None:
@@ -789,6 +794,7 @@ def _descriptions(library: str, element: str):
         tid = GH.topic_for(library, element)
         return tid, (GH.field_descriptions(tid) if tid else {})
     except Exception:  # noqa: BLE001 -- the reference is optional
+        _note_exc("genie_dialogs._descriptions", library=library, element=element)
         return None, {}
 
 
@@ -881,11 +887,7 @@ class _GenieDialogBase(QtWidgets.QDialog):
             note.setWordWrap(True)
             set_note_role(note, "text_dim")
             lay.addWidget(note)
-        buttons = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
-        )
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
+        buttons = dialog_buttons(self)
         self.group_button = None
         if group_button:
             b = buttons.addButton("Group…", QtWidgets.QDialogButtonBox.ActionRole)
@@ -1052,7 +1054,7 @@ class GenieSubstitutionDialog(_GenieDialogBase):
                 or obj.raw.get("_resolved_ref")
                 or ""
             )
-        ref = _friendly_ref(str(ref))
+        ref = friendly_ref(str(ref))
         params = dict(bindings) if bindings is not None else dict(getattr(obj, "substitutions", None) or {})
         self._setup(
             ref,

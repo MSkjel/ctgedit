@@ -31,9 +31,9 @@ def win():
 
     for t in list(tasks.running()):
         tasks.drop(t.token)
-    for x in list(MainWindow._instances):
-        if x in MainWindow._instances:
-            MainWindow._instances.remove(x)
+    for x in list(MainWindow.instances):
+        if x in MainWindow.instances:
+            MainWindow.instances.remove(x)
         x.hide()
 
 
@@ -76,7 +76,7 @@ def test_a_task_of_another_window_does_not_show_here(win):
         assert win.status_tasks.isHidden() and not other.status_tasks.isHidden()
         tasks.end(t)
     finally:
-        MainWindow._instances.remove(other)
+        MainWindow.instances.remove(other)
         other.hide()
 
 
@@ -93,7 +93,7 @@ def test_cancel_calls_the_callback_from_the_list(win):
     assert pop.isVisible()
     bars = pop.rows.findChildren(QtWidgets.QProgressBar)
     assert bars and bars[0].maximum() == 10 and bars[0].value() == 3
-    cancel = [b for b in pop.rows.findChildren(QtWidgets.QToolButton) if b.text() == "Cancel"]
+    cancel = [b for b in pop.rows.findChildren(QtWidgets.QToolButton) if b.text() == "Stop"]
     cancel[0].click()
     assert called == [1] and tasks.registry().tasks[t].cancelled
     tasks.end(t)
@@ -226,7 +226,6 @@ def test_the_expression_check_of_check_page_is_a_task(win, tmp_path, monkeypatch
     from ctgedit.features import page_checks as PC
 
     fields = [SimpleNamespace(text="A + %d" % k, kind="expr") for k in range(5)]
-    monkeypatch.setattr(PC, "expression_fields", lambda doc: list(fields))
     monkeypatch.setattr(PC, "engine_findings", lambda doc, f, res: [])
     pending = []
 
@@ -240,7 +239,7 @@ def test_the_expression_check_of_check_page_is_a_task(win, tmp_path, monkeypatch
     from ctgedit.editing import DocumentUiState
 
     doc = SimpleNamespace(path=str(tmp_path / "Pg.ctg"), ui=DocumentUiState())
-    rep = SimpleNamespace(expressions=0, compiled=0, engine_note="", findings=[])
+    rep = SimpleNamespace(expressions=0, compiled=0, engine_note="", findings=[], fields=list(fields))
     monkeypatch.setattr(win, "_show_page_report", lambda d=None: None)
     win._compile_page_fields(doc, rep)
     task = next(t for t in tasks.running(win) if t.kind == "expressions")
@@ -273,7 +272,7 @@ def test_a_newer_expression_check_drops_the_older_task(win, tmp_path, monkeypatc
     from ctgedit.features import page_checks as PC
 
     monkeypatch.setattr(tasks, "LONG_S", -1.0)
-    monkeypatch.setattr(PC, "expression_fields", lambda doc: [SimpleNamespace(text="A", kind="expr")] * 3)
+    fields = [SimpleNamespace(text="A", kind="expr")] * 3
     monkeypatch.setattr(PC, "engine_findings", lambda doc, f, res: [])
     pending = []
 
@@ -288,11 +287,15 @@ def test_a_newer_expression_check_drops_the_older_task(win, tmp_path, monkeypatc
 
     doc = SimpleNamespace(path=str(tmp_path / "Pg.ctg"), ui=DocumentUiState())
     monkeypatch.setattr(win, "_show_page_report", lambda d=None: None)
-    win._compile_page_fields(doc, SimpleNamespace(expressions=0, compiled=0, engine_note="", findings=[]))
+    win._compile_page_fields(
+        doc, SimpleNamespace(expressions=0, compiled=0, engine_note="", findings=[], fields=list(fields))
+    )
     first = pending.pop(0)
     c = notify.centre(win)
     c.clear()
-    win._compile_page_fields(doc, SimpleNamespace(expressions=0, compiled=0, engine_note="", findings=[]))
+    win._compile_page_fields(
+        doc, SimpleNamespace(expressions=0, compiled=0, engine_note="", findings=[], fields=list(fields))
+    )
     first({})  # the older check's answer comes late
     checks = [t for t in tasks.running(win) if t.kind == "expressions"]
     assert len(checks) == 1  # only the newer one

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from ..infra.paths import lib_path_dirs, path_key
+
+
 import contextlib
 import os
 from typing import List, Set, Tuple
@@ -27,7 +30,7 @@ def _matches(doc, olds) -> List[int]:
 
 
 def _key(path: str, element: str = "") -> Tuple[str, str]:
-    return os.path.normcase(os.path.abspath(path)), element.lower()
+    return path_key(path), element.lower()
 
 
 def _label(path: str, element: str) -> str:
@@ -219,7 +222,7 @@ def _order_elements(elements: List[dict]) -> List[dict]:
     stems = {
         (os.path.splitext(os.path.basename(e["library"]))[0].lower(), e["element"].lower()) for e in elements
     }
-    extra = [d for d in os.environ.get("CTG_LIB_PATH", "").split(os.pathsep) if d]
+    extra = lib_path_dirs()
     deps = {}
     for e in elements:
         try:
@@ -313,9 +316,9 @@ def apply(req: dict, progress=None, skip_now=None) -> dict:
             if not done:
                 continue
             if backup:
-                from ..io.genieusage import backup_library
+                from ..infra import backups
 
-                backup_library(lib, backup, BACKUP_KIND)
+                backups.backup_file(backup, BACKUP_KIND, lib, once=True)
             doc.save(
                 expect_stored=True,
                 page_thumbnail=headless_thumb.page_thumbnail,
@@ -362,7 +365,7 @@ def _chain(req: dict, saved: List[dict], out: dict) -> None:
     from . import genie_worker as GW
 
     pfile = req.get("progress_file") or ""
-    skip = sorted(os.path.normcase(os.path.abspath(p)) for p in req.get("skip") or ())
+    skip = sorted(path_key(p) for p in req.get("skip") or ())
     for e in saved:
         try:
             a = GW.update_closed_pages(

@@ -61,8 +61,8 @@ def win():
     yield w
     for d in list(getattr(w, "_dialogs", {}).values()):
         d.close()
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.hide()
     w.deleteLater()
     QtWidgets.QApplication.processEvents()
@@ -230,11 +230,11 @@ def test_settings_appearance_tab_applies_the_theme(theme, win):
 
 def test_imported_appearance_applies_at_once(theme, win, tmp_path, monkeypatch):
     from ctgedit.ui.prefs.settings_dialog import SettingsDialog
-    from ctgedit.ui.prefs.settings import export_settings
+    from ctgedit.ui.prefs.settings_transfer import export_groups
 
     monkeypatch.setattr(theme, "windows_high_contrast", lambda: False)
     path = str(tmp_path / "exported.ini")
-    export_settings(path, overrides={"ui/style/theme": "light", "ui/follow_text_size": False})
+    export_groups(path, overrides={"ui/style/theme": "light", "ui/follow_text_size": False})
     dlg = SettingsDialog(win)
     assert dlg.import_from(path)
     assert theme.current_scheme() == "light" and dlg._theme.currentData() == "light"
@@ -536,7 +536,7 @@ def test_text_extents_use_the_system_dpi_whatever_the_process_awareness():
         "u.GetThreadDpiAwarenessContext.restype = ctypes.c_void_p\n"
         "u.GetAwarenessFromDpiAwarenessContext.argtypes = [ctypes.c_void_p]\n"
         "aw = lambda: u.GetAwarenessFromDpiAwarenessContext(u.GetThreadDpiAwarenessContext())\n"
-        "g = TM._Gdi.get()\n"
+        "g = TM.Gdi.get()\n"
         "with g.system_aware():\n"
         "    inside = aw()\n"
         "print(json.dumps([TM.system_dpi(), TM.extent('Hello', 'Arial', 12, 0, 1, 0, (0, 20)),\n"
@@ -567,7 +567,7 @@ def test_text_dpi_sets_the_extent_and_the_canvas_font(monkeypatch):
     from ctgedit.format import textmetrics as TM
     from ctgedit.render import scene as SC
 
-    g = TM._Gdi.get()
+    g = TM.Gdi.get()
     base = TM.extent("Hello", "Arial", 12, 0, 1, 0, (0, 40))
     monkeypatch.setattr(g, "logpixelsy", 144)  # a 150 % session
     big = TM.extent("Hello", "Arial", 12, 0, 1, 0, (0, 40))
@@ -588,7 +588,7 @@ def test_legacy_text_font_from_its_box_is_dpi_neutral(monkeypatch):
     from ctgedit.render import scene as SC
 
     _app()
-    g = TM._Gdi.get()
+    g = TM.Gdi.get()
     sc = SC.PageScene()
 
     def px(ey):

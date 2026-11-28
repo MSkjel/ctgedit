@@ -3689,7 +3689,7 @@ class Oracle:
         self.opened = set()
         self.cache.pop("project", None)
         self.wait(3.0)
-        self.pids = self._ctdraw_pids()
+        self.pids = self.ctdraw_pids()
 
     def _detach(self) -> None:
         """Let the attached Graphics Builder go (its page closed first). GraphicsBuilder's
@@ -3710,13 +3710,13 @@ class Oracle:
         else:
             stop_studio(self.log)
 
-    def _ctdraw_pids(self) -> set:
+    def ctdraw_pids(self) -> set:
         return set((self.change.processes() or {}).get("CtDraw32.exe", []))
 
     def builder_gone(self) -> bool:
         """Whether the CtDraw32 the run attached to has ended (the watchdog ends one whose
         COM call waits too long): every later call of that builder would fail."""
-        return bool(self.pids) and not (self.pids & self._ctdraw_pids())
+        return bool(self.pids) and not (self.pids & self.ctdraw_pids())
 
     def fresh_builder(self, why: str, force: bool = False) -> bool:
         """A fresh Graphics Builder, unless the current one will do."""
@@ -3724,14 +3724,14 @@ class Oracle:
             return False
         self.log("A fresh Graphics Builder: %s." % why)
         pending = {rel for rel, _b, _a in self.changes()}
-        old = self._ctdraw_pids()
+        old = self.ctdraw_pids()
         self._detach()
         self.end_builder()
         deadline = time.time() + 20.0 * self.pause
-        left = old & self._ctdraw_pids()
+        left = old & self.ctdraw_pids()
         while left and time.time() < deadline:
             time.sleep(0.5)
-            left = old & self._ctdraw_pids()
+            left = old & self.ctdraw_pids()
         if left:
             raise BuilderLost(
                 "CtDraw32 (pid %s) still runs: no fresh Graphics Builder" % ", ".join(map(str, sorted(left)))

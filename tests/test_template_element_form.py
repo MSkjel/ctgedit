@@ -6,8 +6,7 @@ import fxinstall
 import pytest
 
 from ctgedit.format import genie_place as GP
-from ctgedit.format import links
-from ctgedit.format import writer
+from ctgedit.format import links, writer
 
 pytestmark = pytest.mark.golden
 

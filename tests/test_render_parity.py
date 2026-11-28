@@ -854,8 +854,8 @@ def test_hover_never_deletes_scene_items(alarms):
         assert w.doc.page.root_of(w.view._hit_index(vp)[0]) == w.doc.page.root_of(light)
     finally:
         w.doc = None
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.close()
 
 
@@ -1033,12 +1033,12 @@ def test_metafile_record_found_at_its_class_section():
     if not sys.platform.startswith("win"):
         pytest.skip("metafile rendering is Windows GDI only")
     from ctgedit.format import factory
-    from ctgedit.io.reader import _object_from
+    from ctgedit.io.reader import object_from
 
     wmf = _wmf([(0x041B, (750, 750, 250, 250))])
     po = factory.make_metafile_record(1, (1, 9, 101, 109), wmf)
     assert po.body_raw.find(bytes.fromhex("01000900")) < po.body_raw.find(wmf)
-    obj = _object_from(po, None, 0)
+    obj = object_from(po, None, 0)
     assert obj.raw.get("_embedded_bmp") is not None and obj.raw["_wmf"] == wmf
 
 

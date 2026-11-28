@@ -476,7 +476,7 @@ def affine_mul(A, B):
     )
 
 
-def _affine_inv(A):
+def affine_inv(A):
     a, b, c, d, h, k = A
     det = a * d - b * c
     if abs(det) < 1e-12:
@@ -491,7 +491,7 @@ def origin_of(po: PageObject):
     (m1, L, _o, _n), (m2, S2, _o2, _n2), _s3 = read_slots(po.body_raw)[0]
     if m2 == 0:
         return (0, 0)
-    T = affine_mul(_affine_inv(L if m1 else IDENT), S2)
+    T = affine_mul(affine_inv(L if m1 else IDENT), S2)
     return (int(round(-T[4])), int(round(-T[5])))
 
 
@@ -543,7 +543,7 @@ def _map_record_geometry(po, M6, via=None, anchor_only=False, refresh_owed=False
         # double rounding differs from M6(page) at integer edges
         if via is not None:
             T0, T1 = via
-            ia, ib, ic, id_, ih, ik = _affine_inv(T0)
+            ia, ib, ic, id_, ih, ik = affine_inv(T0)
             lx = round(ia * x + ic * y + ih)
             ly = round(ib * x + id_ * y + ik)
             a, b, c, d, h, k = T1
@@ -571,7 +571,7 @@ def _map_record_geometry(po, M6, via=None, anchor_only=False, refresh_owed=False
     if po.type_code == 0x01:
         pts = G.get_object_nodes(po) or [gh.rect1[:2], gh.rect1[2:]]
         (x1, y1), (x2, y2) = mp(*pts[0]), mp(*pts[1])
-        G._set_line_endpoints(po, x1, y1, x2, y2)
+        G.set_line_endpoints(po, x1, y1, x2, y2)
         return
     na = G.find_node_array(po)
     if na is not None:
@@ -633,7 +633,7 @@ def scale_records(
             chain = chain_of(i)
             P = chain_total(chain)
             Pm = P[1] if P is not None else IDENT
-            Mloc = affine_mul(_affine_inv(Pm), affine_mul(M6, Pm))
+            Mloc = affine_mul(affine_inv(Pm), affine_mul(M6, Pm))
             T0 = slot3(po)
             e = origin_of(po)
             (m1, L1, _, _), (m2, S2, _o2, _n2), _s3 = read_slots(po.body_raw)[0]
@@ -1055,7 +1055,7 @@ def class_section_offset(po: PageObject) -> int:
         o = L["end"] + (54 if po.subtype_size & 2 else 0)
         if po.subtype_size & 0x100:
             try:
-                o = colourstate._bag_end(po.body_raw, o)
+                o = colourstate.bag_end(po.body_raw, o)
             except struct.error:
                 o = None
         if o is not None and o <= len(po.body_raw):

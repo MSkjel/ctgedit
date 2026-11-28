@@ -34,8 +34,8 @@ def _close(w):
 
     for dlg in list(getattr(w, "_dialogs", {}).values()):
         dlg.reject()
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.hide()
 
 
@@ -388,7 +388,7 @@ def test_adjust_dialog_values_follow_ctdraw():
     from ctgedit.ui.dialog.arrange_dialogs import AdjustPositionDialog
 
     dlg = AdjustPositionDialog((10, 20, 30, 40))
-    assert dlg.rect() == (10, 20, 30, 40)
+    assert dlg.chosen_rect() == (10, 20, 30, 40)
     assert dlg.by_percentage()  # CtDraw opens By percentage
     assert dlg._sp["pct"].value() == 100
     ok = dlg._buttons.button(QtWidgets.QDialogButtonBox.Ok)
@@ -396,7 +396,7 @@ def test_adjust_dialog_values_follow_ctdraw():
     assert ok.isEnabled() and not apply_.isEnabled()  # nothing changed yet
     dlg._sp["pct"].setValue(50)
     assert apply_.isEnabled() and dlg.scale() == (0.5, 0.5)
-    assert dlg.rect() == (10, 20, 15, 20)
+    assert dlg.chosen_rect() == (10, 20, 15, 20)
     dlg.set_by_percentage(False)
     assert not apply_.isEnabled()  # Width / Height unchanged
     dlg._sp["w"].setValue(60)

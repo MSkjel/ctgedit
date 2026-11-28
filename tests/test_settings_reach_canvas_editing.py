@@ -1,5 +1,6 @@
 """Canvas and editing settings reach every place they should."""
 
+from ctgedit.ui.main_window import MainWindow
 import contextlib
 import gc
 import os
@@ -346,7 +347,6 @@ def test_a_new_text_is_typed_in_its_styles_font(view):
 # ------------------------------------------------------------------ the paste offset
 def test_dropped_pictures_land_the_paste_offset_apart(monkeypatch):
     from ctgedit.ui.dialog import bitmap_import as BI
-    from ctgedit.ui.window.commands import Commands
 
     monkeypatch.setattr(BI, "open_source", lambda p: p)
     monkeypatch.setattr(BI, "add_recent", lambda paths: None)
@@ -378,11 +378,11 @@ def test_dropped_pictures_land_the_paste_offset_apart(monkeypatch):
             return Bar()
 
     w = W()
-    Commands._import_files(w, ["a.png", "b.png", "c.png"], at=(100, 100), trigger="drop")
+    MainWindow._import_files(w, ["a.png", "b.png", "c.png"], at=(100, 100), trigger="drop")
     assert placed == [(100, 100), (125, 125), (150, 150)]
     placed.clear()
     w._paste_offset = 0
-    Commands._import_files(w, ["a.png", "b.png"], at=(100, 100), trigger="drop")
+    MainWindow._import_files(w, ["a.png", "b.png"], at=(100, 100), trigger="drop")
     assert placed == [(100, 100), (100, 100)]
 
 

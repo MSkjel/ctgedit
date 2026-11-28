@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from ..names import plural
+
 from ..main_window_base import QtCore, QtWidgets, app_settings
+from ..messages import inform
 
 
 class NavigationCommands:
@@ -77,11 +80,11 @@ class NavigationCommands:
         # Space pans the canvas under the pointer wherever the keyboard is (not in a field)
         app = QtWidgets.QApplication.instance()
         if app is not None and getattr(app, "_ctg_space_pan", None) is None:
-            from ..main_window_base import _app_filter
+            from ..main_window_base import app_filter
             from ..editor.viewnav import SpacePanForwarder
 
             app._ctg_space_pan = SpacePanForwarder(app)
-            _app_filter().add(app._ctg_space_pan, SpacePanForwarder.TYPES)
+            app_filter().add(app._ctg_space_pan, SpacePanForwarder.TYPES)
         self._sync_view_history_actions()
 
     # ---- Previous View / Next View -----------------------------------------------------
@@ -166,7 +169,7 @@ class NavigationCommands:
             self.statusBar().showMessage("The page has no guidelines.", 3000)
             return
         self.view.set_guidelines([], [])
-        self._on_guidelines_changed("Cleared %d guideline%s." % (n, "" if n == 1 else "s"))
+        self._on_guidelines_changed("Cleared %s." % (plural(n, "guideline")))
 
     # ---- saved views -------------------------------------------------------------------
     def _sync_saved_views_menu(self, force: bool = False) -> None:
@@ -224,7 +227,7 @@ class NavigationCommands:
             vs = SV.load_views(doc)
             if SV.is_full(vs, name):
                 # (a new name past the limit would not be kept: not saved, and said so)
-                QtWidgets.QMessageBox.information(self, "Save Current View", SV.full_text())
+                inform(self, "Save Current View", SV.full_text())
                 return
             vs = [v for v in vs if v["name"] != name]
             vs.append(SV.current_view(self.view, name))

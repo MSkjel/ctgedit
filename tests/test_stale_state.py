@@ -37,8 +37,8 @@ def _drop_win(w):
         if hasattr(d, "dirty"):
             d.dirty = False
     w.doc = None
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.close()
 
 

@@ -353,7 +353,7 @@ class TasksPopover(StatusPopover):
             btn = None
             if t.cancel is not None:
                 btn = QtWidgets.QToolButton(row)
-                btn.setText("Cancel")
+                btn.setText("Stop")
                 btn.setToolTip("Stop this task")
                 btn.clicked.connect(lambda _=False, k=t.token: cancel(k))
                 top.addWidget(btn)

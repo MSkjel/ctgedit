@@ -1,13 +1,10 @@
-"""Cross-module use of private names is limited to the allow list."""
+"""No module uses another module's private names."""
 
 import ast
-import json
 import os
-import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(os.path.dirname(HERE), "ctgedit")
-LIST = os.path.join(HERE, "private_uses.json")
 
 
 def _module_of(path):
@@ -22,23 +19,6 @@ def _resolve(mod, level, name, is_pkg):
     base = base if is_pkg else base[:-1]
     base = base[: len(base) - (level - 1)]
     return ".".join(base + ([name] if name else []))
-
-
-#: modules that are one unit (the reader and its parts reach each other's names by design)
-UNITS = (
-    ("ctgedit.io.reader", "ctgedit.io.readerparts"),
-    # EditableDocument and MainWindow split into mixins (their module-level helpers live
-    # in the *_base modules and are re-exported): one class each
-    ("ctgedit.editing", "ctgedit.editing_base", "ctgedit.doc"),
-    ("ctgedit.ui.main_window", "ctgedit.ui.main_window_base", "ctgedit.ui.window"),
-)
-
-
-def _unit(name):
-    for u in UNITS:
-        if any(name == m or name.startswith(m + ".") for m in u):
-            return u
-    return name
 
 
 def uses():
@@ -65,7 +45,7 @@ def uses():
                             and src.startswith("ctgedit")
                             and src != mod
                             and not mod.startswith(src + ".")
-                            and _unit(mod) != _unit(src)
+                            and mod != src
                         ):
                             out.add("%s -> %s.%s" % (mod, src, a.name))
                 elif isinstance(n, ast.Import):
@@ -85,28 +65,15 @@ def uses():
                         and target.startswith("ctgedit")
                         and target != mod
                         and not mod.startswith(target + ".")
-                        and _unit(mod) != _unit(target)
+                        and mod != target
                     ):
                         out.add("%s -> %s.%s" % (mod, target, n.attr))
     return out
 
 
-def test_no_new_private_name_use_across_modules():
-    allowed = set(json.load(open(LIST, encoding="utf-8")))
-    now = uses()
-    new = sorted(now - allowed)
-    assert not new, (
+def test_no_private_name_use_across_modules():
+    now = sorted(uses())
+    assert not now, (
         "a module uses another's private name (make it public, or keep it "
-        "inside the module):\n  " + "\n  ".join(new)
+        "inside the module):\n  " + "\n  ".join(now)
     )
-    gone = sorted(allowed - now)
-    assert not gone, (
-        "no longer used, take them out of tests/private_uses.json "
-        "(run this file with --write):\n  " + "\n  ".join(gone)
-    )
-
-
-if __name__ == "__main__" and "--write" in sys.argv:
-    with open(LIST, "w", encoding="utf-8", newline="\n") as fh:
-        json.dump(sorted(uses()), fh, indent=0)
-    print(len(uses()), "uses written")

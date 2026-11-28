@@ -409,7 +409,7 @@ def _full(doc):
 
 
 def test_fresh_record_memo_and_stash(large):
-    from ctgedit.format.page import _parse_object, parse_ctg
+    from ctgedit.format.page import parse_object, parse_ctg
     from ctgedit.format.writer import object_payload
 
     reader.clear_fresh_memo()
@@ -424,11 +424,11 @@ def test_fresh_record_memo_and_stash(large):
     # a record's own stash of its present payload is used, a stale one is not
     reader.clear_fresh_memo()
     payload = object_payload(po)
-    stash = _parse_object(5, 0, len(payload), 0, payload)
+    stash = parse_object(5, 0, len(payload), 0, payload)
     po._fresh_parse = (payload, stash)
     assert reader._fresh_record(po, 5) is stash
     # ... and remembered: a copy of the record (an undo / redo's) finds it without a stash
-    copy = _parse_object(5, 0, len(payload), 0, payload)
+    copy = parse_object(5, 0, len(payload), 0, payload)
     assert reader._fresh_record(copy, 5) is stash
     reader.clear_fresh_memo()
     po._fresh_parse = (payload + b"x", stash)
@@ -444,7 +444,7 @@ def test_fresh_memo_bound_counts_what_the_parses_keep_alive(monkeypatch, large):
     from ctgedit.format.page import parse_ctg
 
     objs = parse_ctg(large).page.objects
-    sigs = [reader._record_sig(po) for po in objs]
+    sigs = [reader.record_sig(po) for po in objs]
     reader.clear_fresh_memo()
     tracemalloc.start()
     try:
@@ -484,8 +484,8 @@ def test_undo_redo_reuse_parses_and_equal_a_full_derive(monkeypatch, large):
     doc._rerender_page()
     assert reader.model_difference(doc.page, _full(doc)) == ""
     parsed = []
-    real = reader._parse_object
-    monkeypatch.setattr(reader, "_parse_object", lambda *a: parsed.append(1) or real(*a))
+    real = reader.parse_object
+    monkeypatch.setattr(reader, "parse_object", lambda *a: parsed.append(1) or real(*a))
     doc.redo()
     doc._rerender_page()
     doc.undo()
@@ -544,7 +544,7 @@ def test_per_record_functions_import_nothing_at_call_time():
     src = open(reader.__file__, encoding="utf-8").read()
     tree = ast.parse(src)
     hot = {
-        "_object_from",
+        "object_from",
         "_fresh_record",
         "_read_geometry",
         "_decode_style",
@@ -557,7 +557,7 @@ def test_per_record_functions_import_nothing_at_call_time():
         "_attach_metafile",
         "_expand_symbol",
         "_cicode_shows_no_symbol",
-        "_classify_container",
+        "classify_container",
         "_state0_pair",
         "_member_nodes",
         "_own_text_caption",

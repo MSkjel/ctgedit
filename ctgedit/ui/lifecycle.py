@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+from ..infra.logsetup import note_exception as _note_exc
+
+from .names import name_list, plural
+
+
 import os
 from typing import Callable, List, Optional
 
 from PySide6 import QtCore, QtWidgets
+from .messages import warn
 
 PAGE_FILES = "files"  # delete the page and its files (CtDraw: Yes)
 PAGE_PROJECT = "project"  # remove it from the project only (CtDraw: No)
@@ -33,7 +39,7 @@ _LIST_MAX = 8
 
 
 def _warn(parent, title: str, text: str) -> None:
-    QtWidgets.QMessageBox.warning(parent, title, text)
+    warn(parent, title, text)
 
 
 def _notice(parent, title: str, text: str) -> None:
@@ -81,7 +87,7 @@ def _open_in_builder(project: str, page: str) -> bool:
         from ..backend.graphics_builder import open_pages
 
         return any(p.lower() == project.lower() and n.lower() == page.lower() for p, n in open_pages())
-    except Exception:  # noqa: BLE001 -- a hint only
+    except Exception:  # noqa: BLE001  # swallow-ok: a hint only, CtDraw may not be running
         return False
 
 
@@ -94,6 +100,7 @@ def touch_catalog(catalog, directory: str) -> None:
             catalog = catalog_for()
         catalog.touch(directory)
     except Exception:  # noqa: BLE001
+        _note_exc("lifecycle.touch_catalog")
         pass
 
 
@@ -217,23 +224,22 @@ def element_usage(lib_path: str, element: str, catalog=None) -> List:
             catalog = catalog_for()
         return catalog.element_usage(lib_path, element)
     except Exception:  # noqa: BLE001 -- the warning is a hint, never a blocker
+        _note_exc("lifecycle.element_usage")
         return []
 
 
-_SUPER_NOTE = "A super genie is opened at runtime, so the pages and genies that open it are not listed."
+SUPER_NOTE = "A super genie is opened at runtime, so the pages and genies that open it are not listed."
 
 
 def usage_text(usage: List, lib_path: str = "", element: str = "") -> str:
     """'It is placed on 3 pages: A, B and C.' (the first few named); for a
     super genie, a note that its runtime uses cannot be listed."""
-    note = ("\n\n" + _SUPER_NOTE) if lib_path and _kind(lib_path, element) == "super genie" else ""
+    note = ("\n\n" + SUPER_NOTE) if lib_path and _kind(lib_path, element) == "super genie" else ""
     if not usage:
         return "No page of its project, or of the projects that include it, places it." + note
     names = ["%s (%s)" % (e.name, e.project) for e in usage]
-    shown = ", ".join(names[:_LIST_MAX])
-    if len(names) > _LIST_MAX:
-        shown += " and %d more" % (len(names) - _LIST_MAX)
-    return "It is placed on %d page%s: %s." % (len(usage), "" if len(usage) == 1 else "s", shown) + note
+    shown = name_list(names, _LIST_MAX)
+    return "It is placed on %s: %s." % (plural(len(usage), "page"), shown) + note
 
 
 def ask_delete_element(parent, lib_path: str, element: str, usage: List) -> bool:
@@ -326,13 +332,13 @@ def ask_element_name(parent, lib_path: str, element: str, usage: List) -> Option
             "(rename it back, or re-place it there)." % usage_text(usage)
         )
     if _kind(lib_path, element) == "super genie":
-        prompt += "\n\n" + _SUPER_NOTE + " Cicode that opens it by the old name stops working."
+        prompt += "\n\n" + SUPER_NOTE + " Cicode that opens it by the old name stops working."
     text = element
     while True:
-        text, ok = QtWidgets.QInputDialog.getText(
-            parent, "Rename %s" % _kind(lib_path, element).title(), prompt, QtWidgets.QLineEdit.Normal, text
-        )
-        if not ok:
+        from .messages import ask_text
+
+        text = ask_text(parent, "Rename %s" % _kind(lib_path, element).title(), prompt, text)
+        if text is None:
             return None
         new = text.strip()
         if new == element:

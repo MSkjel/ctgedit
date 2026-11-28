@@ -9,7 +9,7 @@ import pytest
 def _gdi():
     from ctgedit.format import textmetrics as TM
 
-    g = TM._Gdi.get()
+    g = TM.Gdi.get()
     if g is None:
         pytest.skip("needs Windows GDI (text extents)")
     return g

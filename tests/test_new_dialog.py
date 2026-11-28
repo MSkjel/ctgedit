@@ -216,8 +216,8 @@ def test_file_new_creates_what_the_window_answers(monkeypatch, tmp_path):
         assert w.doc is not None and w.doc.element_ref == (lib, "my_genie", "genie")
         assert not os.path.exists(lib)
     finally:
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.deleteLater()
 
 
@@ -246,8 +246,8 @@ def test_file_new_page_end_to_end(fx_install, monkeypatch):
         assert w.doc.dirty and not os.path.exists(path)
         assert w.doc.template_status()[0] == "current"
     finally:
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.deleteLater()
 
 

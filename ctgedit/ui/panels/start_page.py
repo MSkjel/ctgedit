@@ -1,6 +1,10 @@
 """The start page shown when no page is open."""
 
 from __future__ import annotations
+
+from ...infra.logsetup import note_exception as _note_exc
+
+from ...infra.paths import path_key
 from ..style.theme import sp as _sp  # (the spacing scale)
 
 import os
@@ -47,7 +51,7 @@ def recent_pages(limit: Optional[int] = None) -> List[str]:
     ``limit`` (None: :func:`max_cards`, the Recent pages kept setting)."""
     try:
         mru = [str(p) for p in (app_settings().value("mru", [], type=list) or [])]
-    except Exception:  # noqa: BLE001 -- a garbled setting must not break the start page
+    except Exception:  # noqa: BLE001  # swallow-ok: a garbled setting must not break the start page
         mru = []
     out = []
     for p in mru:
@@ -61,10 +65,10 @@ def remove_recent(path: str) -> None:
     st = app_settings()
     try:
         mru = [str(p) for p in (st.value("mru", [], type=list) or [])]
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # swallow-ok: a garbled setting reads as empty
         mru = []
-    key = os.path.normcase(os.path.abspath(path))
-    st.setValue("mru", [p for p in mru if os.path.normcase(os.path.abspath(p)) != key])
+    key = path_key(path)
+    st.setValue("mru", [p for p in mru if path_key(p) != key])
     st.sync()
 
 
@@ -73,7 +77,10 @@ def _thumb_for(path: str) -> QtGui.QPixmap:
         from ...format.pagesummary import read_page_summary
 
         png = read_page_summary(path).thumbnail_png()
+    except FileNotFoundError:  # (a recent page deleted since: no picture)
+        png = b""
     except Exception:  # noqa: BLE001
+        _note_exc("start_page._thumb_for")
         png = b""
     w, h = CARD_SIZE.width(), CARD_SIZE.height()
     img = QtGui.QImage.fromData(png, "PNG") if png else QtGui.QImage()
@@ -185,9 +192,9 @@ class StartPage(QtWidgets.QWidget):
         m.addAction("Remove from Recent", lambda: self._remove(path))
 
         def reveal():
-            from ..browser.dialog import reveal_in_explorer
+            from ..messages import reveal
 
-            reveal_in_explorer(path)
+            reveal(path)
 
         m.addAction("Show in Explorer", reveal)
         return m

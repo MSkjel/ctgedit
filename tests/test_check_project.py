@@ -102,7 +102,7 @@ def test_the_project_check_lists_the_tables_cicode(fx_install, monkeypatch):
 
 
 def test_replace_references_changes_the_tables_at_the_engines_place(fx_install):
-    from ctgedit.io.pgregister import find_file
+    from ctgedit.format.fileio import find_ci
     from ctgedit.io.project import Project
     from ctgedit.workers import check_worker as CW
 
@@ -122,7 +122,7 @@ def test_replace_references_changes_the_tables_at_the_engines_place(fx_install):
     replaced, problems = CW.replace_in_tables([long])
     assert replaced == 0 and "would not fit" in problems[0]
     assert Project(pdir).page_record("FxShapes")["ENTRY_FUNC"] == got
-    assert find_file(pdir, "pages.dbf") == f["table"]
+    assert find_ci(pdir, "pages.dbf") == f["table"]
 
 
 def test_replace_references_gives_a_closed_page_the_new_name(fx_install):
@@ -301,8 +301,8 @@ def test_replace_references_changes_a_cicode_file_after_a_backup(fx_install, tmp
     with open(path, "rb") as fh:
         assert fh.read().decode("cp1252") == CI.replace('_PageDisplay("FxOld")', '_PageDisplay("FxNewName")')
     (entry,) = backups.read_manifest(folder)["entries"]
-    with open(os.path.join(folder, entry["folder"], entry["file"]), "rb") as fh:
-        assert fh.read().decode("cp1252") == CI and entry["library"] == os.path.abspath(path)
+    with open(os.path.join(folder, entry["backup"]), "rb") as fh:
+        assert fh.read().decode("cp1252") == CI and entry["original"] == os.path.abspath(path)
     # changed since the check: nothing is replaced, and it says so
     replaced, problems = CW.replace_in_files([edit], str(tmp_path / "again"))
     assert replaced == 0 and "no longer holds" in problems[0]

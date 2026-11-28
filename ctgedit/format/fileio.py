@@ -2,15 +2,48 @@
 
 from __future__ import annotations
 
+from ..infra.paths import path_key
+
 import itertools
 import os
 import time
+from typing import Optional
 
 TMP_SUFFIX = ".ctgedit-tmp"
 #: the replace is tried this many times, this many seconds apart, while Windows refuses it
 #: with access denied (5) or a sharing violation (32)
 REPLACE_TRIES = 20
 REPLACE_STEP = 0.05
+
+
+def file_stamp(path: Optional[str]):
+    """(normalised path, mtime_ns, size) of a file: it changed when its stamp did. None
+    when there is none."""
+    if not path:
+        return None
+    try:
+        st = os.stat(path)
+    except OSError:
+        return None
+    return (path_key(path), st.st_mtime_ns, st.st_size)
+
+
+def find_ci(folder: str, name: str):
+    """The file ``name`` in ``folder`` whatever its case ('pages.DBF', 'pages.dbf'), or None.
+    One stat on Windows (its names ignore case); a folder listing elsewhere."""
+    p = os.path.join(folder, name)
+    if os.path.isfile(p):
+        return p
+    if os.name == "nt":
+        return None
+    low = name.lower()
+    try:
+        for f in os.listdir(folder):
+            if f.lower() == low:
+                return os.path.join(folder, f)
+    except OSError:  # swallow-ok: no such folder: no file
+        pass
+    return None
 
 
 def _replace(tmp: str, path: str) -> None:
@@ -22,6 +55,18 @@ def _replace(tmp: str, path: str) -> None:
             if getattr(e, "winerror", None) not in (5, 32) or k == REPLACE_TRIES - 1:
                 raise
             time.sleep(REPLACE_STEP)
+
+
+def read_json_dict(path: str) -> dict:
+    """The JSON object in the file ``path``; {} when there is none or it is unreadable."""
+    import json
+
+    try:
+        with open(path, encoding="utf-8") as fh:
+            m = json.load(fh)
+    except OSError, ValueError:  # swallow-ok: no file, or a garbled one: nothing kept
+        return {}
+    return m if isinstance(m, dict) else {}
 
 
 def write_atomic(path: str, data: bytes) -> None:
@@ -54,7 +99,7 @@ def note_written(path: str) -> None:
     """Remember ``path`` as this process just wrote it (:func:`written_stamp`), and count it
     as a change (:func:`file_version`). Also for a file a helper process of this editor
     wrote (the chain after a genie save): its writes are the editor's own."""
-    key = os.path.normcase(os.path.abspath(path))
+    key = path_key(path)
     _bump(key)
     try:
         st = os.stat(path)
@@ -68,7 +113,7 @@ def note_written(path: str) -> None:
 
 def written_stamp(path: str):
     """The (mtime_ns, size) this process last wrote ``path`` with, None when it did not."""
-    return _WRITTEN.get(os.path.normcase(os.path.abspath(path)))
+    return _WRITTEN.get(path_key(path))
 
 
 #: normcase path -> the last change of the file this process knows of: its own writes
@@ -89,7 +134,7 @@ def _bump(key: str) -> None:
 def note_changed(path: str) -> None:
     """``path`` changed in a way its (mtime_ns, size) may not show: another program or a
     helper process wrote it (the caches keyed by :func:`file_version` read it again)."""
-    _bump(os.path.normcase(os.path.abspath(path)))
+    _bump(path_key(path))
 
 
 #: the library files' extensions whose changes go to a helper process (library_changes)
@@ -118,7 +163,7 @@ def file_version(path: str) -> tuple:
     """The version of the file at ``path`` that a cache of what was read from it is keyed by:
     (mtime_ns, size, the last change this process knows of). Raises OSError as os.stat."""
     st = os.stat(path)
-    return (st.st_mtime_ns, st.st_size, _CHANGES.get(os.path.normcase(os.path.abspath(path)), 0))
+    return (st.st_mtime_ns, st.st_size, _CHANGES.get(path_key(path), 0))
 
 
 #: normcase path -> (its file_version, the SHA-1 of its bytes then) (content_tag)
@@ -127,7 +172,7 @@ _DIGESTS: dict = {}
 
 def content_tag(path: str) -> str:
     """SHA-1 of the file at ``path``, read once per version."""
-    key = os.path.normcase(os.path.abspath(path))
+    key = path_key(path)
     ver = file_version(path)
     hit = _DIGESTS.get(key)
     if hit is not None and hit[0] == ver:

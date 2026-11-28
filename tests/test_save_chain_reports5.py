@@ -22,8 +22,8 @@ def _drop_win(w):
     for ent in list(getattr(w, "_docs", ())):
         if hasattr(ent["doc"], "dirty"):
             ent["doc"].dirty = False
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.close()
     w.deleteLater()
 
@@ -472,7 +472,12 @@ def test_cancel_in_the_open_tabs_step_brings_a_saved_template_to_the_tab(fx_inst
     n.save()
     libraries_changed()
     assert tab.template_status()[0] == "stale"
-    monkeypatch.setattr(JP.JobProgress, "tick", lambda self, i, total, text: False)
+    tick = JP.JobProgress.tick  # (Stop in the open tabs' step only)
+    monkeypatch.setattr(
+        JP.JobProgress,
+        "tick",
+        lambda self, i, total, text: self.phase != "tabs" and tick(self, i, total, text),
+    )
     reports = []
     monkeypatch.setattr(MainWindow, "_report_users_update", lambda self, text, **k: reports.append(text))
     win._update_element_users_run(GU.element_users(inner, "normal@XGA"), confirm=False)
@@ -487,15 +492,15 @@ def test_cancel_in_the_open_tabs_step_brings_a_saved_template_to_the_tab(fx_inst
 
 def test_the_follow_words_name_what_follows(win):
     from ctgedit.ui.prefs.settings import app_settings
-    from ctgedit.ui.window.library import _follow_words
+    from ctgedit.ui.window.run_text import follow_words
 
     kinds = {"mytpl.made@XGA": "template", "fxsuper.!fx_popup@SUPER": "super genie"}
-    assert _follow_words(["fxnest.n1"], {}) == "genies and symbols"
-    assert _follow_words(["mytpl.made@XGA"], kinds) == "templates, genies and symbols"
-    assert _follow_words(["fxsuper.!fx_popup@SUPER"], kinds) == "super genies, genies and symbols"
+    assert follow_words(["fxnest.n1"], {}) == "genies and symbols"
+    assert follow_words(["mytpl.made@XGA"], kinds) == "templates, genies and symbols"
+    assert follow_words(["fxsuper.!fx_popup@SUPER"], kinds) == "super genies, genies and symbols"
     app_settings().setValue("opt/auto_update_template", False)
     app_settings().setValue("opt/auto_update_symbols", False)
-    assert _follow_words(["mytpl.made@XGA"], kinds) == "genies"
+    assert follow_words(["mytpl.made@XGA"], kinds) == "genies"
 
 
 # -- 'always' with only open pages using the template --------------------------------------------
@@ -808,7 +813,12 @@ def test_cancel_in_the_open_tabs_step_names_what_reaches_each_page(fx_install, w
     for d in (last, outer):
         d.dirty = False
         assert d.template_status()[0] == "stale"
-    monkeypatch.setattr(JP.JobProgress, "tick", lambda self, i, total, text: False)
+    tick = JP.JobProgress.tick  # (Stop in the open tabs' step only)
+    monkeypatch.setattr(
+        JP.JobProgress,
+        "tick",
+        lambda self, i, total, text: self.phase != "tabs" and tick(self, i, total, text),
+    )
     reports = []
     monkeypatch.setattr(MainWindow, "_report_users_update", lambda self, text, **k: reports.append(text))
     win._update_element_users_run(GU.element_users(inner, "normal@XGA"), confirm=False)

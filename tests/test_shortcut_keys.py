@@ -36,8 +36,8 @@ def _close(w):
 
     for dlg in list(getattr(w, "_dialogs", {}).values()):
         dlg.reject()
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.hide()
     w.deleteLater()
 

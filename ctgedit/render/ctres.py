@@ -20,7 +20,7 @@ def _res_dll() -> str | None:
         from ..backend.compiler import scada_bin
 
         base = scada_bin()
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- swallow-ok: no install: no resources
         return None
     hits = glob.glob(os.path.join(base, "CtRes32.dll")) or glob.glob(
         os.path.join(base, "**", "CtRes32.dll"), recursive=True
@@ -59,7 +59,7 @@ def _bitmap_resource(name: str) -> bytes | None:
             return None
         size = k32.SizeofResource(mod, res)
         return ctypes.string_at(k32.LockResource(k32.LoadResource(mod, res)), size)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- swallow-ok: no DLL or no such resource: none
         return None
 
 

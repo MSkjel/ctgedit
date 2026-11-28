@@ -303,7 +303,7 @@ def test_word_class_is_isalnum_for_every_code_point():
 
 
 def test_coverage_mode_keeps_the_byte_loop(monkeypatch):
-    monkeypatch.setattr(PG, "_WANT_COVERAGE", True)
+    monkeypatch.setattr(PG, "WANT_COVERAGE", True)
     payload = b"\x00" * 30 + b"\x0e\x00\x01\x00\x03\x00KEY\x03\x00val" + b"\x00" * 8
     bags, covered = PG._scan_payload_bags(payload, 0)
     assert [(b.offset, b.pairs) for b in bags] == [(30, [("KEY", "val")])]
@@ -319,13 +319,13 @@ def test_key_is_known_memo():
 # --------------------------------------------------------------- 2. one re-scan per record
 def _count_parses(monkeypatch):
     n = [0]
-    real = W._parse_object
+    real = W.parse_object
 
     def counting(*a, **k):
         n[0] += 1
         return real(*a, **k)
 
-    monkeypatch.setattr(W, "_parse_object", counting)
+    monkeypatch.setattr(W, "parse_object", counting)
     return n
 
 
@@ -392,8 +392,8 @@ def test_rescan_leaves_its_parse_on_the_record_and_an_unchanged_one_is_a_noop(mo
 
 
 def test_no_fresh_parse_kept_in_coverage_mode(monkeypatch):
-    po = PG._parse_object(0, 0, 0, 0, bytes(12) + b"\x00" * 60)
-    monkeypatch.setattr(PG, "_WANT_COVERAGE", True)
+    po = PG.parse_object(0, 0, 0, 0, bytes(12) + b"\x00" * 60)
+    monkeypatch.setattr(PG, "WANT_COVERAGE", True)
     W.refresh_object_bags(po)
     assert not hasattr(po, W.FRESH_PARSE_ATTR)
 
@@ -527,7 +527,7 @@ def test_decode_dib_equals_the_generator_version():
             if mask_kind != "random":
                 b[3::4] = bytes([0 if mask_kind == "opaque" else 0xFF]) * (abs(w * h))
             raw = struct.pack("<IiiHH", 40, w, h, 1, 32) + bytes(24) + bytes(b)
-            eb = S._decode_dib(raw)
+            eb = S.decode_dib(raw)
             assert (eb.width, eb.height, eb.rgba, eb.has_alpha) == _ref_decode_dib(raw)
 
 
@@ -591,6 +591,72 @@ def test_find_node_array_memo(big):
     # deep copies (clipboard) carry a consistent memo
     c = copy.deepcopy(po)
     assert G.find_node_array(c) == G._find_node_array(c, c.body_raw)
+
+
+def _ref_run_starts(body, start, lo_x, hi_x, lo_y, hi_y):
+    """The general node scan's candidates as the byte loop finds them: a count of 2 to 512
+    with room for its first point, and that point inside the bounds."""
+    out = []
+    for pos in range(start, len(body) - 1):
+        (cnt,) = struct.unpack_from("<H", body, pos)
+        if not (2 <= cnt <= 512) or pos + 2 + cnt * 4 > len(body):
+            continue
+        x, y = struct.unpack_from("<2h", body, pos + 2)
+        if lo_x <= x <= hi_x and lo_y <= y <= hi_y:
+            out.append(pos)
+    return out
+
+
+def test_node_scan_candidates_hold_every_byte_loop_candidate():
+    """geometry._run_starts finds every position the byte loop would test past its first
+    point, on random bodies and bounds (negative, wide, empty, the int16 limits)."""
+    rnd = random.Random(7)
+    for _ in range(3000):
+        body = bytes(rnd.choice((0, 1, 2, 3, 0xFF, rnd.randrange(256))) for _ in range(rnd.randrange(0, 300)))
+        span = rnd.choice((3, 300, 3000, 40000))
+        lo_x, lo_y = rnd.randint(-40000, 40000), rnd.randint(-40000, 40000)
+        hi_x, hi_y = lo_x + rnd.randint(-5, span), lo_y + rnd.randint(-5, span)
+        start = rnd.randrange(0, 20)
+        got = G._run_starts(body, start, lo_x, hi_x, lo_y, hi_y)
+        ref = _ref_run_starts(body, start, lo_x, hi_x, lo_y, hi_y)
+        assert set(ref) <= set(got) and got == sorted(set(got))
+
+
+def test_value_bag_decodes_as_the_full_decode(big, genies):
+    """writer.value_bag's decode of e0.b1 alone gives the full decode's pairs and fails
+    where it fails."""
+    from ctgedit.format import genie_place as GP
+
+    for path in (big, genies):
+        for po in PG.parse_ctg_bytes(open(path, "rb").read()).page.objects:
+            try:
+                r = GP.decode(po)
+                ref = list(r.entries[0][1].pairs) if r.entries else []
+            except Exception:  # noqa: BLE001 -- swallow-ok: the failure is what is compared
+                ref = None
+            if getattr(po, "raw_payload", None) is not None:
+                ref = None
+            assert W._value_bag_of(po) == ref
+
+
+def test_body_reference_memo(genies):
+    """reference_from_object keeps the body's reference on the record while it holds that
+    body object: every FxGenies record gives the unmemoised answer, a new body reads again."""
+    pc = PG.parse_ctg_bytes(open(genies, "rb").read())
+    linked = [po for po in pc.page.objects if po.subtype_size & 0x1]
+    assert linked
+    for po in pc.page.objects:
+        ref = S.reference_from_body(po.body_raw) if po.subtype_size & 0x1 else None
+        a = S.reference_from_object(po)
+        assert S.reference_from_object(po) == a
+        if ref is not None:
+            assert a == ref
+    po = next(p for p in linked if S.reference_from_object(p) is not None)
+    po.body_raw = bytes(len(po.body_raw))  # (a body without a reference)
+    assert S._body_reference(po) is None
+    from ctgedit.doc.geometry import GeometryEdits
+
+    assert S.BODY_REF_MEMO_ATTR in GeometryEdits._CACHE_FIELDS
 
 
 def test_value_bag_memo(big):

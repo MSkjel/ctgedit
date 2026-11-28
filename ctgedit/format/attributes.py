@@ -10,7 +10,6 @@ from .container import Block
 from .textcodec import CODEC
 
 HEAD_SIZE = 0x54  # 84 bytes fixed header
-TRAILING_PAD = 0x200  # 512 bytes of zero padding at the end
 NO_COLOUR = 0xFFFFFFFF  # COLORREF "no colour / default" sentinel
 
 

@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from ..dialog_buttons import dialog_buttons
+
 import os
 from typing import Callable, List, Optional, Sequence
 
 from PySide6 import QtCore, QtGui, QtWidgets
+
+from ...infra.logsetup import note_exception as _note_exc
 
 
 def library_token(lib_path: str) -> str:
@@ -72,11 +76,7 @@ class AttachSuperGeniesDialog(QtWidgets.QDialog):
         self._msg.setWordWrap(True)
         set_note_role(self._msg, "danger")  # (follows a theme change)
         lay.addWidget(self._msg)
-        buttons = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
-        )
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
+        buttons = dialog_buttons(self)
         lay.addWidget(buttons)
         self.btn_add.clicked.connect(self._add)
         self.btn_remove.clicked.connect(self._remove)
@@ -99,6 +99,7 @@ class AttachSuperGeniesDialog(QtWidgets.QDialog):
             try:
                 why = self._problem(name)
             except Exception:  # noqa: BLE001 -- a hint only
+                _note_exc("supergenie_dialogs._append", name=name)
                 why = None
         page = SG.page_name(elem) or elem
         if why:

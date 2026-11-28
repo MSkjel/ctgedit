@@ -76,8 +76,8 @@ def win(themed, tmp_path_factory):
         yield w
     for d in list(getattr(w, "_dialogs", {}).values()):
         d.close()
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.hide()
     w.deleteLater()
     QtWidgets.QApplication.processEvents()
@@ -402,8 +402,8 @@ def test_magnifier_keeps_its_size_and_position_when_hidden(win):
         other.act_zoom_window.setChecked(False)
         other._toggle_zoom_window()
     finally:
-        if other in MainWindow._instances:
-            MainWindow._instances.remove(other)
+        if other in MainWindow.instances:
+            MainWindow.instances.remove(other)
         other.hide()
         other.deleteLater()
         QtWidgets.QApplication.processEvents()

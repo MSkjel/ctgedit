@@ -70,7 +70,7 @@ def test_a_page_needs_an_update_only_while_it_quotes_an_old_stamp(fx_install):
 
 # ------------------------------------------------------------------ the save question's count
 def test_the_save_question_counts_the_elements_by_their_kind():
-    from ctgedit.ui.window.library import LibraryCommands
+    from ctgedit.ui.main_window import MainWindow
 
     def u(lib, el, ext):
         return types.SimpleNamespace(ref=types.SimpleNamespace(library=lib, element=el, ext=ext))
@@ -81,16 +81,13 @@ def test_the_save_question_counts_the_elements_by_their_kind():
         u("fx_style", "normal@XGA", "ctt"),
         u("fxsuper", "!fx_detail@SUPER", "ctm"),
     ]
-    text = LibraryCommands._users_count_text(users, 1, "fxnest.n0")
+    text = MainWindow._users_count_text(users, 1, "fxnest.n0")
     assert text == (
         "2 library genies, 1 super genie, 1 template and 1 closed page use "
         "fxnest.n0 and still show its old version."
     ), text
     assert (
-        LibraryCommands._users_count_text([u("fx_style", "normal@XGA", "ctt")], 0, "fxsym.fx_on")
+        MainWindow._users_count_text([u("fx_style", "normal@XGA", "ctt")], 0, "fxsym.fx_on")
         == "1 template uses fxsym.fx_on and still shows its old version."
     )
-    assert (
-        LibraryCommands._users_count_text(2, 0, "x")
-        == "2 library genies use x and still show its old version."
-    )
+    assert MainWindow._users_count_text(2, 0, "x") == "2 library genies use x and still show its old version."

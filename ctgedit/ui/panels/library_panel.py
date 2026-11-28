@@ -1,6 +1,14 @@
 """The Library panel: search and place symbols and genies."""
 
 from __future__ import annotations
+
+from ...infra.logsetup import note_exception as _note_exc
+
+from ...infra.paths import path_key
+
+from ..names import plural
+
+from ...format.fileio import file_stamp, find_ci
 from ..style.theme import sp as _sp  # (the spacing scale)
 
 import collections
@@ -24,7 +32,7 @@ from ...io.catalog import (
     natural_key,
 )
 from ..browser import search as _search
-from ..browser.project_tree import FLAT, TREE, LabelRole, NoteRole, StyleRole, _RowDelegate
+from ..browser.project_tree import FLAT, TREE, LabelRole, NoteRole, StyleRole, RowDelegate
 from ..browser.thumbs import ThumbnailService
 from . import panel_options as _panels
 from ..style import theme as _theme
@@ -53,7 +61,7 @@ def paste_linked() -> bool:
     """Place symbols LINKED to their library (the default) or as unlinked copies."""
     try:
         return bool(app_settings().value(PASTE_LINKED_KEY, True, type=bool))
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # swallow-ok: a garbled setting reads as the default
         return True
 
 
@@ -65,13 +73,9 @@ def set_paste_linked(on: bool) -> None:
 
 LIBELEM_MIME = "application/x-ctgedit-libelem"
 KIND_EXT = {"symbol": "ctl", "genie": "ctm"}
-EXT_KIND = {v: k for k, v in KIND_EXT.items()}
 _KIND_NOUN = {"symbol": ("symbol", "symbols"), "genie": ("genie", "genies")}
 
 _S = "librarypanel/"
-#: the recent elements kept: the default of Settings > Pages and libraries > Library panel >
-#: Recent elements kept (ui/prefs/timing_options.LIBRARY_RECENT_KEPT)
-MAX_RECENT = 40
 HOME_RECENT = 12
 CARD_MIN, CARD_MAX, CARD_DEFAULT = 56, 184, 100
 
@@ -131,22 +135,8 @@ def parse_libelem_mime(md: Optional[QtCore.QMimeData]) -> Optional[Tuple[str, st
     return parts[0], parts[1], parts[2].lower().lstrip(".")
 
 
-# --------------------------------------------------------------------------- search
-# the ranking is shared with the page browser's element lists (browser.search)
-_words = _search.words
-_subsequence = _search.subsequence
 _prep = _search.prep
-_token_score = _search.token_score
 score_tokens = _search.score_tokens
-
-
-def _file_stamp(path: str) -> tuple:
-    """(path, mtime_ns, size) of a file, (path, None, None) when it is not there."""
-    try:
-        st = os.stat(path)
-    except OSError:
-        return (path, None, None)
-    return (path, st.st_mtime_ns, st.st_size)
 
 
 # --------------------------------------------------------------------------- glyphs
@@ -523,13 +513,19 @@ class _CardDelegate(QtWidgets.QStyledItemDelegate):
         return QtCore.QRect(w.right() - 19, w.top() + 2, 18, 18)
 
     def sizeHint(self, option, index) -> QtCore.QSize:  # noqa: N802 (Qt API)
+        # (Qt asks every row laid out: the sizes of a header and of a row, made once for
+        # the view's width, mode, card size and theme)
+        head, row = self._view.row_sizes()
+        return QtCore.QSize(*head) if index.data(HeaderRole) is not None else QtCore.QSize(*row)
+
+    def row_sizes(self) -> Tuple[Tuple[int, int], Tuple[int, int]]:
+        """((width, height) of a section header, (width, height) of a card or list row)."""
         full = max(40, self._view.usable_width() - 2 * _SPACING)
-        if index.data(HeaderRole) is not None:
-            return QtCore.QSize(full, _theme.px(_HEADER_H))
+        head = (full, _theme.px(_HEADER_H))
         if self._panel.view_mode() == "list":
-            return QtCore.QSize(full, _theme.px(_LIST_H))
+            return head, (full, _theme.px(_LIST_H))
         cw = self._view.cell_width()
-        return QtCore.QSize(cw, self.card_height(cw))
+        return head, (cw, self.card_height(cw))
 
     # -- paint -------------------------------------------------------------------------
     def paint(self, p: QtGui.QPainter, opt, index) -> None:
@@ -740,6 +736,7 @@ class _GridView(QtWidgets.QListView):
         self._panel = panel
         self._hover = -1
         self._cell_cache: Tuple = ()
+        self._sizes_cache: Tuple = ()
         self.setObjectName("libGrid")
         self.setViewMode(QtWidgets.QListView.ListMode)
         self.setMovement(QtWidgets.QListView.Static)
@@ -814,6 +811,16 @@ class _GridView(QtWidgets.QListView):
         self._cell_cache = (key, cw)
         return cw
 
+    def row_sizes(self) -> Tuple[Tuple[int, int], Tuple[int, int]]:
+        """The delegate's :meth:`_CardDelegate.row_sizes`, kept while the width, the view
+        mode, the card size and the theme are the same."""
+        key = (self.width(), self._panel.view_mode(), self._panel.card_size(), _theme.generation())
+        if self._sizes_cache and self._sizes_cache[0] == key:
+            return self._sizes_cache[1]
+        sizes = self.itemDelegate().row_sizes()
+        self._sizes_cache = (key, sizes)
+        return sizes
+
     def columns(self) -> int:
         if self._panel.view_mode() == "list":
             return 1
@@ -822,6 +829,7 @@ class _GridView(QtWidgets.QListView):
 
     def relayout(self) -> None:
         self._cell_cache = ()
+        self._sizes_cache = ()
         self.doItemsLayout()
         self.viewport().update()
 
@@ -1230,6 +1238,46 @@ class LibraryPanel(QtWidgets.QWidget):
         self._search_regex = self._search.regex_toggle
         lay.addWidget(self._search)
 
+        self._build_top_row(lay)
+
+        self._split = QtWidgets.QSplitter(QtCore.Qt.Vertical, self)
+        self._split.setChildrenCollapsible(False)
+        self._split.setHandleWidth(3)
+        self._split.splitterMoved.connect(self._on_split_moved)
+
+        self._build_tree_view()
+
+        right = QtWidgets.QWidget(self._split)
+        rl = QtWidgets.QVBoxLayout(right)
+        rl.setContentsMargins(0, 0, 0, 0)
+        rl.setSpacing(_sp(1))
+        self._build_scope_bar(right, rl)
+        self._build_card_stack(right, rl)
+        self._split.addWidget(self._tree)
+        self._split.addWidget(right)
+        self._split.setStretchFactor(0, 0)
+        self._split.setStretchFactor(1, 1)
+        lay.addWidget(self._split, 1)
+        self._tree.setVisible(self._tree_visible)
+
+        self._build_footer(lay)
+
+        self._preview = _HoverPreview(self)
+        self._preview.hide()
+        for w in (
+            self,
+            self._search,
+            self._grid,
+            self._grid.viewport(),
+            self._tree,
+            self._slider,
+            *self._btn_kind.values(),
+        ):
+            w.installEventFilter(self)
+
+    def _build_top_row(self, lay: QtWidgets.QVBoxLayout) -> None:
+        """The row under the search: Symbols or Genies, Linked, the library tree and the
+        view options."""
         row = QtWidgets.QHBoxLayout()
         row.setSpacing(0)
         self._seg = QtWidgets.QButtonGroup(self)
@@ -1271,11 +1319,8 @@ class LibraryPanel(QtWidgets.QWidget):
         row.addWidget(self._btn_more)
         lay.addLayout(row)
 
-        self._split = QtWidgets.QSplitter(QtCore.Qt.Vertical, self)
-        self._split.setChildrenCollapsible(False)
-        self._split.setHandleWidth(3)
-        self._split.splitterMoved.connect(self._on_split_moved)
-
+    def _build_tree_view(self) -> None:
+        """The library tree in the splitter's top part."""
         self._tree = QtWidgets.QTreeWidget(self._split)
         self._tree.setObjectName("libTree")
         self._tree.setColumnCount(2)
@@ -1292,14 +1337,12 @@ class LibraryPanel(QtWidgets.QWidget):
         hdr.setSectionResizeMode(0, QtWidgets.QHeaderView.Stretch)
         hdr.setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
         # names with a dim note ('always included', '(included above)')
-        self._tree.setItemDelegateForColumn(0, _RowDelegate(self._tree))
+        self._tree.setItemDelegateForColumn(0, RowDelegate(self._tree))
         self._tree.setAccessibleName("Libraries")
         self._tree.currentItemChanged.connect(self._on_tree_current)
 
-        right = QtWidgets.QWidget(self._split)
-        rl = QtWidgets.QVBoxLayout(right)
-        rl.setContentsMargins(0, 0, 0, 0)
-        rl.setSpacing(_sp(1))
+    def _build_scope_bar(self, right: QtWidgets.QWidget, rl: QtWidgets.QVBoxLayout) -> None:
+        """The bar over the cards: the library shown, its count, and Show all libraries."""
         bar = QtWidgets.QFrame(right)
         bar.setObjectName("libScopeBar")
         bl = QtWidgets.QHBoxLayout(bar)
@@ -1323,6 +1366,8 @@ class LibraryPanel(QtWidgets.QWidget):
         rl.addWidget(bar)
         self._scope_bar = bar
 
+    def _build_card_stack(self, right: QtWidgets.QWidget, rl: QtWidgets.QVBoxLayout) -> None:
+        """The cards (the grid or the list) and the note shown when there are none."""
         self._stack = QtWidgets.QStackedWidget(right)
         self._model = _GridModel(self)
         self._grid = _GridView(self)
@@ -1351,13 +1396,9 @@ class LibraryPanel(QtWidgets.QWidget):
         el.addStretch(2)
         self._stack.addWidget(empty)
         rl.addWidget(self._stack, 1)
-        self._split.addWidget(self._tree)
-        self._split.addWidget(right)
-        self._split.setStretchFactor(0, 0)
-        self._split.setStretchFactor(1, 1)
-        lay.addWidget(self._split, 1)
-        self._tree.setVisible(self._tree_visible)
 
+    def _build_footer(self, lay: QtWidgets.QVBoxLayout) -> None:
+        """The footer: the status, the grid or list view and the card size."""
         foot = QtWidgets.QHBoxLayout()
         foot.setSpacing(_sp(0))
         self._status = QtWidgets.QLabel(self)
@@ -1382,19 +1423,6 @@ class LibraryPanel(QtWidgets.QWidget):
         foot.addWidget(self._slider)
         lay.addLayout(foot)
         self._sync_view_buttons()
-
-        self._preview = _HoverPreview(self)
-        self._preview.hide()
-        for w in (
-            self,
-            self._search,
-            self._grid,
-            self._grid.viewport(),
-            self._tree,
-            self._slider,
-            *self._btn_kind.values(),
-        ):
-            w.installEventFilter(self)
 
     def _tool(self, glyph_name: str, tip: str) -> QtWidgets.QToolButton:
         b = QtWidgets.QToolButton(self)
@@ -1674,8 +1702,8 @@ class LibraryPanel(QtWidgets.QWidget):
         try:
             from ... import editing
 
-            gen = editing._LIBRARY_GENERATION[0]
-        except Exception:  # noqa: BLE001
+            gen = editing.LIBRARY_GENERATION[0]
+        except Exception:  # noqa: BLE001  # swallow-ok: no generation, the stamp is read again
             gen = None
         # (an include added in Studio: each install's MASTER.DBF and the include.dbf of each
         # project of the chain; the chain is read again in _load_chain, io/catalog. Stamped
@@ -1684,7 +1712,7 @@ class LibraryPanel(QtWidgets.QWidget):
         topo = []
         try:
             for inst in catalog_for().installs:
-                topo.append(_file_stamp(os.path.join(inst.user_dir, "MASTER.DBF")))
+                topo.append(file_stamp(find_ci(inst.user_dir, "MASTER.DBF")))
         except Exception:  # noqa: BLE001 -- swallow-ok: no catalog: the stamp does without it
             pass
         dirs = []
@@ -1694,7 +1722,7 @@ class LibraryPanel(QtWidgets.QWidget):
                 dirs.append((d, os.stat(d).st_mtime_ns))
             except OSError:
                 dirs.append((d, None))
-            topo.append(_file_stamp(os.path.join(d, "include.dbf")))
+            topo.append(file_stamp(find_ci(d, "include.dbf")))
         topo = tuple(topo)
         libs = []
         for kind in sorted(data):
@@ -1711,6 +1739,7 @@ class LibraryPanel(QtWidgets.QWidget):
         try:
             catalog_for().reload()
         except Exception:  # noqa: BLE001
+            _note_exc("library_panel.refresh")
             pass
         self._dirty = True
         self.ensure_loaded()
@@ -2036,6 +2065,7 @@ class LibraryPanel(QtWidgets.QWidget):
             proj = cat.project_for_dir(self._project_dir) or cat.folder(self._project_dir)
             self._chain = cat.closure(proj)
         except Exception:  # noqa: BLE001 -- the catalog is best-effort
+            _note_exc("library_panel._load_chain")
             self._chain = []
 
     def _kind_data(self, kind: Optional[str] = None) -> dict:
@@ -2062,6 +2092,7 @@ class LibraryPanel(QtWidgets.QWidget):
                     libs.append((pr, li))
             entries = cat.entries(chain, kind)
         except Exception:  # noqa: BLE001
+            _note_exc("library_panel._compute_kind_data")
             libs, entries = [], []
         if kind == "genie":
             # super genies ('<name>@SUPER') are pages attached to a genie, not
@@ -2103,9 +2134,7 @@ class LibraryPanel(QtWidgets.QWidget):
         if scope and scope[0] == "library" and len(scope) > 1:
             return (
                 "library",
-                os.path.normcase(os.path.abspath(scope[1]))
-                if (os.sep in scope[1] or "/" in scope[1])
-                else scope[1],
+                path_key(scope[1]) if (os.sep in scope[1] or "/" in scope[1]) else scope[1],
             )
         if scope and scope[0] in ("all", "favourites", "recent", "project"):
             return scope
@@ -2325,6 +2354,7 @@ class LibraryPanel(QtWidgets.QWidget):
         try:
             fill(self._tree_view == TREE and bool(self._chain))
         except Exception:  # noqa: BLE001 -- the catalog is best-effort: a flat list
+            _note_exc("library_panel._build_tree")
             fill(False)
         tops = [self._tree.topLevelItem(k) for k in range(3, self._tree.topLevelItemCount())]
         for it in self._tree_all:
@@ -2817,7 +2847,7 @@ class LibraryPanel(QtWidgets.QWidget):
             facts.append("%d × %d px" % (s.width, s.height))
         n = getattr(s, "object_count", None) if s is not None else None
         if n:
-            facts.append("%d object%s" % (n, "" if n == 1 else "s"))
+            facts.append(plural(n, "object"))
         if facts:
             lines.append("  ·  ".join(facts))
         lines.append(os.path.basename(e.path))
@@ -2940,6 +2970,7 @@ class LibraryPanel(QtWidgets.QWidget):
 
             return genie_help.element_help(e.library, e.name, e.project)
         except Exception:  # noqa: BLE001 -- the reference is optional
+            _note_exc("library_panel.element_help")
             return None, ""
 
     @staticmethod
@@ -2965,10 +2996,10 @@ class LibraryPanel(QtWidgets.QWidget):
     @staticmethod
     def _reveal(path: str) -> None:
         try:
-            from ..browser.dialog import reveal_in_explorer
+            from ..messages import reveal
 
-            reveal_in_explorer(path)
-        except Exception:  # noqa: BLE001
+            reveal(path)
+        except Exception:  # noqa: BLE001  # swallow-ok: a convenience
             pass
 
     # ------------------------------------------------------------------ events

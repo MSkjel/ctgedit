@@ -21,8 +21,8 @@ def win(fx_install):
     for dlg in list(w._dialogs.values()):
         dlg._ctg_dropped = True
         dlg.reject()
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.hide()
     w.deleteLater()
     QtWidgets.QApplication.processEvents()

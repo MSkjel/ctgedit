@@ -343,12 +343,12 @@ def test_a_saved_library_reloads_the_pages_that_use_it(tmp_path, page_file, monk
         assert sp.lib_stamps is not None and list(sp.lib_stamps) == [lib]
         # another library saved by ctgedit: nothing
         _write(other, "bb")
-        editing._LIBRARY_GENERATION[0] += 1
+        editing.LIBRARY_GENERATION[0] += 1
         wait_for(lambda: (win.tick(), False)[1], timeout=1.3)
         assert sim.reloads == []
         # its library saved (by ctgedit's element editor: the library generation)
         _write(lib, "bbb")
-        editing._LIBRARY_GENERATION[0] += 1
+        editing.LIBRARY_GENERATION[0] += 1
         assert wait_for(lambda: (win.tick(), sim.reloads)[1], timeout=15)
         # ... or on disk (the folder watch): the page reloads again
         win._libraries_changed([lib])

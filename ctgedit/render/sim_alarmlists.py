@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Tuple
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from ..model.document import GraphicObject, ObjectKind
-from .scene import PAGE_INDEX_ROLE, SIM_CHILD_ROLE
+from .scene import PAGE_INDEX_ROLE, SIM_CHILD_ROLE, walk_items
 from ..infra.logsetup import note_exception as _note_exc
 
 #: an alarm state -> the priority symbols' COL_ARR index (SA_Controls SAStateOffset)
@@ -114,7 +114,7 @@ def gdi_metrics(font: QtGui.QFont) -> Tuple[float, float]:
         try:
             from ..format import textmetrics
 
-            g = textmetrics._Gdi.get()
+            g = textmetrics.Gdi.get()
             if g is not None and font.pixelSize() > 0:
                 with g.system_aware():
                     f = g.gdi.CreateFontW(
@@ -184,15 +184,6 @@ def _descendants(obj: GraphicObject) -> Dict[int, GraphicObject]:
     return out
 
 
-def _walk(item) -> list:
-    out, stack = [], [item]
-    while stack:
-        it = stack.pop()
-        out.append(it)
-        stack.extend(it.childItems())
-    return out
-
-
 class SymbolPaint:
     """A priority symbol's items (a flag / icon built from a resolved element, ``obj`` its
     GraphicObject) painted for an alarm state: COL_ARR records take the state's pair (the
@@ -204,11 +195,11 @@ class SymbolPaint:
         self.parts: List[tuple] = []  # (item, record, kind 'shape' | 'text')
         self._saved: Dict[int, tuple] = {}
         recs = _descendants(obj)
-        for it in _walk(item):
+        for it in walk_items(item):
             c = recs.get(it.data(SIM_CHILD_ROLE))
             if c is None:
                 continue
-            for sub in _walk(it):
+            for sub in walk_items(it):
                 if isinstance(sub, QtWidgets.QGraphicsSimpleTextItem):
                     self.parts.append((sub, c, "text"))
                 elif isinstance(sub, QtWidgets.QAbstractGraphicsShapeItem) and (
@@ -317,7 +308,7 @@ def priority_symbol(layer, ref, x: float, y: float, w: float = 0, h: float = 0):
     item = layer._scene._make_symbol_item(obj)
     if item is None:
         return None, None
-    for it in _walk(item):
+    for it in walk_items(item):
         it.setData(0, None)
         it.setData(PAGE_INDEX_ROLE, None)
     return item, obj

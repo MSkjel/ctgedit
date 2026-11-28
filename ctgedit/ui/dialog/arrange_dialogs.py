@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..dialog_buttons import dialog_buttons
+
 from PySide6 import QtCore, QtWidgets
 
 #: the largest coordinate CtDraw's Adjust Position and Size accepts
@@ -57,7 +59,7 @@ class AlignDialog(QtWidgets.QDialog):
         ref_label = QtWidgets.QLabel("&Align to:", self)
         self.align_to = QtWidgets.QComboBox(self)
         for key, text in (
-            ("selection", "The selection"),
+            ("selection", "The selection box"),
             ("last", "The object selected last"),
             ("page", "The page"),
         ):
@@ -96,15 +98,7 @@ class AlignDialog(QtWidgets.QDialog):
         self._note.setWordWrap(True)
         lay.addWidget(self._note)
         lay.addStretch(1)
-        self._buttons = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Ok
-            | QtWidgets.QDialogButtonBox.Cancel
-            | QtWidgets.QDialogButtonBox.Apply,
-            self,
-        )
-        self._buttons.accepted.connect(self._ok)
-        self._buttons.rejected.connect(self.reject)
-        self._buttons.button(QtWidgets.QDialogButtonBox.Apply).clicked.connect(self._apply)
+        self._buttons = dialog_buttons(self, accept=self._ok, apply=self._apply)
         lay.addWidget(self._buttons)
         self._update_state()
 
@@ -279,15 +273,7 @@ class AdjustPositionDialog(QtWidgets.QDialog):
         self._note = theme.note_label("", "warn", self)
         lay.addWidget(self._note)
 
-        self._buttons = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Ok
-            | QtWidgets.QDialogButtonBox.Cancel
-            | QtWidgets.QDialogButtonBox.Apply,
-            self,
-        )
-        self._buttons.accepted.connect(self._ok)
-        self._buttons.rejected.connect(self.reject)
-        self._buttons.button(QtWidgets.QDialogButtonBox.Apply).clicked.connect(self._apply)
+        self._buttons = dialog_buttons(self, accept=self._ok, apply=self._apply)
         lay.addWidget(self._buttons)
 
         for key, sp in self._sp.items():
@@ -349,7 +335,7 @@ class AdjustPositionDialog(QtWidgets.QDialog):
         sy = (nh + 1e-10) / h if h and nh != h else 1.0
         return (sx, sy)
 
-    def rect(self) -> tuple:
+    def chosen_rect(self) -> tuple:
         """(x, y, width, height) the selection will have."""
         x, y = self.position()
         if self._box is None:
@@ -480,15 +466,7 @@ class _SelectionDialog(QtWidgets.QDialog):
         self._note.setWordWrap(True)
         self._lay.addWidget(self._note)
         self._lay.addStretch(1)
-        self._buttons = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Ok
-            | QtWidgets.QDialogButtonBox.Cancel
-            | QtWidgets.QDialogButtonBox.Apply,
-            self,
-        )
-        self._buttons.accepted.connect(self._ok)
-        self._buttons.rejected.connect(self.reject)
-        self._buttons.button(QtWidgets.QDialogButtonBox.Apply).clicked.connect(self._apply)
+        self._buttons = dialog_buttons(self, accept=self._ok, apply=self._apply)
         self._lay.addWidget(self._buttons)
 
     def set_selection(self, doc, indices) -> None:

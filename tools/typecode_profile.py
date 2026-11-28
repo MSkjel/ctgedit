@@ -102,7 +102,7 @@ def _strip_index(k: str) -> str:
 def _shape(body: bytes):
     """Read rect1 from the geometry header; classify aspect."""
     import struct
-    from ctgedit.format.page import _XFORM_DOUBLES
+    from ctgedit.format.page import XFORM_DOUBLES
 
     o = 0
     n = len(body)
@@ -114,7 +114,7 @@ def _shape(body: bytes):
             return None
         mode = body[o]
         o += 1
-        nd = _XFORM_DOUBLES.get(mode, 6 if mode > 3 else 0)
+        nd = XFORM_DOUBLES.get(mode, 6 if mode > 3 else 0)
         if o + nd * 8 > n:
             return None
         o += nd * 8

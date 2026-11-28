@@ -392,8 +392,8 @@ def test_the_window_says_why_before_it_asks_for_the_parameters(fx, bounded, monk
     finally:
         for e in list(w._docs):
             e["doc"].dirty = False
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
 
 
 def test_a_paste_that_would_make_a_genie_hold_itself_is_refused(fx, bounded):

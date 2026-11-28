@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from ..infra.paths import path_key
+
+from ..format.fileio import file_stamp, find_ci
+
 import os
 import re
 import threading
@@ -51,18 +55,14 @@ LIB_EXT = {"template": ".ctt", "symbol": ".ctl", "genie": ".ctm"}
 SUPER_KIND = "supergenie"
 _EXT_KIND = {v: k for k, v in LIB_EXT.items()}
 _CT_EXTS = (".ctg", ".ctt", ".ctl", ".ctm")
-# pages.DBF NAME is C(64) (io.project.Project.NAME_LEN)
-NAME_LEN = 64
+from ..format.projects import PAGE_NAME_LEN as NAME_LEN
+
 # a library that is only the container header + an 8-slot directory holds nothing
 _EMPTY_LIBRARY_SIZE = 0x10 + 8 * 42
 _IMPLICIT = tuple(n.lower() for n in IMPLICIT_INCLUDE_PROJECTS)
 #: a folder listing is kept only when the folder was last changed this long before it was
 #: listed (symbols._DIR_RACY_NS: the file-system time has a granularity of up to 2 s)
 _DIR_RACY_NS = 3_000_000_000
-
-
-def _norm(path: str) -> str:
-    return os.path.normcase(os.path.abspath(path))
 
 
 _NAT_RE = re.compile(r"([0-9]+)")
@@ -117,7 +117,7 @@ class InstallInfo:
 
     @property
     def key(self) -> str:
-        return _norm(self.user_dir)
+        return path_key(self.user_dir)
 
 
 @dataclass(eq=False)
@@ -145,7 +145,7 @@ class ProjectInfo:
 
     @property
     def key(self) -> str:
-        return _norm(self.dir)
+        return path_key(self.dir)
 
     @property
     def scope_id(self) -> str:
@@ -307,7 +307,7 @@ class ProjectCatalog:
 
     def install_for_path(self, path: str) -> Optional[InstallInfo]:
         """The install whose ``User`` tree contains ``path`` (or None)."""
-        p = _norm(path)
+        p = path_key(path)
         for inst in self.installs:
             k = inst.key
             if p == k or p.startswith(k + os.sep):
@@ -321,10 +321,8 @@ class ProjectCatalog:
                 return topo
             topo = {}
             ud = install.user_dir
-            master = os.path.join(ud, "MASTER.DBF")
-            if not os.path.isfile(master):
-                master = os.path.join(ud, "master.dbf")
-            for row in read_dbf_rows(master) if os.path.isfile(master) else []:
+            master = find_ci(ud, "MASTER.DBF")
+            for row in read_dbf_rows(master) if master else []:
                 name, path = row.get("NAME", "").strip(), row.get("PATH", "").strip()
                 if not name or not path:
                     continue
@@ -344,7 +342,7 @@ class ProjectCatalog:
                 if (
                     d.startswith(".")
                     or d.lower() in topo
-                    or _norm(full) in registered_dirs
+                    or path_key(full) in registered_dirs
                     or not os.path.isdir(full)
                 ):
                     continue
@@ -358,7 +356,7 @@ class ProjectCatalog:
                 if not info.exists:
                     continue
                 info.includes = included_project_names(info.dir)
-                info.has_pages_dbf = self._find_file(info.dir, "pages.dbf") is not None
+                info.has_pages_dbf = find_ci(info.dir, "pages.dbf") is not None
             for info in topo.values():
                 for inc in info.includes:
                     tgt = topo.get(inc.lower())
@@ -371,25 +369,6 @@ class ProjectCatalog:
             self._topo[install.key] = topo
             self._topo_stamp = self.topology_stamp()
             return topo
-
-    @staticmethod
-    def _find_file(directory: str, lower_name: str) -> Optional[str]:
-        for cand in (
-            lower_name,
-            lower_name.upper(),
-            lower_name.capitalize(),
-            os.path.splitext(lower_name)[0] + os.path.splitext(lower_name)[1].upper(),
-        ):
-            p = os.path.join(directory, cand)
-            if os.path.isfile(p):
-                return p
-        try:
-            for fn in os.listdir(directory):
-                if fn.lower() == lower_name:
-                    return os.path.join(directory, fn)
-        except OSError:
-            pass
-        return None
 
     def projects(
         self, install: Optional[InstallInfo] = None, existing_only: bool = True
@@ -416,7 +395,7 @@ class ProjectCatalog:
         """The project whose folder is ``directory`` (any install), else None."""
         if not directory:
             return None
-        k = _norm(directory)
+        k = path_key(directory)
         for inst in self.installs:
             for p in self._topology(inst).values():
                 if p.exists and p.key == k:
@@ -431,7 +410,7 @@ class ProjectCatalog:
 
     def folder(self, directory: str) -> ProjectInfo:
         """A loose folder (outside any project) as a browsable pseudo-project."""
-        k = _norm(directory)
+        k = path_key(directory)
         info = self.project_for_dir(directory)
         if info is not None:
             return info
@@ -447,7 +426,7 @@ class ProjectCatalog:
                     exists=os.path.isdir(directory),
                     is_folder=True,
                 )
-                info.has_pages_dbf = self._find_file(directory, "pages.dbf") is not None
+                info.has_pages_dbf = find_ci(directory, "pages.dbf") is not None
                 self._folders[k] = info
             return info
 
@@ -710,14 +689,14 @@ class ProjectCatalog:
         info = self._as_project(project)
         if info is None or not info.exists:
             return []
-        return self._dbf_rows(self._find_file(info.dir, "pages.dbf"))
+        return self._dbf_rows(find_ci(info.dir, "pages.dbf"))
 
     def pages(self, project: ProjectLike) -> List[Entry]:
         """Page entries of a project / folder, natural-sorted by name."""
         info = self._as_project(project)
         if info is None or not info.exists:
             return []
-        dbf = self._find_file(info.dir, "pages.dbf")
+        dbf = find_ci(info.dir, "pages.dbf")
         stamp = (_stamp(info.dir)[0],) + (_stamp(dbf) if dbf else (0, -1))
         with self._lock:
             hit = self._pages.get(info.key)
@@ -821,9 +800,9 @@ class ProjectCatalog:
         if not path or not os.path.isfile(path):
             return None
         info = self.project_for_path(path) or self.folder(os.path.dirname(os.path.abspath(path)))
-        k = _norm(path)
+        k = path_key(path)
         for e in self.pages(info):
-            if _norm(e.path) == k:
+            if path_key(e.path) == k:
                 return e
         return None
 
@@ -963,27 +942,12 @@ class ProjectCatalog:
         """The (path, mtime_ns, size) of what the topology is read from: every install's
         MASTER.DBF and the include.dbf of every project read so far (a project added or
         an include changed in Studio moves one of them)."""
-
-        def stamp(p):
-            if not p:
-                return None
-            try:
-                st = os.stat(p)
-            except OSError:
-                return (p, None, None)
-            return (p, st.st_mtime_ns, st.st_size)
-
-        out = []
-        for inst in self.installs:
-            master = os.path.join(inst.user_dir, "MASTER.DBF")
-            if not os.path.isfile(master):
-                master = os.path.join(inst.user_dir, "master.dbf")
-            out.append(stamp(master))
+        out = [file_stamp(find_ci(inst.user_dir, "MASTER.DBF")) for inst in self.installs]
         with self._lock:
             infos = [i for t in self._topo.values() for i in t.values()]
         for info in infos:
             if info.exists:
-                out.append((info.key, stamp(self._find_file(info.dir, "include.dbf"))))
+                out.append((info.key, file_stamp(find_ci(info.dir, "include.dbf"))))
         return tuple(out)
 
     def refresh_topology(self) -> bool:
@@ -1038,7 +1002,7 @@ _CAT_LOCK = threading.Lock()
 def catalog_for(user_dir: Optional[str] = None) -> ProjectCatalog:
     """The shared catalog of ``user_dir`` (default: the live install)."""
     ud = user_dir or live_user_dir() or ""
-    key = _norm(ud) if ud else ""
+    key = path_key(ud) if ud else ""
     with _CAT_LOCK:
         cat = _CATALOGS.get(key)
         if cat is None:

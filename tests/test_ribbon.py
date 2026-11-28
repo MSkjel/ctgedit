@@ -31,8 +31,8 @@ def _drop(w):
 
     from ctgedit.ui.main_window import MainWindow
 
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     for e in getattr(w, "_docs", []):
         e["doc"].dirty = False
     w.hide()

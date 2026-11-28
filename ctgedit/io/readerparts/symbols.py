@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from ...infra.paths import path_key
+
+
 import os
 import re
 import struct  # noqa: F401 (re-exported)
 from ...format import geometry as _geom
-from ...format.page import _XFORM_DOUBLES, _extract_bmp, _geom_name_len, _parse_object, parse_ctg  # noqa: F401 (re-exported)
+from ...format.page import XFORM_DOUBLES, extract_bmp, geom_name_len, parse_object, parse_ctg  # noqa: F401 (re-exported)
 from ...model.document import (
     GraphicObject,
     Geometry,  # noqa: F401 (re-exported)
@@ -39,7 +42,7 @@ from . import common as _pc, style as _ps, symbols as _py, graft as _pg  # noqa:
 
 # --------------------------------------------------------------------------- symbols
 # Kinds that PLACE a library element and expand into real children.
-_PLACEABLE_KINDS = frozenset(
+PLACEABLE_KINDS = frozenset(
     {
         ObjectKind.SYMBOL,
         ObjectKind.SYMBOL_SET,
@@ -57,10 +60,10 @@ _MAX_SYMBOL_DEPTH = 6
 
 # tc=7 "Bitmap": either a library REFERENCE (resolved into children) or an inline PICTURE
 # (zlib-compressed DIB in its body).
-_BITMAP_TYPE_CODE = 0x07
+BITMAP_TYPE_CODE = 0x07
 
 
-def _attach_embedded_bitmap(obj: GraphicObject, po, geom_end) -> None:
+def attach_embedded_bitmap(obj: GraphicObject, po, geom_end) -> None:
     """Decode a bitmap object's inline DIB for the renderer."""
     eb, flash = embedded_bitmaps_from_body(po.body_raw, geom_end or 0)
     if eb is None:
@@ -70,12 +73,12 @@ def _attach_embedded_bitmap(obj: GraphicObject, po, geom_end) -> None:
     try:
         obj.raw["_pic_bytes"] = _stored_size(po)
     except Exception:  # noqa: BLE001
-        _note_exc("reader._attach_embedded_bitmap")
+        _note_exc("reader.attach_embedded_bitmap")
     if flash is not None:  # two-DIB FLASHING bitmap (alternates at runtime)
         obj.raw["_embedded_bmp_flash"] = (flash.width, flash.height, flash.rgba, flash.has_alpha)
 
 
-def _attach_metafile(obj: GraphicObject, po, geom_end) -> None:
+def attach_metafile(obj: GraphicObject, po, geom_end) -> None:
     """Render a metafile record's picture for the renderer."""
     try:
         wmf = metafile_bits(po)  # CtDraw's position: class section + 8
@@ -83,7 +86,7 @@ def _attach_metafile(obj: GraphicObject, po, geom_end) -> None:
         th = obj.geometry.extent_y if obj.geometry else 0
         eb = render_metafile(po.body_raw, geom_end or 0, tw, th, wmf=wmf)
     except Exception:  # noqa: BLE001
-        _note_exc("reader._attach_metafile")
+        _note_exc("reader.attach_metafile")
         eb = wmf = None
     if eb is None:
         return
@@ -95,29 +98,22 @@ def _attach_metafile(obj: GraphicObject, po, geom_end) -> None:
     obj.raw.pop("_non_drawable", None)
 
 
-def _build_resolver(page_path: str):
-    """Build a SymbolResolver for ``page_path``."""
-    if os.environ.get("CTG_NO_SYMBOLS") == "1":
-        return None
-    extra = [p for p in os.environ.get("CTG_LIB_PATH", "").split(os.pathsep) if p]
-    try:
-        return SymbolResolver.for_page(page_path, extra_paths=extra)
-    except Exception:  # noqa: BLE001
-        _note_exc("reader._build_resolver")
-        return None
+def build_resolver(page_path: str):
+    """The SymbolResolver for ``page_path`` (:meth:`SymbolResolver.for_page_env`)."""
+    return SymbolResolver.for_page_env(page_path)
 
 
 # multi-state symbol container ("SymbolSet"): its tc=7 children are mutually exclusive STATES,
 # CtDraw draws only the active one (in the runtime object).
-_SYMBOL_SET_TC = 0x0C
+SYMBOL_SET_TC = 0x0C
 
 
 # library ref extensions a genie container may expand from (.ctt templates define page furniture
 # and are NOT expanded into the placing object's box).
-_EXPANDABLE_EXTS = ("ctm", "ctl")
+EXPANDABLE_EXTS = ("ctm", "ctl")
 
 
-def _expand_symbol(obj: GraphicObject, po, resolver, depth: int) -> None:
+def expand_symbol(obj: GraphicObject, po, resolver, depth: int) -> None:
     """Resolve a placed symbol and fill ``obj.children``."""
     if resolver is None or depth >= _MAX_SYMBOL_DEPTH:
         return
@@ -127,29 +123,97 @@ def _expand_symbol(obj: GraphicObject, po, resolver, depth: int) -> None:
             return
         resolved = resolver.resolve(ref)
     except Exception:  # noqa: BLE001
-        _note_exc("reader._expand_symbol")
+        _note_exc("reader.expand_symbol")
         return
     if resolved is None:
         return
-    _expand_element(obj, resolved, resolver, depth)
+    expand_element(obj, resolved, resolver, depth)
     if obj.children:
         obj.raw["_resolved_ref"] = str(resolved.reference)
         obj.raw["_resolved_lib"] = os.path.basename(resolved.library_path)
 
 
-def _expand_element(obj: GraphicObject, resolved, resolver, depth: int) -> None:
+def name_nested_genies(page, records, resolver, only=None) -> None:
+    """``_def_ref`` of each genie copy nested in a placed genie, composite or template (a
+    copy stores no link of its own): its AN string is the handle of the element record it
+    is composed from, in the element its nearest linked ancestor places. That record links
+    the element, or is a copy nested in that element in turn. ``only``: the records derived
+    afresh (None: all)."""
+    if resolver is None:
+        return
+    objs = page.objects
+    elements: dict = {}
+
+    def linked(po) -> bool:
+        return bool(po.class_flag and po.subtype_size & 0x1)
+
+    def element(po):
+        """(records, parents, {handle: index}) of the element ``po`` links, or None."""
+        try:
+            ref = reference_from_object(po)
+        except Exception:  # noqa: BLE001  # swallow-ok: an unreadable link names nothing
+            return None
+        if ref is None:
+            return None
+        key = (ref.library.lower(), ref.element.lower(), ref.ext)
+        if key not in elements:
+            got = None
+            try:
+                r = resolver.resolve(ref)
+                if r is not None:
+                    rs = list(r.objects)
+                    got = (rs, _forest.parents(rs), {_geom.get_handle(x): k for k, x in enumerate(rs)})
+            except Exception:  # noqa: BLE001
+                _note_exc("reader.name_nested_genies")
+            elements[key] = got
+        return elements[key]
+
+    def named(recs, parent_of, k: int, depth: int) -> str:
+        po = recs[k]
+        if linked(po):
+            ref = reference_from_object(po)
+            return (ref.raw or str(ref)) if ref is not None else ""
+        if depth >= _MAX_SYMBOL_DEPTH:
+            return ""
+        a = parent_of(k)
+        while a is not None and not linked(recs[a]):
+            a = parent_of(a)
+        el = element(recs[a]) if a is not None else None
+        j = el[2].get(po.an_id) if el is not None else None
+        return named(el[0], el[1].__getitem__, j, depth + 1) if j is not None else ""
+
+    def page_parent(k: int):
+        return objs[k].parent if objs[k] is not None else None
+
+    for i in range(len(objs)) if only is None else sorted(only):
+        o = objs[i]
+        po = records[i] if i < len(records) else None
+        if o is None or po is None or not po.class_flag or not po.subtype_size & 0x200 or linked(po):
+            continue
+        try:
+            name = named(records, page_parent, i, 0)
+        except Exception:  # noqa: BLE001
+            _note_exc("reader.name_nested_genies", index=i)
+            name = ""
+        if name:
+            o.raw["_def_ref"] = name
+        else:
+            o.raw.pop("_def_ref", None)
+
+
+def expand_element(obj: GraphicObject, resolved, resolver, depth: int) -> None:
     """Attach a library element's objects as ``obj.children``."""
     # the reader's object builder (it calls back into this part: a call-time import, so the
     # parts import no reader at load)
-    from ..reader import _classify_container, _object_from
+    from ..reader import classify_container, object_from
 
     children: list[GraphicObject] = []
     pobjs = resolved.objects
     for child_po in pobjs:
         try:
-            child = _object_from(child_po, resolver, depth + 1)
+            child = object_from(child_po, resolver, depth + 1)
         except Exception:  # noqa: BLE001 -- keep indices aligned with pobjs
-            _note_exc("reader._expand_element/element record")
+            _note_exc("reader.expand_element/element record")
             child = GraphicObject(kind=ObjectKind.UNKNOWN)
             child.raw["_non_drawable"] = True
         children.append(child)
@@ -160,12 +224,12 @@ def _expand_element(obj: GraphicObject, resolved, resolver, depth: int) -> None:
     for i, child in enumerate(children):
         if child.members:
             try:
-                _classify_container(child, pobjs[i])
+                classify_container(child, pobjs[i])
             except Exception:  # noqa: BLE001
-                _note_exc("reader._expand_element/classify")
+                _note_exc("reader.expand_element/classify")
                 pass
     if depth + 1 < _MAX_SYMBOL_DEPTH:
-        _pg._expand_nested_containers(children, pobjs, resolver, depth)
+        _pg.expand_nested_containers(children, pobjs, resolver, depth)
     _select_local_states(children, pobjs)
     # un-expanded nested containers keep their inline members: restore any art the cache stripped
     # (polygon/pipe vertices, symbol-slot DIBs/refs)
@@ -175,15 +239,15 @@ def _expand_element(obj: GraphicObject, resolved, resolver, depth: int) -> None:
             continue
         if pobjs[i].type_code != _codes.TC.GROUP:
             continue
-        sub = sorted(_local_subtree(children, i))
+        sub = sorted(local_subtree(children, i))
         pairs = [(children[j], pobjs[j]) for j in sub if j < n]
-        if _repair_stripped_nodes(pobjs[i], pairs, resolver, depth + 1):
+        if repair_stripped_nodes(pobjs[i], pairs, resolver, depth + 1):
             # repaired state slots are mutually exclusive: draw one
             for j in sub:
-                if j < n and pobjs[j].type_code == _SYMBOL_SET_TC and children[j].members:
-                    _reselect_set_state(children[j], children, pobjs)
+                if j < n and pobjs[j].type_code == SYMBOL_SET_TC and children[j].members:
+                    reselect_set_state(children[j], children, pobjs)
 
-    emin = _pg._content_bbox_min(children)
+    emin = _pg.content_bbox_min(children)
     ew = resolved.width or 0
     eh = resolved.height or 0
     bx, by = obj.geometry.x, obj.geometry.y
@@ -261,7 +325,7 @@ def _wire_local_forest(children: list, pobjs) -> None:
                 stack.pop()
 
 
-def _local_subtree(children: list, idx: int) -> list[int]:
+def local_subtree(children: list, idx: int) -> list[int]:
     """All descendant indices of ``children[idx]`` (exclusive), via members."""
     out: list[int] = []
     todo = list(children[idx].members)
@@ -272,7 +336,7 @@ def _local_subtree(children: list, idx: int) -> list[int]:
     return out
 
 
-def _member_has_art(o: GraphicObject) -> bool:
+def member_has_art(o: GraphicObject) -> bool:
     """Does this member draw real artwork in a static render?"""
     if o.raw.get("_non_drawable") or o.members:
         return False
@@ -299,8 +363,8 @@ def _state_members(state: GraphicObject, objs) -> list:
 
 def _state_has_art(state: GraphicObject, objs) -> bool:
     if state.members and objs is not None:
-        return any(_member_has_art(o) for o in _state_members(state, objs))
-    return _member_has_art(state)
+        return any(member_has_art(o) for o in _state_members(state, objs))
+    return member_has_art(state)
 
 
 #: the type codes of a symbol-set state the editor draws one of: a linked / embedded symbol
@@ -308,7 +372,7 @@ def _state_has_art(state: GraphicObject, objs) -> bool:
 SET_STATE_TCS = (0x07, 0x08)
 
 
-def _select_set_state(states: list[GraphicObject], objs=None) -> None:
+def select_set_state(states: list[GraphicObject], objs=None) -> None:
     """Pick the one state a symbol set draws."""
     if len(states) <= 1:
         return
@@ -320,7 +384,7 @@ def _select_set_state(states: list[GraphicObject], objs=None) -> None:
                 o.raw["_state_hidden"] = True
 
 
-def _reselect_set_state(set_obj: GraphicObject, objs: list, pobjs) -> None:
+def reselect_set_state(set_obj: GraphicObject, objs: list, pobjs) -> None:
     """Pick a set's drawn state again after a repair."""
     if set_obj.raw.get("_state_hidden"):
         return
@@ -337,30 +401,30 @@ def _reselect_set_state(set_obj: GraphicObject, objs: list, pobjs) -> None:
                 objs[j].raw.pop("_state_hidden", None)
                 if not objs[j].children:
                     todo.extend(objs[j].members)
-    _select_set_state(states, objs)
+    select_set_state(states, objs)
 
 
 def _select_local_states(children: list, pobjs) -> None:
     """Apply symbol-set state selection over a detached element stream."""
     n = min(len(children), len(pobjs))
     for i in range(n):
-        if pobjs[i].type_code != _SYMBOL_SET_TC or not children[i].members:
+        if pobjs[i].type_code != SYMBOL_SET_TC or not children[i].members:
             continue
         states = [children[m] for m in children[i].members if m < n and pobjs[m].type_code in SET_STATE_TCS]
-        _select_set_state(states, children)
+        select_set_state(states, children)
 
 
 # type codes whose shape is a counted vertex array (polygon variants + pipe).
 _NODE_TYPE_CODES = frozenset({0x0A, 0x0B, 0x10})
 
 
-def _template_alignment(pobjs, resolver):
+def template_alignment(pobjs, resolver):
     """Page record index -> the template record at the same index."""
-    return _template_alignment_span(pobjs, resolver)[0]
+    return template_alignment_span(pobjs, resolver)[0]
 
 
-def _template_alignment_span(pobjs, resolver):
-    """(:func:`_template_alignment`, how many LEADING records it read -- the result depends on
+def template_alignment_span(pobjs, resolver):
+    """(:func:`template_alignment`, how many LEADING records it read -- the result depends on
     nothing after them; None when it scanned every record and found no template)."""
     tpl = None
     base = 0
@@ -371,14 +435,14 @@ def _template_alignment_span(pobjs, resolver):
         try:
             ref = reference_from_object(po)
         except Exception:  # noqa: BLE001
-            _note_exc("reader._template_alignment_span/reference")
+            _note_exc("reader.template_alignment_span/reference")
             continue
         if ref is not None and ref.ext == "ctt":
             read = i + 1
             try:
                 resolved = resolver.resolve(ref)
             except Exception:  # noqa: BLE001
-                _note_exc("reader._template_alignment_span/resolve")
+                _note_exc("reader.template_alignment_span/resolve")
                 resolved = None
             if resolved is not None:
                 tpl = resolved.objects
@@ -394,21 +458,21 @@ def _template_alignment_span(pobjs, resolver):
         a, b = pobjs[base + k], tpl[k]
         if a.type_code != b.type_code or a.class_flag != b.class_flag:
             continue
-        ga = _pc._read_geometry(a.body_raw, 0)
-        gb = _pc._read_geometry(b.body_raw, 0)
+        ga = _pc.read_geometry(a.body_raw, 0)
+        gb = _pc.read_geometry(b.body_raw, 0)
         if ga is None or gb is None or ga["rect1"] != gb["rect1"]:
             continue
         out[base + k] = b
     return out, base + n
 
 
-def _template_alignment_safe(pobjs, resolver) -> dict:
-    """:func:`_template_alignment`, {} when it fails (never fail a page load)."""
-    return _template_alignment_read(pobjs, resolver)[0]
+def template_alignment_safe(pobjs, resolver) -> dict:
+    """:func:`template_alignment`, {} when it fails (never fail a page load)."""
+    return template_alignment_read(pobjs, resolver)[0]
 
 
-def _template_alignment_read(pobjs, resolver, previous=None):
-    """(:func:`_template_alignment_safe`, the leading records it read). ``previous`` = an earlier
+def template_alignment_read(pobjs, resolver, previous=None):
+    """(:func:`template_alignment_safe`, the leading records it read). ``previous`` = an earlier
     derive of the same page: when those leading records are the same parsed records as then,
     its result is reused."""
     if resolver is None:
@@ -426,15 +490,13 @@ def _template_alignment_read(pobjs, resolver, previous=None):
         ):
             return previous.tpl_map, previous.tpl_read
     try:
-        return _template_alignment_span(pobjs, resolver)
+        return template_alignment_span(pobjs, resolver)
     except Exception:  # noqa: BLE001
-        _note_exc("reader._template_alignment_read")
+        _note_exc("reader.template_alignment_read")
         return {}, None
 
 
-def _repair_stripped_nodes(
-    container_po, member_pairs, resolver, depth: int = 1, ref=None, twins=None
-) -> bool:
+def repair_stripped_nodes(container_po, member_pairs, resolver, depth: int = 1, ref=None, twins=None) -> bool:
     """Restore the art a genie's copy strips."""
     stripped_nodes = [
         (o, po) for o, po in member_pairs if po.type_code in _NODE_TYPE_CODES and not o.geometry.nodes
@@ -449,11 +511,11 @@ def _repair_stripped_nodes(
     try:
         if ref is None:
             ref = reference_from_object(container_po)
-        if ref is None or ref.ext not in _EXPANDABLE_EXTS:
+        if ref is None or ref.ext not in EXPANDABLE_EXTS:
             return False
         resolved = resolver.resolve(ref)
     except Exception:  # noqa: BLE001
-        _note_exc("reader._repair_stripped_nodes/resolve")
+        _note_exc("reader.repair_stripped_nodes/resolve")
         return False
     if resolved is None:
         return False
@@ -465,7 +527,7 @@ def _repair_stripped_nodes(
             try:
                 _tws.append(twins() if callable(twins) else twins)
             except Exception:  # noqa: BLE001
-                _note_exc("reader._repair_stripped_nodes/owner twins")
+                _note_exc("reader.repair_stripped_nodes/owner twins")
                 _tws.append(None)
         t = _tws[0]
         return t if t is not None and len(t) == len(member_pairs) else None
@@ -478,7 +540,7 @@ def _repair_stripped_nodes(
                 try:
                     lib_nodes.append(_geom.get_object_nodes(lpo))
                 except Exception:  # noqa: BLE001
-                    _note_exc("reader._repair_stripped_nodes/library nodes")
+                    _note_exc("reader.repair_stripped_nodes/library nodes")
                     lib_nodes.append(None)
         inline = [(o, po) for o, po in member_pairs if po.type_code in _NODE_TYPE_CODES]
         if len(inline) == len(lib_nodes):  # else structure mismatch
@@ -506,10 +568,10 @@ def _repair_stripped_nodes(
                 try:
                     nodes = _geom.get_object_nodes(tw)
                 except Exception:  # noqa: BLE001
-                    _note_exc("reader._repair_stripped_nodes/twin nodes")
+                    _note_exc("reader.repair_stripped_nodes/twin nodes")
                     nodes = None
                 if nodes and len(nodes) >= 2:
-                    o.geometry.nodes = _pg._member_nodes(po, o.geometry, nodes)
+                    o.geometry.nodes = _pg.member_nodes(po, o.geometry, nodes)
 
     # ---- symbol slots (embedded DIB / nested library ref) -----------------
     grafted = False
@@ -530,9 +592,9 @@ def _repair_stripped_nodes(
                 if o.children or o.raw.get("_embedded_bmp") is not None:
                     continue
                 try:
-                    got = _pg._graft_dib(o, lpo)
+                    got = _pg.graft_dib(o, lpo)
                 except Exception:  # noqa: BLE001
-                    _note_exc("reader._repair_stripped_nodes/twin bitmap")
+                    _note_exc("reader.repair_stripped_nodes/twin bitmap")
                     got = False
                 if got:
                     grafted = True
@@ -541,15 +603,15 @@ def _repair_stripped_nodes(
                     ref2 = reference_from_object(lpo)
                     rs2 = resolver.resolve(ref2) if ref2 is not None else None
                 except Exception:  # noqa: BLE001
-                    _note_exc("reader._repair_stripped_nodes/nested resolve")
+                    _note_exc("reader.repair_stripped_nodes/nested resolve")
                     rs2 = None
                 if rs2 is not None:
-                    _expand_element(o, rs2, resolver, depth)
+                    expand_element(o, rs2, resolver, depth)
                     grafted = grafted or bool(o.children)
     return grafted
 
 
-_GRAFT_TYPE_CODES = frozenset({0x0F, 0x11, 0x10, 0x0A})
+GRAFT_TYPE_CODES = frozenset({0x0F, 0x11, 0x10, 0x0A})
 
 
 #: (library file version, element, resolver search path) -> the element's art twins (None: the
@@ -558,22 +620,22 @@ _GRAFT_TYPE_CODES = frozenset({0x0F, 0x11, 0x10, 0x0A})
 #: the first one stored is kept and shared), and a result that depended on where it was computed
 #: (an element met again inside its own nesting, the nesting depth limit) is returned but never
 #: stored.
-_ART_TWINS_CACHE: dict = {}
+ART_TWINS_CACHE: dict = {}
 
 
-_ART_TWINS_LOCK = threading.Lock()
+ART_TWINS_LOCK = threading.Lock()
 
 
-_ART_TWINS_TLS = threading.local()  # .stack: [key, stable] of this thread's computations
+ART_TWINS_TLS = threading.local()  # .stack: [key, stable] of this thread's computations
 
 
-_ART_TWINS_MAX_DEPTH = 8
+ART_TWINS_MAX_DEPTH = 8
 
 
 _MISSING = object()
 
 
-def _element_root_records(path: str, element: str):
+def element_root_records(path: str, element: str):
     """The element's ONE root subtree (the trailer records dropped), from the process-cached
     library (no re-composition: only the appearance-owning records are wanted)."""
     pb = open_library(path).element(element)
@@ -588,7 +650,7 @@ def _element_root_records(path: str, element: str):
     return recs[:end]
 
 
-def _art_twins_light(path: str, element: str, resolver, depth: int = 0):
+def art_twins_light(path: str, element: str, resolver, depth: int = 0):
     """art_twins without nested recomposition."""
     return _art_twins_entry(path, element, resolver)[0]
 
@@ -601,20 +663,20 @@ def _art_twins_entry(path: str, element: str, resolver):
 
     try:
         key = (
-            os.path.normcase(os.path.abspath(path)),
+            path_key(path),
             element.lower(),
             library_version(path),
             tuple(getattr(resolver, "search_paths", None) or ()),
         )
     except OSError:
         return None, 0
-    stack = getattr(_ART_TWINS_TLS, "stack", None)
+    stack = getattr(ART_TWINS_TLS, "stack", None)
     if stack is None:
-        stack = _ART_TWINS_TLS.stack = []
-    hit = _ART_TWINS_CACHE.get(key, _MISSING)
+        stack = ART_TWINS_TLS.stack = []
+    hit = ART_TWINS_CACHE.get(key, _MISSING)
     # a stored result was followed to its full depth: at this depth a computation would stop
     # following the nesting (the depth limit) when it is too deep -- then compute it instead
-    if hit is not _MISSING and len(stack) + 1 + hit[1] <= _ART_TWINS_MAX_DEPTH + 2:
+    if hit is not _MISSING and len(stack) + 1 + hit[1] <= ART_TWINS_MAX_DEPTH + 2:
         return hit
     for p, frame in enumerate(stack):
         if frame[0] == key:
@@ -632,19 +694,19 @@ def _art_twins_entry(path: str, element: str, resolver):
         stack.pop()
     if not frame[1]:
         return got
-    with _ART_TWINS_LOCK:
-        return _ART_TWINS_CACHE.setdefault(key, got)
+    with ART_TWINS_LOCK:
+        return ART_TWINS_CACHE.setdefault(key, got)
 
 
 def _art_twins_compute(path: str, element: str, resolver, stack: list):
     """The body of :func:`_art_twins_entry` (``stack`` = this thread's computations, this one
     last): (twins, height)."""
-    recs = _element_root_records(path, element)
+    recs = element_root_records(path, element)
     if recs is None:
         return None, 0
     out = list(recs)
     height = 1
-    if len(stack) > _ART_TWINS_MAX_DEPTH:
+    if len(stack) > ART_TWINS_MAX_DEPTH:
         # nested too deep: the nested elements are not followed, so this result -- and every
         # one this thread is computing around it -- depends on the depth it was asked at
         if any(po.class_flag and (po.subtype_size & 0x1) for po in recs[1:]):
@@ -667,7 +729,7 @@ def _art_twins_compute(path: str, element: str, resolver, stack: list):
                     ref = reference_from_object(po)
                     res = resolver.resolve(ref) if ref is not None else None
                 except Exception:  # noqa: BLE001
-                    _note_exc("reader._art_twins_light")
+                    _note_exc("reader.art_twins_light")
                     res = None
                 sub, h = (
                     _art_twins_entry(res.library_path, ref.element, resolver)
@@ -685,10 +747,10 @@ def _art_twins_compute(path: str, element: str, resolver, stack: list):
 
 
 #: a %name% / %name=default% token, leading '='s skipped (genie_place._token_name)
-_TOKEN_RE = re.compile(r"%=*([^%\s=]+)(?:=([^%]*))?%")
+TOKEN_RE = re.compile(r"%=*([^%\s=]+)(?:=([^%]*))?%")
 
 
-def _substitute_tokens(text, props: dict, objs, j: int):
+def substitute_tokens(text, props: dict, objs, j: int):
     """A twin's %TEMPLATE% caption as the INSTANCE shows it: each ``%name%`` / ``%name=def%``
     token takes the member's own substituted value (its bags carry ``name``), else the nearest
     ancestor genie's binding, else the declared default, else blank (a ``%Description%``
@@ -708,21 +770,21 @@ def _substitute_tokens(text, props: dict, objs, j: int):
             v = default or ""
         return str(v)
 
-    return _TOKEN_RE.sub(val, text)
+    return TOKEN_RE.sub(val, text)
 
 
-def _art_twins_for(resolved, ref, resolver, n: int):
+def art_twins_for(resolved, ref, resolver, n: int):
     """The art twins of the element ``ref`` resolved to (cached per library file version),
     or None when unavailable / not aligned (``n`` records)."""
     try:
-        tw = _art_twins_light(resolved.library_path, ref.element, resolver)
+        tw = art_twins_light(resolved.library_path, ref.element, resolver)
     except Exception:  # noqa: BLE001
-        _note_exc("reader._art_twins_for")
+        _note_exc("reader.art_twins_for")
         tw = None
     return tw if tw is not None and len(tw) >= n else None
 
 
 def template_records(pobjs, resolver) -> set:
-    """The page records the template put there (:func:`_template_alignment_safe`), for the
+    """The page records the template put there (:func:`template_alignment_safe`), for the
     helper processes (picture_worker)."""
-    return set(_template_alignment_safe(pobjs, resolver) or ())
+    return set(template_alignment_safe(pobjs, resolver) or ())

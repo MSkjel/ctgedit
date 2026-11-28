@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..infra.paths import path_key
+
 import base64
 import contextlib
 import glob
@@ -104,7 +106,7 @@ class Transaction:
         self._fh.flush()
 
     def _file(self, path: str, fh) -> _File:
-        key = os.path.normcase(os.path.abspath(path))
+        key = path_key(path)
         f = self._files.get(key)
         if f is None:
             pos = fh.tell()
@@ -400,11 +402,11 @@ def recover_project(project_dir: str) -> List[dict]:
     from . import projectlock
 
     want = projectlock.key_of(project_dir)
-    own = {os.path.normcase(os.path.abspath(t.path)) for t in _stack() if t.path}
+    own = {path_key(t.path) for t in _stack() if t.path}
     name = os.path.basename(os.path.normpath(project_dir))
     notes = []
     for path in _journals():
-        if os.path.normcase(os.path.abspath(path)) in own:
+        if path_key(path) in own:
             continue
         try:
             head, files, writes = _read(path)

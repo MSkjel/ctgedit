@@ -1,5 +1,6 @@
 """Page Properties."""
 
+from ctgedit.format.fileio import find_ci
 import os
 import shutil
 
@@ -74,7 +75,7 @@ def test_symbols_render_children():
 def test_every_placed_symbol_draws():
     """Every placed symbol draws."""
     from ctgedit.editing import EditableDocument
-    from ctgedit.io.readerparts.symbols import _member_has_art
+    from ctgedit.io.readerparts.symbols import member_has_art
 
     doc = EditableDocument.open(_page("FxSymbols"))
     objs = doc.page.objects
@@ -85,11 +86,11 @@ def test_every_placed_symbol_draws():
         if o.children or o.raw.get("_embedded_bmp") is not None:
             return True
         return kind == "group" and any(
-            _member_has_art(objs[k]) or objs[k].children for k in doc.page.subtree(i) if k != i
+            member_has_art(objs[k]) or objs[k].children for k in doc.page.subtree(i) if k != i
         )
 
     assert len(placed) >= 12, "too few placed symbols (%d)" % len(placed)
-    assert {kind for _i, kind in placed} == {"leaf", "group"}
+    assert {kind for i, kind in placed} == {"leaf", "group"}
     bad = [(i, kind) for i, kind in placed if not draws(i, kind)]
     assert not bad, "symbols that draw nothing: %r" % bad
 
@@ -128,14 +129,14 @@ def test_template_chrome_graft():
     """The template's chrome is grafted onto its art-stripped copy."""
     from ctgedit.editing import EditableDocument
     from ctgedit.format.page import parse_ctg
-    from ctgedit.io.reader import _template_alignment, read_page
+    from ctgedit.io.reader import template_alignment, read_page
     from ctgedit.format.symbols import SymbolResolver
     from ctgedit.model.document import ObjectKind
 
     path = _page("FxSaContent", "FxSa")
     pobjs = parse_ctg(path).page.objects
     resolver = SymbolResolver.for_page(path)
-    tpl_map = _template_alignment(pobjs, resolver)
+    tpl_map = template_alignment(pobjs, resolver)
     assert len(tpl_map) >= 5, "template alignment collapsed (%d)" % len(tpl_map)
 
     page = read_page(path)
@@ -351,14 +352,14 @@ def test_template_reference_edit_and_undo():
 
     new = ref.raw.replace("HD1080", "UHD4K")
     assert doc.set_template_reference(idx, new) is True
-    _i, ref2 = doc.template_reference()
+    i, ref2 = doc.template_reference()
     assert ref2.element == "normal@-UHD4K"
     doc.undo()
-    _i, ref3 = doc.template_reference()
+    i, ref3 = doc.template_reference()
     assert ref3.raw == ref.raw
     # a nonsense splice target reports failure and leaves the body intact
     assert doc.set_template_reference(idx, "") is False
-    _i, ref4 = doc.template_reference()
+    i, ref4 = doc.template_reference()
     assert ref4.raw == ref.raw
 
 
@@ -369,7 +370,7 @@ def test_bitmap_record_round_trip(tmp_path):
     import shutil as _sh
     from ctgedit.editing import EditableDocument
     from ctgedit.format.symbols import embedded_bitmap_from_body
-    from ctgedit.io.reader import _read_geometry
+    from ctgedit.io.reader import read_geometry
 
     _sh.copy(_page(SA_PAGE, SA_PROJECT), tmp_path / "m.ctg")
     doc = EditableDocument.open(str(tmp_path / "m.ctg"))
@@ -396,7 +397,7 @@ def test_bitmap_record_round_trip(tmp_path):
     doc.save(out)
     re = EditableDocument.open(out)
     po = re.parsed.page.objects[idx]
-    geo = _read_geometry(po.body_raw, 0)
+    geo = read_geometry(po.body_raw, 0)
     eb = embedded_bitmap_from_body(po.body_raw, geo["end"])
     assert eb is not None and (eb.width, eb.height) == (w, h)
 
@@ -655,7 +656,7 @@ def test_arrange_tools_dialogs():
     doc = EditableDocument.open(_page("FxMany"))
 
     adj = AdjustPositionDialog((10, 20, 30, 40))
-    assert adj.rect() == (10, 20, 30, 40)
+    assert adj.chosen_rect() == (10, 20, 30, 40)
     g = GotoObjectDialog(doc)
     assert g.object_count() > 90
     f = FindReplaceDialog(doc, replace_mode=True)
@@ -1189,16 +1190,16 @@ def _mini_project(project, dst, pages, tables=("pgkey",)):
         "KEYS.DBF",
         "devices.DBF",
     ):
-        src = PR._find_file(project, f)
+        src = find_ci(project, f)
         if src:
             shutil.copy(src, os.path.join(dst, os.path.basename(src)))
     for t in tables:
-        src = PR._find_file(project, t + ".DBF")
+        src = find_ci(project, t + ".DBF")
         if src is None:
             continue
         d = Dbf(src, writable=False)
-        n = PR._open_ndx(project, t)
-        recs = [r for p in pages for _i, r in sorted(PR._page_records(d, n, "PAGE", p))]
+        n = PR.open_ndx(project, t)
+        recs = [r for p in pages for i, r in sorted(PR.page_records(d, n, "PAGE", p))]
         if n is not None:
             n.close()
         with open(src, "rb") as fh:
@@ -1222,9 +1223,8 @@ def _mini_project(project, dst, pages, tables=("pgkey",)):
 def _live_rows(project_dir, table, page):
     """Live rows of ``page`` read with dbfread (an independent DBF reader)."""
     from dbfread import DBF
-    from ctgedit.io import pgregister as PR
 
-    path = PR._find_file(project_dir, table + ".DBF")
+    path = find_ci(project_dir, table + ".DBF")
     return [
         dict(r)
         for r in DBF(path, encoding="cp1252", char_decode_errors="replace")
@@ -1687,8 +1687,8 @@ def test_main_window_page_properties_apply_is_staged_until_save(tmp_path):
         assert Project(proj).page_record(PUMP)["TITLE"] == "FxShapes from the window"
         dlg.reject()
     finally:
-        if win in MainWindow._instances:
-            MainWindow._instances.remove(win)
+        if win in MainWindow.instances:
+            MainWindow.instances.remove(win)
         win.deleteLater()
 
 
@@ -1735,8 +1735,8 @@ def test_main_window_undo_closes_page_properties_and_discard_writes_nothing(tmp_
         assert win._close_doc_tab(0) is not False
         assert _bytes(*before) == before
     finally:
-        if win in MainWindow._instances:
-            MainWindow._instances.remove(win)
+        if win in MainWindow.instances:
+            MainWindow.instances.remove(win)
         win.deleteLater()
 
 

@@ -26,9 +26,6 @@ def app():
 def _fresh_notice(monkeypatch):
     """CtDraw's cache notice is the editor's (every window): each test starts with none
     shown and no run holding it."""
-    from ctgedit.ui.window import files
-
-    monkeypatch.setattr(files, "CACHE_NOTICE_RUN", {"holds": 0, "waiting": "", "shown": False})
 
 
 class Clock:
@@ -275,8 +272,8 @@ def _window(app, monkeypatch):
 def _close(w):
     from ctgedit.ui.main_window import MainWindow
 
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.close()
     w.deleteLater()
 
@@ -492,11 +489,11 @@ def test_a_helper_s_last_records_are_counted_after_it_ends(app, tmp_path):
 
 
 def test_the_chain_s_status_note_reads_plainly():
-    from ctgedit.ui.window.library import _with_figures
+    from ctgedit.ui.window.users_chain import with_figures
 
     head = "Updating the closed pages that use lib.x: 3 of 40 (Page)"
-    assert _with_figures(head, "12 s so far, about 2 min left") == head + ". 12 s so far, about 2 min left."
-    assert _with_figures(head, "") == head
+    assert with_figures(head, "12 s so far, about 2 min left") == head + ". 12 s so far, about 2 min left."
+    assert with_figures(head, "") == head
 
 
 def test_the_progress_window_keeps_its_size(app):

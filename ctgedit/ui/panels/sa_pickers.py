@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+from ...infra.logsetup import note_exception as _note_exc
+
+from ...infra.paths import path_key
+
 import os
 import re
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from ..dialog.genie_dialogs import _BrowseField
+from ..dialog.genie_dialogs import BrowseField
+from ..messages import inform
 
-HELP_EQUIPMENT = "situational-awareness#choose-equipment"
-HELP_MENU = "situational-awareness#choose-a-menu-item"
 #: the most matches a search in the equipment tree lists
 SEARCH_LIMIT = 500
 
@@ -55,7 +58,7 @@ def _dim() -> QtGui.QColor:
         from ..style.theme import COLORS
 
         return QtGui.QColor(COLORS.get("text_dim", "#969ca5"))
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # swallow-ok: the theme's colour is optional
         return QtGui.QColor(139, 145, 154)
 
 
@@ -68,6 +71,7 @@ def scope_equipment(project_dir: str) -> tuple:
 
         return equipment(project_dir)
     except Exception:  # noqa: BLE001 -- the list is an aid only
+        _note_exc("sa_pickers.scope_equipment")
         return ()
 
 
@@ -319,6 +323,9 @@ class EquipmentBrowserDialog(QtWidgets.QDialog):
         self._flat: Optional[list] = None
         self.search.searchChanged.connect(lambda _t: self._apply_filter())
         self.project.currentIndexChanged.connect(lambda _i: self._project_changed())
+        from ..remember import keep
+
+        keep(self.project, "equipment_project")
         self.view.doubleClicked.connect(lambda _i: self._accept())
         self.view.selectionModel().currentChanged.connect(lambda cur, _p: self._show(cur))
         if not self.rows:
@@ -504,7 +511,7 @@ def warm_equipment(project_dir: str) -> None:
     """Read the folder's equipment on a worker thread, once per folder."""
     if not project_dir:
         return
-    key = os.path.normcase(os.path.abspath(project_dir))
+    key = path_key(project_dir)
     if key in _EQUIP_WARMING:
         return
 
@@ -532,7 +539,7 @@ def warm_equipment(project_dir: str) -> None:
 
 def equipment_completion_model(project_dir: str) -> Optional[QtCore.QStringListModel]:
     """The equipment names of the scope as one shared model (per scope)."""
-    t = _EQUIP_WARMING.get(os.path.normcase(os.path.abspath(project_dir))) if project_dir else None
+    t = _EQUIP_WARMING.get(path_key(project_dir)) if project_dir else None
     if t is not None and t.is_alive():
         t.join()  # (the warm-up has read part of it: wait, rather than read again)
     rows = scope_equipment(project_dir)
@@ -548,7 +555,7 @@ def equipment_completion_model(project_dir: str) -> Optional[QtCore.QStringListM
     return hit[1]
 
 
-class EquipmentField(_BrowseField):
+class EquipmentField(BrowseField):
     """An equipment name: a text box that completes from the scope's
     equipment and a 'Browse…' button that opens Select Equipment."""
 
@@ -726,8 +733,8 @@ class MenuItemPickerDialog(QtWidgets.QDialog):
         self.view.expandToDepth(0)
         if not items:
             self.detail.setText(
-                "The menu configuration has no '%s' menu items (Plant SCADA "
-                "Studio > Visualization > Menu Configuration)." % (page or "")
+                "The menu configuration has no %smenu items (Plant SCADA Studio > Visualization > "
+                "Menu Configuration)." % ("'%s' " % page if page else "")
             )
         self._filter(self.search.text())
 
@@ -831,6 +838,7 @@ class ParamPickers:
 
                 self._menus = list(menu_pages(self.project_dir))
             except Exception:  # noqa: BLE001
+                _note_exc("sa_pickers.menus")
                 self._menus = []
         return self._menus
 
@@ -841,6 +849,7 @@ class ParamPickers:
 
             return list(menu_items(self.project_dir))
         except Exception:  # noqa: BLE001
+            _note_exc("sa_pickers.menu_items")
             return []
 
     def reference_categories(self) -> List[str]:
@@ -850,6 +859,7 @@ class ParamPickers:
 
             return list(equipment_reference_categories(self.project_dir))
         except Exception:  # noqa: BLE001
+            _note_exc("sa_pickers.reference_categories")
             return []
 
     def equipment_rows(self) -> list:
@@ -944,29 +954,31 @@ class ParamPickers:
                 header = v
         page, names = self.tab_control_names(header)
         if not header:
-            QtWidgets.QMessageBox.information(
+            inform(
                 parent,
                 "Tab Control Name",
                 "Enter the Tab Header Pane Name first. The tab control is on that pane's default page.",
             )
             return None
         if not names:
-            QtWidgets.QMessageBox.information(
+            inform(
                 parent,
                 "Tab Control Name",
                 "%s, the default page of pane '%s', has no named objects. Name the tab bar "
                 "genie there (Access > General > Name)." % (page or "The default page", header),
             )
             return None
-        item, ok = QtWidgets.QInputDialog.getItem(
+        from ..messages import ask_item
+
+        item = ask_item(
             parent,
             "Tab Control Name",
             "Objects on %s (the default page of pane '%s'):" % (page, header),
             names,
             max(0, next((i for i, n in enumerate(names) if n.lower() == (current or "").lower()), 0)),
-            True,
+            editable=True,
         )
-        return item if ok and item else None
+        return item or None
 
 
 from ...infra import caches as _caches  # noqa: E402

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from ...infra.paths import folder_key, path_key
+
+
 import os
 import shutil
 import time
@@ -48,6 +51,9 @@ class UpdatePagesRun(QtCore.QObject):
     #: element saved; ui/window/library._update_closed_pages): Update Pages and Pack
     #: Libraries wait for it, and a chain asked for meanwhile waits in :attr:`users_queue`
     users_busy: str = ""
+    #: Pack Libraries or Pack Database is running in its helper process (its name): the
+    #: runs wait for it
+    pack_busy: str = ""
     #: a run in the editor's process (Update Users, Update Pages with or without its chain)
     #: has not brought the open tabs up to date yet: Update Pages' pages, the open pages'
     #: step, the element tabs' updates queued (LibraryCommands._follow_run_saves). Simulate's
@@ -62,6 +68,26 @@ class UpdatePagesRun(QtCore.QObject):
     users_queue: list = []
     #: a look for the next waiting chain is due (one timer at a time)
     users_retry: bool = False
+    #: the progress file of the chain after a library save running in its helper now ('':
+    #: none); its answer so far is written beside it (genie_worker.GENIES_SUFFIX, the pages'
+    #: records: RECORDS_SUFFIX)
+    chain_progress: str = ""
+    #: reads of what uses an element going on (_element_users_read): the look at the open
+    #: Used By windows waits for them (else it would read its users again inside the save's
+    #: own read, whose progress lets timers run)
+    users_reads: int = 0
+    #: a look at the open Used By windows is due (one for many calls)
+    used_by_due: bool = False
+
+    @classmethod
+    def reset(cls) -> None:
+        """No run going on, none waiting (the tests: each starts with none)."""
+        cls.active = None
+        cls.chain_busy = False
+        cls.users_busy = cls.pack_busy = cls.tabs_run = cls.chain_progress = ""
+        cls.tabs_following = cls.users_retry = cls.used_by_due = False
+        cls.users_queue = []
+        cls.users_reads = 0
 
     @classmethod
     def busy_text(cls, what: str) -> str:
@@ -74,6 +100,8 @@ class UpdatePagesRun(QtCore.QObject):
             )
         if cls.active is not None or cls.chain_busy:
             return "Update Pages is running. %s when it has finished." % what
+        if cls.pack_busy:
+            return "%s is running. %s when it has finished." % (cls.pack_busy, what)
         if cls.tabs_following:
             # (a run's open tabs' step: its progress window lets events through. Named: Update
             # Pages without its chain updates no library)
@@ -129,10 +157,8 @@ class UpdatePagesRun(QtCore.QObject):
             return False
         try:
             skip = list(self._skip())
-            run = {os.path.normcase(os.path.abspath(d)) for d in self._dirs}
-            self.open_at_start = [
-                p for p in skip if os.path.normcase(os.path.dirname(os.path.abspath(p))) in run
-            ]
+            run = {path_key(d) for d in self._dirs}
+            self.open_at_start = [p for p in skip if folder_key(p) in run]
             self.pages, self.unregistered = updatepages.run_page_list(self._dirs, skip=skip)
         except Exception:  # noqa: BLE001
             from ...infra import logsetup

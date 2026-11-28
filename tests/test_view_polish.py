@@ -66,8 +66,8 @@ def _open_window(path):
 def _close_window(w):
     from ctgedit.ui.main_window import MainWindow
 
-    if w in MainWindow._instances:
-        MainWindow._instances.remove(w)
+    if w in MainWindow.instances:
+        MainWindow.instances.remove(w)
     w.hide()  # (close() would ask to save the page)
 
 
@@ -460,8 +460,8 @@ def test_smart_guides_align_page_objects_on_their_extents(fx_page):
         v._sg_active = []
     finally:
         w.close()
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
 
 
 def test_guideline_drop_outside_an_element_window_deletes_it():
@@ -535,8 +535,8 @@ def test_element_save_as_keeps_its_guidelines(fx_install, monkeypatch):
         assert w._guidelines_key(w.doc) != old_key
         assert w._load_guidelines(w.doc) == ([40], [30])
     finally:
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
 
 
 def test_guidelines_dialog_first_guideline_turns_display_and_snap_on():
@@ -653,9 +653,9 @@ def test_status_bar_refresh_toolbox_and_window_menu(win):
     win.act_status_bar.trigger()
     assert win.statusBar().isVisible()
     # Refresh: libraries re-read (a new generation) and the page derived again
-    gen, serial = editing._LIBRARY_GENERATION[0], win.doc.derive_serial
+    gen, serial = editing.LIBRARY_GENERATION[0], win.doc.derive_serial
     win.act_refresh.trigger()
-    assert editing._LIBRARY_GENERATION[0] == gen + 1
+    assert editing.LIBRARY_GENERATION[0] == gen + 1
     assert win.doc.derive_serial > serial and win.scene._items
     # Show Tools (F3): the floating toolbox hosts the drawing tool actions
     assert win.act_show_tools.shortcut().toString() == "F3"
@@ -690,5 +690,5 @@ def test_view_prefs_round_trip(win):
         assert not w2.view.guides_visible()
         assert w2.view.crosshair()
     finally:
-        if w2 in MainWindow._instances:
-            MainWindow._instances.remove(w2)
+        if w2 in MainWindow.instances:
+            MainWindow.instances.remove(w2)

@@ -36,11 +36,11 @@ def win(fx_install):
     w.show()
     _pump()
     yield w
-    for x in list(MainWindow._instances):
+    for x in list(MainWindow.instances):
         for e in getattr(x, "_docs", []):
             e["doc"].dirty = False
-        if x in MainWindow._instances:
-            MainWindow._instances.remove(x)
+        if x in MainWindow.instances:
+            MainWindow.instances.remove(x)
         x.hide()
 
 
@@ -152,17 +152,17 @@ def test_the_zoom_menu_fit_and_typed_zoom(win, tmp_path, small):
     # Ctrl+click types a zoom: Enter applies it
     QtTest.QTest.mouseClick(z.button, QtCore.Qt.LeftButton, QtCore.Qt.ControlModifier)
     _pump()
-    assert not z.spin.isHidden() and z.button.isHidden()
-    z.spin.setValue(250)
-    QtTest.QTest.keyClick(z.spin, QtCore.Qt.Key_Return)
+    assert not z.entry.isHidden() and z.button.isHidden()
+    z.entry.setText("250 %")
+    QtTest.QTest.keyClick(z.entry, QtCore.Qt.Key_Return)
     _pump()
-    assert z.spin.isHidden() and not z.button.isHidden()
+    assert z.entry.isHidden() and not z.button.isHidden()
     win.view.finish_view_animation()
     assert abs(win.view.zoom() - 2.5) < 0.01
     # Esc goes back without a change
     z.edit()
-    z.spin.setValue(50)
-    QtTest.QTest.keyClick(z.spin, QtCore.Qt.Key_Escape)
+    z.entry.setText("50 %")
+    QtTest.QTest.keyClick(z.entry, QtCore.Qt.Key_Escape)
     win.view.finish_view_animation()
     assert abs(win.view.zoom() - 2.5) < 0.01
 
@@ -284,7 +284,7 @@ def test_right_click_lists_the_fields_and_the_choice_is_kept(win):
     try:
         assert status_items.field(w2, "position").user_on is False
     finally:
-        MainWindow._instances.remove(w2)
+        MainWindow.instances.remove(w2)
         w2.hide()
     status_items.set_item_visible("position", True)
     assert status_items.item_visible("position")

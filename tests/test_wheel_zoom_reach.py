@@ -107,8 +107,8 @@ def _drop_windows():
         w = _WINS.pop()
         for e in getattr(w, "_docs", []):
             e["doc"].dirty = False
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.hide()
 
 

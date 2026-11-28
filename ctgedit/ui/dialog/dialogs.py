@@ -1,6 +1,11 @@
 """Small modal dialogs for genie parameters."""
 
 from __future__ import annotations
+
+from ..dialog_buttons import dialog_buttons
+
+from ...infra.logsetup import note_exception as _note_exc
+from ...infra.paths import path_key
 from ..style.theme import sp as _sp
 
 import os
@@ -11,7 +16,9 @@ from ..prefs.settings import app_settings
 
 
 from ...format import codes as _codes
-from ..pick_fields import TemplateCatalog, TemplatePicker, _preview_size, library_stem, thumbnail_pixmap
+from ..pick_fields import TemplateCatalog, TemplatePicker, preview_size, library_stem, thumbnail_pixmap
+from ..messages import inform, warn
+from ..names import chain_lines, element_label, values_text
 
 
 # ---------------------------------------------------------------------------
@@ -22,7 +29,7 @@ from ..pick_fields import TemplateCatalog, TemplatePicker, _preview_size, librar
 class _ChoiceDialog(QtWidgets.QDialog):
     """A CtDraw-style radio-choice dialog (Rotate / Mirror / Align)."""
 
-    def __init__(self, title: str, options: list[str], parent=None, current: int = 0):
+    def __init__(self, title: str, options: list[str], parent=None, current: int = 0, action: str = "OK"):
         super().__init__(parent)
         self.setWindowTitle(title)
         lay = QtWidgets.QVBoxLayout(self)
@@ -35,6 +42,7 @@ class _ChoiceDialog(QtWidgets.QDialog):
         buttons = QtWidgets.QDialogButtonBox(
             QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
         )
+        buttons.button(QtWidgets.QDialogButtonBox.Ok).setText(action)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         lay.addWidget(buttons)
@@ -142,6 +150,8 @@ GOTO_COLUMNS = (
     ("position", "Position", False),
     ("size", "Size", False),
     ("name", "Name", False),
+    ("element", "Element", False),
+    ("parameters", "Parameters", False),
     ("text", "Text", False),
     ("fill", "Fill", False),
     ("line", "Line colour", False),
@@ -348,6 +358,7 @@ class GotoObjectDialog(QtWidgets.QDialog):
         self._tree.addTopLevelItem(self._root)
         objs = doc.page.objects
         records = getattr(getattr(getattr(doc, "parsed", None), "page", None), "objects", None) or []
+        levels: dict = {}  # (the genie tree's line of each level: names.chain_lines)
         for i, o in enumerate(objs):
             # CtDraw lists no touch / keyboard command records (they share the
             # owner's AN, so an AN finds the owner)
@@ -355,8 +366,11 @@ class GotoObjectDialog(QtWidgets.QDialog):
                 continue
             parent = self._items.get(o.parent) if o.parent is not None else self._root
             item = QtWidgets.QTreeWidgetItem([self._label(doc, i, o), self._details(o)])
-            if i in self._tips:
-                item.setToolTip(0, self._tips[i])
+            # (a row inside a nested genie tree: each level's element and the values it gets)
+            chain = chain_lines(doc.page, i, levels, self._genie_values)
+            tip = "\n".join(x for x in (self._tips.get(i, ""), "\n".join(chain) if chain else "") if x)
+            if tip:
+                item.setToolTip(0, tip)
             # the TOPMOST object first at every level, like CtDraw's tree (a
             # later record draws over an earlier one)
             (parent or self._root).insertChild(0, item)
@@ -455,6 +469,10 @@ class GotoObjectDialog(QtWidgets.QDialog):
             return "%d x %d" % (g.extent_x, g.extent_y), None
         if key == "name":
             return self._name.get(i, ""), None
+        if key == "element":
+            return element_label(o, self._doc.page, short=False), None
+        if key == "parameters":
+            return values_text(self._doc.page, i, self._genie_values), None
         if key == "text":
             return " ".join(str(st.text or "").split()), None
         if key in ("fill", "line"):
@@ -532,7 +550,10 @@ class GotoObjectDialog(QtWidgets.QDialog):
         if tc == 0x05 and o.kind.value == "number":
             cls = "Number"  # CtDraw's TextAsNumber class
         if tc == 0x08 and (o.raw.get("_dwflags") or 0) & 0x200:
-            cls = "Genie"  # a nested genie instance (no own link)
+            # a genie copy nested in a placed genie: no link of its own, the element its
+            # definition record places (model/extras _def_ref)
+            el = element_label(o, doc.page, short=False) if o.raw.get("_def_ref") else ""
+            cls = "Genie %s" % el if el else "Genie"
         try:
             po = doc.parsed.page.objects[i]
             if po.subtype_size & 0x1:
@@ -547,7 +568,7 @@ class GotoObjectDialog(QtWidgets.QDialog):
                     kind = _LINK_LABELS.get(ref.ext, "Symbol")
                     cls = "%s %s.%s" % (kind, ref.library, ref.element)
         except Exception:  # noqa: BLE001 -- a label only
-            pass
+            _note_exc("dialogs._label", index=i)
         an = o.an if o.an is not None and o.an > 0 else None
         self._an[i] = an if an is not None else -1
         props = o.raw.get("_props") or {}
@@ -555,6 +576,15 @@ class GotoObjectDialog(QtWidgets.QDialog):
         self._name[i] = name
         text = "%s AN%d" % (cls, an) if an is not None else cls
         return "%s  %s" % (name, text) if name else text
+
+    def _genie_values(self, i: int) -> list:
+        """The values genie ``i`` gets (the document's genie_values), [] when unknown."""
+        fn = getattr(self._doc, "genie_values", None)
+        try:
+            return list(fn(i)) if fn is not None else []
+        except Exception:  # noqa: BLE001
+            _note_exc("dialogs._genie_values", index=i)
+            return []
 
     def _composite_name(self, doc, ref) -> str:
         """The template name of a composite genie's cache link (its guid
@@ -568,6 +598,7 @@ class GotoObjectDialog(QtWidgets.QDialog):
             try:
                 self._composite_templates = C.load_templates(doc.path) if doc.path else {}
             except Exception:  # noqa: BLE001 -- a label only
+                _note_exc("dialogs._composite_name/templates", page=doc.path)
                 self._composite_templates = {}
         tpl = self._composite_templates.get(guid)
         if tpl is None and doc.path:
@@ -577,6 +608,7 @@ class GotoObjectDialog(QtWidgets.QDialog):
                     if tpl is not None:
                         break
             except Exception:  # noqa: BLE001
+                _note_exc("dialogs._composite_name/cache", page=doc.path)
                 tpl = None
             self._composite_templates[guid] = tpl
         return tpl.name if tpl is not None and tpl.name else "{%s}" % guid
@@ -670,6 +702,7 @@ class GotoObjectDialog(QtWidgets.QDialog):
             try:
                 full = set(finder(t))
             except Exception:  # noqa: BLE001 -- the other rules still apply
+                _note_exc("dialogs._find")
                 full = set()
             hits = [i for i in order if i in full]
             if hits:
@@ -805,14 +838,7 @@ class FontDialog(QtWidgets.QDialog):
         self._note.setWordWrap(True)
         lay.addWidget(self._note)
         lay.addStretch(1)
-        self._buttons = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Ok
-            | QtWidgets.QDialogButtonBox.Cancel
-            | QtWidgets.QDialogButtonBox.Apply
-        )
-        self._buttons.accepted.connect(self._ok)
-        self._buttons.rejected.connect(self.reject)
-        self._buttons.button(QtWidgets.QDialogButtonBox.Apply).clicked.connect(self._apply)
+        self._buttons = dialog_buttons(self, accept=self._ok, apply=self._apply)
         lay.addWidget(self._buttons)
         if style is not None:
             self.load(style)
@@ -881,7 +907,10 @@ class PasteSpecialDialog(_ChoiceDialog):
     """Edit > Paste Special...: choose the clipboard format to paste."""
 
     def __init__(self, formats: list[str], parent=None):
-        super().__init__("Paste Special", formats, parent)
+        super().__init__("Paste Special", formats, parent, action="Paste")
+        from ..remember import keep_one_of
+
+        keep_one_of(self._radios, "paste_special")
 
 
 class GridSetupDialog(QtWidgets.QDialog):
@@ -968,14 +997,7 @@ class GridSetupDialog(QtWidgets.QDialog):
         self._chk_snap.setChecked(snap)
         lay.addWidget(self._chk_snap)
         lay.addStretch(1)
-        self._buttons = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Ok
-            | QtWidgets.QDialogButtonBox.Cancel
-            | QtWidgets.QDialogButtonBox.Apply
-        )
-        self._buttons.accepted.connect(self._ok)
-        self._buttons.rejected.connect(self.reject)
-        self._buttons.button(QtWidgets.QDialogButtonBox.Apply).clicked.connect(self.applyRequested.emit)
+        self._buttons = dialog_buttons(self, accept=self._ok, apply=self.applyRequested.emit)
         lay.addWidget(self._buttons)
         self._loaded = self._state()
 
@@ -1127,14 +1149,7 @@ class GuidelinesDialog(QtWidgets.QDialog):
         self.note = note_label(self.ON_THE_PAGE)
         lay.addWidget(self.note)
 
-        buttons = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Ok
-            | QtWidgets.QDialogButtonBox.Cancel
-            | QtWidgets.QDialogButtonBox.Apply
-        )
-        buttons.accepted.connect(self._ok)
-        buttons.rejected.connect(self.reject)
-        buttons.button(QtWidgets.QDialogButtonBox.Apply).clicked.connect(self.applyRequested.emit)
+        buttons = dialog_buttons(self, accept=self._ok, apply=self.applyRequested.emit)
         lay.addWidget(buttons)
 
         b_set.clicked.connect(self._set_pos)
@@ -1248,6 +1263,7 @@ class NumberExpressionDialog(QtWidgets.QDialog):
                 else ExpressionContext(None, extra)
             )
         except Exception:  # noqa: BLE001 -- completion is an aid
+            _note_exc("dialogs.expression_context")
             ctx = ExpressionContext(None, extra)
         self._context = ctx
         self._expr = ExpressionField(ctx, self)
@@ -1264,11 +1280,7 @@ class NumberExpressionDialog(QtWidgets.QDialog):
         self._error = theme.note_label("", "danger")
         self._error.hide()
         lay.addWidget(self._error)
-        self._buttons = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
-        )
-        self._buttons.accepted.connect(self.accept)
-        self._buttons.rejected.connect(self.reject)
+        self._buttons = dialog_buttons(self, ok="Place")
         lay.addWidget(self._buttons)
         self._expr.valueChanged.connect(self._sync_ok)
         self._fmt.textChanged.connect(self._sync_ok)
@@ -1529,7 +1541,7 @@ class ZoomWindow(QtWidgets.QDialog):
         painter.translate(-src.left(), -src.top())
         try:
             fg(painter, src)
-        except Exception:  # noqa: BLE001 -- never let the overlay break the render
+        except Exception:  # noqa: BLE001  # swallow-ok: paint code; the overlay is optional
             pass
         painter.restore()
 
@@ -1569,9 +1581,48 @@ class UpdatePagesDialog(QtWidgets.QDialog):
     def __init__(self, start_dir=None, parent=None, projects=None, library_dir=None, chain=None):
         super().__init__(parent)
         from ..style import theme
-        from ..prefs.settings import UPDATE_PROCESSES_RANGE, stored_bool
 
         self.setWindowTitle("Update Pages")
+        projects = self._list_projects(projects, start_dir)
+        # (the form scrolls when the window is too short for it: the notes and buttons never
+        # cover the project list; OK and Cancel stay in view below it)
+        lay, outer = theme.scroll_body(self)
+        intro = QtWidgets.QLabel(
+            "Update the pages that use genies, symbols or templates changed since the "
+            "pages were saved. Compile afterwards. Pages open in the Graphics Builder "
+            "are skipped."
+        )
+        intro.setWordWrap(True)
+        lay.addWidget(intro)
+        box = self._build_projects_box(projects)
+        # (the choices that decide what the run writes come first, the project list after:
+        # under a tall list they would be seen only after scrolling)
+        what = QtWidgets.QGroupBox("Update")
+        wl = QtWidgets.QVBoxLayout(what)
+        self._make_update_checks()
+        self._make_chain_checks(chain)
+        self._lay_out_update_box(wl)
+        lay.addWidget(what)
+        self._build_run_options(lay)
+        lay.addWidget(box, 1)
+        self._set_tab_order(what)
+        buttons = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
+        )
+        self._ok = buttons.button(QtWidgets.QDialogButtonBox.Ok)
+        self._ok.setText("Update Pages")
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        outer.addWidget(buttons)
+        self._root.setCurrentIndex(self._start_index(start_dir, library_dir))
+        self._tree.itemChanged.connect(lambda *_a: self._update_count())
+        self._root.currentIndexChanged.connect(lambda _i: self._rebuild())
+        self._rebuild()
+        self.resize(max(self.sizeHint().width(), 480), max(self.sizeHint().height(), 560))
+
+    def _list_projects(self, projects, start_dir) -> list:
+        """The root projects offered: the install's (or ``projects``) by name, and a page's
+        or a browsed folder outside them."""
         self._catalog = None
         if projects is None:
             projects = self._install_projects()
@@ -1587,16 +1638,13 @@ class UpdatePagesDialog(QtWidgets.QDialog):
                 and self._loose_root(loose)
             ):
                 projects.append((os.path.basename(os.path.normpath(loose)), os.path.abspath(loose)))
-        # (the form scrolls when the window is too short for it: the notes and buttons never
-        # cover the project list; OK and Cancel stay in view below it)
-        lay, outer = theme.scroll_body(self)
-        intro = QtWidgets.QLabel(
-            "Update the pages that use genies, symbols or templates changed since the "
-            "pages were saved. Compile afterwards. Pages open in the Graphics Builder "
-            "are skipped."
-        )
-        intro.setWordWrap(True)
-        lay.addWidget(intro)
+        return projects
+
+    def _build_projects_box(self, projects: list) -> QtWidgets.QGroupBox:
+        """The Projects group: the root project, the projects to update with their page
+        counts, Tick All and Untick All."""
+        from ..style import theme
+
         box = QtWidgets.QGroupBox("Projects")
         bl = QtWidgets.QVBoxLayout(box)
         form = QtWidgets.QFormLayout()
@@ -1633,8 +1681,8 @@ class UpdatePagesDialog(QtWidgets.QDialog):
         bl.addWidget(self._tree, 1)
         bl.addWidget(theme.note_label("Include and System are AVEVA's projects. They are never changed."))
         row = QtWidgets.QHBoxLayout()
-        self._all = QtWidgets.QPushButton("Select All")
-        self._none = QtWidgets.QPushButton("Clear All")
+        self._all = QtWidgets.QPushButton("Tick All")
+        self._none = QtWidgets.QPushButton("Untick All")
         self._all.clicked.connect(lambda: self._tick_all(True))
         self._none.clicked.connect(lambda: self._tick_all(False))
         row.addWidget(self._all)
@@ -1643,10 +1691,10 @@ class UpdatePagesDialog(QtWidgets.QDialog):
         bl.addLayout(row)
         self._count = QtWidgets.QLabel()
         bl.addWidget(self._count)
-        # (the choices that decide what the run writes come first, the project list after:
-        # under a tall list they would be seen only after scrolling)
-        what = QtWidgets.QGroupBox("Update")
-        wl = QtWidgets.QVBoxLayout(what)
+        return box
+
+    def _make_update_checks(self) -> None:
+        """What to update: templates (and their page properties), genies, symbols."""
         self._tpl = QtWidgets.QCheckBox("Page templates")
         self._gen = QtWidgets.QCheckBox("Genies and super genies")
         self._gen.setToolTip(
@@ -1666,6 +1714,7 @@ class UpdatePagesDialog(QtWidgets.QDialog):
 
             props_default = template_update_enabled()
         except Exception:  # noqa: BLE001
+            _note_exc("dialogs.template_update_enabled")
             props_default = False
         self._tpl_props = QtWidgets.QCheckBox(
             "Also apply the template's page size, page colour and page properties"
@@ -1673,6 +1722,12 @@ class UpdatePagesDialog(QtWidgets.QDialog):
         self._tpl_props.setToolTip("Replaces the page's own values with the template's")
         self._tpl_props.setChecked(props_default)
         self._tpl.toggled.connect(self._tpl_props.setEnabled)
+
+    def _make_chain_checks(self, chain) -> None:
+        """Save the library genies and templates in the chain first (``chain``: given by the
+        caller, else the setting), and compose their nested genies again."""
+        from ..prefs.settings import stored_bool
+
         # the genies and templates of the ticked projects' libraries that place a changed
         # genie or template are saved again first (genieusage.chain_plan;
         # window/library._update_pages): with the genies or the templates (a template built
@@ -1717,6 +1772,10 @@ class UpdatePagesDialog(QtWidgets.QDialog):
         self._chain.toggled.connect(chain_all_on)
         self._gen.toggled.connect(chain_all_on)
         self._tpl.toggled.connect(chain_all_on)
+
+    def _lay_out_update_box(self, wl: QtWidgets.QVBoxLayout) -> None:
+        """The Update group's boxes, each sub box indented under its box, and Update every
+        page."""
         # (each indented box under the box it belongs to; the chain's box, which goes with
         # the genies and the templates, after them, its own sub box one step in)
         for parent_box, sub in (
@@ -1744,12 +1803,13 @@ class UpdatePagesDialog(QtWidgets.QDialog):
         )
         self._force.setChecked(False)
         wl.addWidget(self._force)
-        lay.addWidget(what)
+
+    def _build_run_options(self, lay: QtWidgets.QVBoxLayout) -> None:
+        """Back up each page and the helper processes."""
         self._backup = QtWidgets.QCheckBox("Back up each page before it is changed")
         self._backup.setChecked(True)
         # (the tips say where the backup goes and what Automatic does)
         from ...infra import backups
-        from ..prefs.settings import HELPER_MB, UPDATE_PER_HELPER_RANGE, whole
 
         self._backup.setToolTip(
             "A copy of each page and its project database rows goes to "
@@ -1757,25 +1817,15 @@ class UpdatePagesDialog(QtWidgets.QDialog):
         )
         lay.addWidget(self._backup)
         pform = QtWidgets.QFormLayout()
-        self._procs = QtWidgets.QSpinBox()
-        self._procs.setRange(*UPDATE_PROCESSES_RANGE)
-        self._procs.setSpecialValueText("Automatic")
-        self._procs.setToolTip(
-            (
-                "Automatic: half the processors, at most 4, fewer when memory is short. Each helper "
-                "takes about %d MB while it runs and gets at least %d pages, so a small run uses fewer"
-            )
-            % (HELPER_MB, whole("opt/update_pages_per_helper", UPDATE_PER_HELPER_RANGE))
-        )
-        try:
-            # (as text: Qt reads a garbled number as 0, not as an error)
-            self._procs.setValue(int(str(app_settings().value("opt/update_processes", 0)).strip()))
-        except TypeError, ValueError:  # swallow-ok: a garbled setting shows Automatic
-            self._procs.setValue(0)
+        from ..prefs.job_options import processes_box
+
+        self._procs = processes_box("opt/update_processes")
         # (the value is stored by accept(): Cancel leaves the setting as it was)
         pform.addRow("Helper processes:", self._procs)
         lay.addLayout(pform)
-        lay.addWidget(box, 1)
+
+    def _set_tab_order(self, what: QtWidgets.QGroupBox) -> None:
+        """Tab goes down the window as it is laid out: the choices, then the projects."""
         # (Tab goes down the window as it is laid out: the choices, then the projects)
         chain = [w for w in what.findChildren(QtWidgets.QAbstractButton)] + [
             self._backup,
@@ -1784,19 +1834,6 @@ class UpdatePagesDialog(QtWidgets.QDialog):
         ]
         for a_w, b_w in zip(chain, chain[1:]):
             QtWidgets.QWidget.setTabOrder(a_w, b_w)
-        buttons = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
-        )
-        self._ok = buttons.button(QtWidgets.QDialogButtonBox.Ok)
-        self._ok.setText("Update Pages")
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        outer.addWidget(buttons)
-        self._root.setCurrentIndex(self._start_index(start_dir, library_dir))
-        self._tree.itemChanged.connect(lambda *_a: self._update_count())
-        self._root.currentIndexChanged.connect(lambda _i: self._rebuild())
-        self._rebuild()
-        self.resize(max(self.sizeHint().width(), 480), max(self.sizeHint().height(), 560))
 
     # -- the projects ---------------------------------------------------------------------
     def _install_projects(self) -> list:
@@ -1853,7 +1890,7 @@ class UpdatePagesDialog(QtWidgets.QDialog):
                 self._root.setCurrentIndex(k)
                 return True
         if not self._loose_root(d):
-            QtWidgets.QMessageBox.information(
+            inform(
                 self,
                 "Update Pages",
                 "%s cannot be the root. Include, System and the projects of another "
@@ -1939,7 +1976,7 @@ class UpdatePagesDialog(QtWidgets.QDialog):
         for a browsed one (a copy of a project has its own)."""
         d = str(self._root.currentData() or "")
         if d and not any(_same_dir(x, d) for x in self._listed):
-            return "updatepages/ticks/" + os.path.normcase(os.path.abspath(d))
+            return "updatepages/ticks/" + path_key(d)
         return "updatepages/ticks/" + self.root_name().lower()
 
     def _unticked_saved(self) -> set:
@@ -2111,7 +2148,7 @@ class UpdatePagesDialog(QtWidgets.QDialog):
 def _same_dir(a, b) -> bool:
     if not a or not b:
         return False
-    return os.path.normcase(os.path.abspath(str(a))) == os.path.normcase(os.path.abspath(str(b)))
+    return path_key(str(a)) == path_key(str(b))
 
 
 # ------------------------------------------------------------ page templates
@@ -2144,7 +2181,7 @@ def screen_resolution() -> str:
         for name, w, h in RESOLUTIONS:
             if (w, h) == (s.width(), s.height()):
                 return name
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # swallow-ok: no primary screen, no match
         pass
     return "HD1080"
 
@@ -2158,6 +2195,7 @@ def page_defaults(project_dir: str | None = None, resolve_default: bool = True) 
 
             d = projectcit.page_defaults(project_dir)
         except Exception:  # noqa: BLE001 -- an unreadable PROJECT.CIT: the fallback
+            _note_exc("dialogs.page_defaults/project_cit", project=project_dir)
             d = None
     if d is not None:
         d = dict(d, source="project")
@@ -2169,6 +2207,7 @@ def page_defaults(project_dir: str | None = None, resolve_default: bool = True) 
 
             ini = template_defaults()
         except Exception:  # noqa: BLE001
+            _note_exc("dialogs.page_defaults/template_defaults")
             ini = {"style": "Tab_Style_1", "resolution": "Default", "title_bar": False}
         st = app_settings()
         d = {
@@ -2264,7 +2303,9 @@ class UseTemplateDialog(QtWidgets.QDialog):
         )
         self.ok_button = self.buttons.button(QtWidgets.QDialogButtonBox.Ok)
         self.ok_button.setText("Select" if choose else "Create Page")
-        self.edit_button = self.buttons.addButton("Edit Template", QtWidgets.QDialogButtonBox.ActionRole)
+        self.edit_button = self.buttons.addButton(
+            "Edit Template", QtWidgets.QDialogButtonBox.ResetRole
+        )  # (left of Create and Cancel)
         self.edit_button.setToolTip("Open the selected template for editing")
         self.edit_button.setVisible(not choose)
         self.buttons.accepted.connect(self._ok)
@@ -2363,7 +2404,7 @@ class PageDefaultsDialog(QtWidgets.QDialog):
         bform.addRow("Page colour:", self.btn_colour)
         row.addLayout(bform)
         self.preview = QtWidgets.QLabel()
-        self.preview.setFixedSize(_preview_size())
+        self.preview.setFixedSize(preview_size())
         row.addWidget(self.preview)
         row.addStretch(1)
         lay.addLayout(row)
@@ -2371,11 +2412,7 @@ class PageDefaultsDialog(QtWidgets.QDialog):
         self._status = theme.note_label("", "danger")
         self._status.hide()
         lay.addWidget(self._status)
-        self._buttons = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
-        )
-        self._buttons.accepted.connect(self._ok)
-        self._buttons.rejected.connect(self.reject)
+        self._buttons = dialog_buttons(self, accept=self._ok)
         lay.addWidget(self._buttons)
         self.cb_style.currentIndexChanged.connect(lambda _i: self._update_preview())
         self.cb_res.currentIndexChanged.connect(lambda _i: self._update_preview())
@@ -2392,7 +2429,7 @@ class PageDefaultsDialog(QtWidgets.QDialog):
     def resolution(self) -> str:
         return str(self.cb_res.currentData() or "Default")
 
-    def style(self) -> str:
+    def style_name(self) -> str:
         return str(self.cb_style.currentData() or "").strip()
 
     def _colour_picked(self) -> None:
@@ -2410,7 +2447,7 @@ class PageDefaultsDialog(QtWidgets.QDialog):
         res = screen_resolution() if res == "Default" else res
         want = {res.lower()} | ({"4k", "uhd4k"} if res.upper() in ("4K", "UHD4K") else set())
         best = None
-        for _p, s in self._catalog.elements(self.style()):
+        for _p, s in self._catalog.elements(self.style_name()):
             name, r, tb = split_element(s.name)
             if r.lower() not in want:
                 continue
@@ -2423,7 +2460,7 @@ class PageDefaultsDialog(QtWidgets.QDialog):
 
     def values(self) -> dict:
         return {
-            "style": self.style(),
+            "style": self.style_name(),
             "resolution": self.resolution(),
             "title_bar": self.chk_titlebar.isChecked(),
             "background": self._background,
@@ -2441,7 +2478,7 @@ class PageDefaultsDialog(QtWidgets.QDialog):
         self._problem("")
         where = set_page_defaults(v, self._project_dir)
         if not where:
-            QtWidgets.QMessageBox.warning(
+            warn(
                 self,
                 "Page Defaults",
                 "The page defaults could not be written to %s. Check that the project "

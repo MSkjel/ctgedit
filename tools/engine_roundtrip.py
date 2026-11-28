@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from ctgedit.backend.graphics_builder import GraphicsBuilder  # noqa: E402
 from ctgedit.format import factory, geometry as G, writer  # noqa: E402
-from ctgedit.format.page import parse_ctg, parse_ctg_bytes, _parse_object  # noqa: E402
+from ctgedit.format.page import parse_ctg, parse_ctg_bytes, parse_object  # noqa: E402
 from ctgedit.io.citect_config import live_project_dir  # noqa: E402
 
 CAP_DIR = os.path.join(os.path.dirname(__file__), "_ctdraw", "engine_caps")
@@ -116,7 +116,7 @@ def roundtrip(
 
 # --------------------------------------------------------------------- diffs
 def _po(payload: bytes):
-    return _parse_object(0, 0, len(payload), 0, payload)
+    return parse_object(0, 0, len(payload), 0, payload)
 
 
 def _hexdiff(a: bytes, b: bytes, limit: int = 12) -> list:
@@ -1188,7 +1188,7 @@ def experiments_mutator(spec: dict):
         hs = []
         for i, r in enumerate(spec["records"]):
             pl = base64.b64decode(r["payload_b64"])
-            po = _parse_object(0, 0, len(pl), 0, pl)
+            po = parse_object(0, 0, len(pl), 0, pl)
             h = 900 + i
             if not r.get("keep_handle"):
                 G.set_handle(po, h)

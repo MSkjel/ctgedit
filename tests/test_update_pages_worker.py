@@ -1,5 +1,6 @@
 """Update Pages runs in a worker process and keeps the window painting."""
 
+from ctgedit.ui.main_window import MainWindow
 import os
 import shutil
 
@@ -66,8 +67,8 @@ def test_update_pages_runs_in_the_worker_and_reports(tmp_path, monkeypatch, fx_p
         w._update_pages()
     finally:
         w.doc = None
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.close()
     assert not called  # not in this process
     assert shown and not shown[-1].startswith("WARN"), shown
@@ -78,7 +79,7 @@ def test_update_pages_runs_in_the_worker_and_reports(tmp_path, monkeypatch, fx_p
     assert not [p for p in os.listdir(d) if p.endswith((".json", ".progress", ".skip"))]
 
 
-# -- the pages open in tabs (LibraryCommands._update_open_documents) -------------------------
+# -- the pages open in tabs (MainWindow._update_open_documents) -------------------------
 def _counting_stamps(monkeypatch):
     from ctgedit.format import element as E
 
@@ -132,8 +133,8 @@ def open_tab(tmp_path, monkeypatch, fx_page):
         w._ask_save_on_close = lambda *a, **k: QtWidgets.QMessageBox.Discard
         w._save_changes_list = lambda *a, **k: True
         w.doc = None
-        if w in MainWindow._instances:
-            MainWindow._instances.remove(w)
+        if w in MainWindow.instances:
+            MainWindow.instances.remove(w)
         w.close()
         w.deleteLater()
 
@@ -143,7 +144,6 @@ OPTS = {"genies": True, "templates": True, "symbols": True}
 
 def _summary(tabs):
     import types
-    from ctgedit.ui.window.library import LibraryCommands
 
     rep = types.SimpleNamespace(
         pages=0,
@@ -173,7 +173,7 @@ def _summary(tabs):
         links_dropped=[],
         unchanged=[],
     )
-    return LibraryCommands._update_pages_summary(rep, None, tabs)
+    return MainWindow._update_pages_summary(rep, None, tabs)
 
 
 def test_an_open_page_is_updated_in_memory_and_told(open_tab):
@@ -310,7 +310,7 @@ def test_a_run_without_genies_keeps_the_pending_genie_update(open_tab):
     jobs._ready.append((GenieJob(d1, changes, ["tablib.g1"]), ans, 0.0))
     entry = next(e for e in w._docs if e["doc"] is d1)
     gen = entry.get("genie_gen")
-    assert gen != editing._LIBRARY_GENERATION[0]
+    assert gen != editing.LIBRARY_GENERATION[0]
     steps = len(d1._undo)
     tabs = w._update_open_documents([proj], {"genies": False, "templates": True, "symbols": True})
     assert jobs.busy(d1) and len(d1._undo) == steps
@@ -326,7 +326,7 @@ def test_an_update_is_seen_when_the_undo_cap_drops_an_old_step(open_tab, monkeyp
     undo stack keeps its length. The page is still updated. (The genie step here is one plain edit: the cap
     is checked on each edit, not on a batch's step.)"""
     from ctgedit import editing
-    from ctgedit.editing_base import _Command
+    from ctgedit.editing_base import Command
 
     w, proj, d1, _d2 = open_tab
 
@@ -337,8 +337,8 @@ def test_an_update_is_seen_when_the_undo_cap_drops_an_old_step(open_tab, monkeyp
     monkeypatch.setattr(d1, "apply_genie_changes", apply)
     big = 50 * 1024 * 1024  # (a number only: nothing is held)
     for k in range(20):
-        d1._undo.append(_Command("old step %d" % k, lambda: None, lambda: None, nbytes=big))
-    total = sum(editing._command_bytes(c) for c in d1._undo)
+        d1._undo.append(Command("old step %d" % k, lambda: None, lambda: None, nbytes=big))
+    total = sum(editing.command_bytes(c) for c in d1._undo)
     monkeypatch.setattr(editing, "UNDO_BYTES_TOTAL", total * 3 // 2 + 3)
     assert editing._undo_page_cap() >= total
     steps, trimmed = len(d1._undo), getattr(d1, "undo_trimmed", 0)
@@ -448,8 +448,8 @@ def test_update_pages_shows_the_update_in_every_window(open_tab, monkeypatch):
         monkeypatch.setattr(w2, "_update_pages_in_worker", lambda job, parts=None: rep)
         w2._update_pages()
     finally:
-        if w2 in MainWindow._instances:
-            MainWindow._instances.remove(w2)
+        if w2 in MainWindow.instances:
+            MainWindow.instances.remove(w2)
         w2.close()
         w2.deleteLater()
     assert len(d1._undo) == steps + 1 and steps + 1 in seen, seen
